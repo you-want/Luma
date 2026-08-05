@@ -1,0 +1,270 @@
+:root {
+  /* macOS uses the San Francisco system font; -apple-system resolves to it. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--window);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Light appearance — Apple system colors. */
+  --window: #ececec;
+  --sidebar: #f5f5f7;
+  --surface: #ffffff;
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --surface-active: rgba(0, 0, 0, 0.08);
+  --fill-quaternary: rgba(0, 0, 0, 0.05);
+  --separator: rgba(0, 0, 0, 0.1);
+  --separator-strong: rgba(0, 0, 0, 0.16);
+  --text: #1d1d1f;
+  --text-secondary: rgba(60, 60, 67, 0.6);
+  --text-tertiary: rgba(60, 60, 67, 0.3);
+  --accent: #007aff;
+  --accent-hover: #0a6ff0;
+  --on-accent: #ffffff;
+  --danger: #ff3b30;
+  --danger-soft: rgba(255, 59, 48, 0.12);
+  --warning: #ff9500;
+  --control-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --toolbar-bg: rgba(246, 246, 246, 0.72);
+  --toolbar-border: rgba(0, 0, 0, 0.12);
+  --radius-card: 10px;
+  --radius-control: 6px;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; background: var(--window); }
+button, input, select { font: inherit; color: inherit; }
+button { letter-spacing: -0.01em; }
+
+.app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* Translucent, blurred toolbar in the style of macOS window title bars. */
+.app-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  border-bottom: 0.5px solid var(--toolbar-border);
+  background: var(--toolbar-bg);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand-mark {
+  width: 28px; height: 28px; display: block; flex: 0 0 auto;
+}
+.brand-copy { display: flex; align-items: baseline; gap: 8px; }
+.brand-copy strong { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.brand-copy span { color: var(--text-secondary); font-size: 12px; }
+.privacy-note {
+  margin-left: auto; display: flex; align-items: center; gap: 5px;
+  color: var(--text-secondary); font-size: 11px;
+  padding: 3px 9px; border-radius: 100px; background: var(--fill-quaternary);
+}
+
+.content { width: min(1040px, calc(100% - 40px)); margin: 0 auto; padding: 24px 0 48px; }
+.intro { margin-bottom: 20px; }
+.eyebrow { display: none; }
+.intro h1 { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; }
+.intro > p:last-child { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+
+/* Grouped white cards with hairline outline, like System Settings panes. */
+.scan-controls, .progress-panel, .result-section, .metric-grid, .storage-panel {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+}
+.scan-controls { padding: 16px; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.section-heading h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+
+/* macOS-style switch. */
+.toggle-control { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; cursor: pointer; white-space: nowrap; user-select: none; }
+.toggle-control input { position: absolute; opacity: 0; pointer-events: none; }
+.switch { position: relative; width: 38px; height: 22px; border-radius: 100px; background: var(--separator-strong); transition: background 0.18s ease; flex: 0 0 auto; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); transition: transform 0.18s ease; }
+.toggle-control input:checked + .switch { background: var(--accent); }
+.toggle-control input:checked + .switch::after { transform: translateX(16px); }
+.toggle-control input:focus-visible + .switch { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+.toggle-control input:disabled + .switch { opacity: 0.5; }
+
+.path-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 14px; }
+.path-button {
+  min-width: 0; min-height: 52px; display: flex; align-items: center; gap: 11px; text-align: left;
+  color: var(--text); border: 0.5px solid var(--separator); border-radius: var(--radius-control);
+  background: var(--sidebar); padding: 8px 12px; cursor: pointer; transition: background 0.12s ease;
+}
+.path-button:hover:not(:disabled) { background: var(--surface-hover); }
+.path-button:disabled { opacity: 0.55; cursor: default; }
+.path-button > svg { color: var(--accent); flex: 0 0 auto; }
+.path-copy { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.path-copy strong, .path-copy span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.path-copy strong { font-size: 13px; font-weight: 590; }
+.path-copy span { color: var(--text-secondary); font-size: 11px; }
+
+/* Push buttons in the macOS style: filled accent, subtle gradient and shadow. */
+.button { min-height: 30px; align-self: center; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: var(--radius-control); padding: 0 15px; font-size: 13px; font-weight: 510; cursor: pointer; transition: filter 0.12s ease; }
+.button:disabled { opacity: 0.45; cursor: default; }
+.button-primary { color: var(--on-accent); background: linear-gradient(180deg, #2b91ff, var(--accent)); box-shadow: var(--control-shadow); }
+.button-primary:hover:not(:disabled) { filter: brightness(1.05); }
+.button-primary:active:not(:disabled) { filter: brightness(0.94); }
+.button-danger { color: var(--danger); background: var(--danger-soft); }
+.button-danger:hover:not(:disabled) { background: rgba(255, 59, 48, 0.18); }
+
+.progress-panel { margin-top: 14px; padding: 16px; }
+.progress-title { display: flex; align-items: center; gap: 10px; }
+.progress-title svg { color: var(--accent); flex: 0 0 auto; }
+.progress-title div { min-width: 0; display: flex; flex-direction: column; }
+.progress-title strong { font-size: 13px; font-weight: 600; }
+.progress-title span { color: var(--text-secondary); font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.progress-track { height: 4px; margin: 14px 0; overflow: hidden; background: var(--fill-quaternary); border-radius: 100px; }
+.progress-track span { display: block; width: 35%; height: 100%; background: var(--accent); border-radius: 100px; animation: scan 1.4s ease-in-out infinite; }
+@keyframes scan { from { transform: translateX(-110%); } to { transform: translateX(300%); } }
+.progress-stats { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; gap: 1px; background: var(--separator); border-radius: var(--radius-control); overflow: hidden; }
+.progress-stats div { background: var(--surface); padding: 10px 12px; }
+.progress-stats dt { color: var(--text-secondary); font-size: 11px; }
+.progress-stats dd { margin: 3px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+
+.status-message { margin-top: 14px; display: flex; gap: 11px; padding: 14px 16px; color: var(--text); box-shadow: var(--card-shadow); background: var(--surface); border-radius: var(--radius-card); }
+.status-message > svg { flex: 0 0 auto; color: var(--text-secondary); margin-top: 1px; }
+.status-message strong { font-size: 13px; font-weight: 600; }
+.status-message strong, .status-message p { margin: 0; }
+.status-message p { margin-top: 2px; color: var(--text-secondary); font-size: 12px; }
+.status-error { background: var(--danger-soft); }
+.status-error > svg { color: var(--danger); }
+.status-error strong { color: var(--danger); }
+.loading-state, .empty-state { color: var(--text-secondary); text-align: center; padding: 56px 20px; }
+.empty-state > svg { color: var(--text-tertiary); }
+.empty-state h2 { color: var(--text); margin: 12px 0 5px; font-size: 15px; font-weight: 600; }
+.empty-state p { max-width: 380px; margin: 0 auto; font-size: 13px; line-height: 1.5; }
+
+.results { margin-top: 20px; display: flex; flex-direction: column; gap: 14px; }
+/* Category breakdown and insights sit side by side on wide windows; the gap
+   also gives them breathing room when they collapse into a single column. */
+.results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.results-grid > * { min-width: 0; }
+.result-heading { margin-bottom: 10px; }
+.scan-time { color: var(--text-secondary); font-size: 11px; }
+
+/* Metric summary row. */
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--separator); overflow: hidden; }
+.metric { position: relative; min-width: 0; padding: 14px 16px; background: var(--surface); }
+.metric svg { color: var(--text-secondary); }
+.metric span { display: block; color: var(--text-secondary); font-size: 11px; margin-top: 6px; }
+.metric strong { display: block; margin-top: 2px; font-size: 19px; font-weight: 600; line-height: 1.15; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+
+/* Segmented storage bar + legend, modeled on System Settings › Storage. */
+.storage-panel { padding: 16px; }
+.storage-bar { display: flex; height: 22px; border-radius: 5px; overflow: hidden; background: var(--fill-quaternary); box-shadow: inset 0 0 0 0.5px var(--separator); }
+.storage-seg { height: 100%; box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.28); transition: flex-grow 0.3s ease; }
+.storage-seg:last-child { box-shadow: none; }
+.storage-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 18px; margin-top: 16px; }
+.legend-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.legend-label { font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.legend-size { margin-left: auto; color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.result-section { padding: 6px 16px; }
+.compact-heading { padding: 10px 0; }
+.compact-heading > span { color: var(--text-secondary); font-size: 12px; }
+
+.category-list, .file-list, .insight-list { display: flex; flex-direction: column; }
+
+/* File rows with a chevron affordance, like Finder / Storage detail lists. */
+.file-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto 22px; gap: 11px; align-items: center; min-height: 48px; border-top: 0.5px solid var(--separator); padding: 6px 0; }
+.file-row:first-child { border-top: 0; }
+.file-icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--accent); background: var(--fill-quaternary); border-radius: 6px; }
+.file-copy, .file-meta { min-width: 0; display: flex; flex-direction: column; }
+.file-copy strong, .file-copy span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.file-copy strong { font-size: 13px; font-weight: 510; }
+.file-copy span, .file-meta span { color: var(--text-secondary); font-size: 11px; }
+.file-meta { text-align: right; }
+.file-meta strong { font-size: 13px; font-weight: 590; font-variant-numeric: tabular-nums; }
+.icon-button { width: 22px; height: 22px; display: grid; place-items: center; color: var(--text-tertiary); background: transparent; border: 0; border-radius: 5px; cursor: pointer; transition: color 0.12s, background 0.12s; }
+.icon-button:hover { color: var(--accent); background: var(--surface-hover); }
+.empty-inline { color: var(--text-secondary); font-size: 13px; padding: 8px 0 14px; }
+
+/* Insights: rows plus macOS pop-up-button style selects. */
+.insight-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 0; border-top: 0.5px solid var(--separator); }
+.insight-filters label { display: flex; flex-direction: column; gap: 5px; color: var(--text-secondary); font-size: 11px; }
+.insight-filters select {
+  width: 100%; min-height: 28px; color: var(--text); background: var(--surface);
+  border: 0.5px solid var(--separator); border-radius: var(--radius-control); padding: 0 26px 0 9px; font-size: 12px;
+  box-shadow: var(--control-shadow); cursor: pointer; -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='14' viewBox='0 0 10 14'%3E%3Cpath fill='%23007aff' d='M5 0L1.5 3.5h7zM5 14l3.5-3.5h-7z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.insight-filters select:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 1px; }
+.insight { border-top: 0.5px solid var(--separator); }
+/* The row is a button so the whole insight is one click target; the chevron
+   rotates to signal the expanded file list below. */
+.insight-head { display: grid; grid-template-columns: 28px minmax(0, 1fr) 16px; gap: 10px; align-items: center; width: 100%; padding: 11px 0; background: transparent; border: 0; text-align: left; cursor: pointer; }
+.insight-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; }
+.insight-copy { min-width: 0; }
+.insight strong { font-size: 13px; font-weight: 590; }
+.insight p { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.insight-chevron { color: var(--text-tertiary); transition: transform 0.15s ease; }
+.insight-chevron.is-open { transform: rotate(90deg); }
+.insight-head:hover .insight-chevron { color: var(--accent); }
+.insight-head:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.insight-files { padding: 2px 0 10px; }
+.insight-more { margin: 6px 0 0; color: var(--text-tertiary); font-size: 11px; }
+.insight-note { margin: 0; padding: 12px 0 14px; border-top: 0.5px solid var(--separator); color: var(--text-tertiary); font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 760px) {
+  .results-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .content { width: calc(100% - 28px); }
+  .privacy-note span, .brand-copy span { display: none; }
+  .path-picker { grid-template-columns: 1fr; }
+  .button { width: 100%; }
+  .progress-stats { grid-template-columns: repeat(2, 1fr); }
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .insight-filters { grid-template-columns: 1fr; }
+  .file-row { grid-template-columns: 28px minmax(0, 1fr) 22px; }
+  .file-meta { grid-column: 2; text-align: left; flex-direction: row; gap: 8px; }
+  .icon-button { grid-column: 3; grid-row: 1; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --window: #1e1e1e;
+    --sidebar: #2a2a2c;
+    --surface: #2c2c2e;
+    --surface-hover: rgba(255, 255, 255, 0.06);
+    --surface-active: rgba(255, 255, 255, 0.1);
+    --fill-quaternary: rgba(255, 255, 255, 0.08);
+    --separator: rgba(255, 255, 255, 0.12);
+    --separator-strong: rgba(255, 255, 255, 0.2);
+    --text: #f5f5f7;
+    --text-secondary: rgba(235, 235, 245, 0.6);
+    --text-tertiary: rgba(235, 235, 245, 0.3);
+    --accent: #0a84ff;
+    --accent-hover: #3b9bff;
+    --danger: #ff453a;
+    --danger-soft: rgba(255, 69, 58, 0.18);
+    --warning: #ff9f0a;
+    --control-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.5);
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+    --toolbar-bg: rgba(40, 40, 40, 0.72);
+    --toolbar-border: rgba(255, 255, 255, 0.1);
+  }
+  .brand-mark { background: linear-gradient(180deg, #0a84ff, #0066d6); }
+  .button-primary { background: linear-gradient(180deg, #339dff, var(--accent)); }
+  .storage-seg { box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.25); }
+  .switch::after { background: #f5f5f7; }
+}

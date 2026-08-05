@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="song" data-color-mode="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Luma · 照见你的数字世界</title>
+  <meta name="description" content="Luma 是一款为 Mac 打造的本地文件理解工具。它扫描你的目录，建立数字空间地图，找出大文件与长期未整理的角落 —— 全程只读、数据不出本机。">
+  <meta name="theme-color" content="#17211f">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/han/fonts.css">
+  <link rel="stylesheet" href="assets/han/han.css">
+  <style>
+    /* ============================================================
+     * Luma 官网 · 基于 Han design skill（song 主题）的局部增强
+     * 设计取向：苹果式产品展示的呼吸感 × 宋韵水墨的克制
+     * ============================================================ */
+    :root {
+      --lm-ink: var(--han-color-ink-800);
+      --lm-muted: var(--han-color-text-secondary);
+      --lm-faint: var(--han-color-text-tertiary);
+      --lm-line: color-mix(in srgb, var(--han-color-ink-300) 38%, transparent);
+      --lm-paper: var(--han-color-paper-100);
+      --lm-celadon: var(--han-color-celadon);
+      --lm-content: 1120px;
+      --lm-dark: var(--han-color-ink-900);
+      --lm-dark-soft: var(--han-color-ink-800);
+    }
+
+    body {
+      background: var(--han-color-bg);
+      color: var(--lm-ink);
+      font-family: var(--han-font-song);
+      scroll-behavior: smooth;
+    }
+
+    :where(section[id]) { scroll-margin-top: calc(var(--han-nav-height) + 2rem); }
+
+    /* 极淡的宣纸颗粒背景 */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.028;
+      background-image:
+        radial-gradient(circle at 18% 28%, color-mix(in srgb, var(--han-color-ink-300) 30%, transparent) 0 1.5px, transparent 1.5px),
+        radial-gradient(circle at 78% 68%, color-mix(in srgb, var(--han-color-celadon) 22%, transparent) 0 1.5px, transparent 1.5px);
+      background-size: 34px 34px, 54px 54px;
+    }
+
+    .lm-container {
+      width: min(calc(100% - 3rem), var(--lm-content));
+      margin: 0 auto;
+    }
+
+    /* 跳转链接 */
+    .lm-skip {
+      position: absolute;
+      left: -9999px;
+      top: auto;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+    .lm-skip:focus {
+      position: fixed;
+      left: 1rem;
+      top: 1rem;
+      width: auto;
+      height: auto;
+      padding: 0.75rem 1rem;
+      background: var(--han-color-vermilion-500);
+      color: #fff;
+      z-index: 10000;
+      text-decoration: none;
+      border-radius: var(--han-radius-sm);
+    }
+
+    /* ============================ 导航栏 ============================ */
+    .lm-nav__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--han-space-5);
+      min-height: var(--han-nav-height);
+    }
+
+    .lm-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      text-decoration: none;
+      color: var(--lm-ink);
+    }
+
+    .lm-brand__seal {
+      width: 2rem;
+      height: 2rem;
+      display: block;
+      flex: none;
+    }
+
+    .lm-brand__word {
+      font-family: var(--han-font-kai);
+      font-size: var(--han-fs-xl);
+      letter-spacing: 0.14em;
+    }
+
+    .lm-brand__word small {
+      display: block;
+      font-family: var(--han-font-sans);
+      font-size: 0.58rem;
+      letter-spacing: 0.28em;
+      color: var(--lm-muted);
+      text-transform: uppercase;
+      margin-top: 0.1rem;
+    }
+
+    .lm-nav__menu { margin: 0; padding: 0; display: flex; gap: var(--han-space-2); list-style: none; }
+
+    .lm-nav__menu a {
+      display: block;
+      color: var(--lm-muted);
+      text-decoration: none;
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-sm);
+      padding: 0.5rem 0.8rem;
+      border-radius: var(--han-radius-sm);
+      transition: color var(--han-duration-normal), background var(--han-duration-normal);
+    }
+    .lm-nav__menu a:hover,
+    .lm-nav__menu a:focus-visible {
+      color: var(--han-color-accent-text);
+      background: color-mix(in srgb, var(--han-color-celadon) 16%, transparent);
+    }
+
+    .lm-nav__cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--han-color-accent-control);
+      color: var(--han-color-on-accent, #fff);
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-sm);
+      font-weight: var(--han-fw-medium);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: var(--han-radius-pill);
+      transition: transform var(--han-duration-normal), box-shadow var(--han-duration-normal);
+    }
+    .lm-nav__cta:hover {
+      color: var(--han-color-on-accent, #fff);
+      border-bottom-color: transparent;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px color-mix(in srgb, var(--han-color-vermilion-500) 26%, transparent);
+    }
+
+    .lm-nav__toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+    .lm-nav__toggle span {
+      display: block;
+      width: 20px; height: 2px;
+      background: var(--lm-ink);
+      margin: 4px 0;
+      transition: transform var(--han-duration-normal), opacity var(--han-duration-normal);
+    }
+    .lm-nav--open .lm-nav__toggle span:nth-child(1) { transform: rotate(45deg) translate(4px, 4px); }
+    .lm-nav--open .lm-nav__toggle span:nth-child(2) { opacity: 0; }
+    .lm-nav--open .lm-nav__toggle span:nth-child(3) { transform: rotate(-45deg) translate(4px, -4px); }
+
+    @media (max-width: 860px) {
+      .lm-nav__cta--top { display: none; }
+      .lm-nav__toggle { display: block; }
+      .lm-nav__menu {
+        position: fixed;
+        top: var(--han-nav-height);
+        left: 0;
+        width: 100%;
+        max-height: calc(100vh - var(--han-nav-height));
+        overflow-y: auto;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: var(--han-space-4) var(--han-space-5) var(--han-space-6);
+        background: var(--han-color-paper-100);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+        transform: translateY(-8px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--han-duration-normal), transform var(--han-duration-normal);
+      }
+      .lm-nav--open .lm-nav__menu { transform: translateY(0); opacity: 1; pointer-events: auto; }
+      .lm-nav__menu a { padding: 0.85rem; text-align: center; }
+    }
+
+    /* ============================ Hero ============================ */
+    .lm-hero {
+      position: relative;
+      padding: clamp(3.5rem, 8vw, 7rem) 0 clamp(3rem, 6vw, 5rem);
+      overflow: hidden;
+      isolation: isolate;
+    }
+    .lm-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        radial-gradient(ellipse at 82% 8%, color-mix(in srgb, var(--han-color-celadon) 20%, transparent), transparent 42%),
+        radial-gradient(ellipse at 8% 92%, color-mix(in srgb, var(--han-color-gold-200) 22%, transparent), transparent 46%);
+    }
+
+    /* 竖排装饰题字 */
+    .lm-hero__seal-col {
+      position: absolute;
+      right: clamp(0.5rem, 3vw, 2.5rem);
+      top: 50%;
+      transform: translateY(-50%);
+      writing-mode: vertical-rl;
+      font-family: var(--han-font-kai);
+      font-size: var(--han-fs-sm);
+      letter-spacing: 0.34em;
+      line-height: 2.2;
+      color: var(--han-color-ink-300);
+      opacity: 0.55;
+      pointer-events: none;
+      user-select: none;
+    }
+    @media (max-width: 1100px) { .lm-hero__seal-col { display: none; } }
+
+    .lm-hero__grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: clamp(2rem, 5vw, 4.5rem);
+      align-items: center;
+    }
+
+    .lm-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--han-color-accent-text);
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-xs);
+      letter-spacing: var(--han-ls-widest);
+      text-transform: uppercase;
+    }
+    .lm-kicker::before { content: ""; width: 1.75rem; height: 1px; background: currentColor; }
+
+    .lm-hero__title {
+      font-family: var(--han-font-song);
+      font-size: clamp(2.6rem, 6vw, 4.6rem);
+      font-weight: var(--han-fw-bold);
+      letter-spacing: 0.03em;
+      line-height: 1.1;
+      margin: 1.1rem 0 0;
+      color: var(--lm-ink);
+    }
+    .lm-hero__title em {
+      display: block;
+      font-style: normal;
+      color: var(--han-color-vermilion-500);
+      margin-top: 0.15em;
+    }
+
+    .lm-hero__en {
+      margin: 1.1rem 0 0;
+      font-family: var(--han-font-sans);
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      letter-spacing: 0.02em;
+      color: var(--lm-muted);
+    }
+
+    .lm-hero__lead {
+      max-width: 34rem;
+      margin: 1.5rem 0 0;
+      color: var(--lm-muted);
+      font-size: clamp(1.02rem, 1.6vw, 1.15rem);
+      line-height: var(--han-lh-relaxed);
+    }
+
+    .lm-hero__actions {
+      display: flex;
+      align-items: center;
+      gap: var(--han-space-5);
+      flex-wrap: wrap;
+      margin-top: var(--han-space-7);
+    }
+
+    .lm-btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--han-color-vermilion-500);
+      color: #fff;
+      border: none;
+      font-family: var(--han-font-song);
+      font-size: var(--han-fs-md);
+      letter-spacing: 0.06em;
+      padding: 0.85rem 1.9rem;
+      border-radius: var(--han-radius-pill);
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform var(--han-duration-normal) var(--han-ease-out), box-shadow var(--han-duration-normal);
+    }
+    .lm-btn-primary:hover {
+      color: #fff;
+      border-bottom-color: transparent;
+      transform: translateY(-2px);
+      box-shadow: 0 12px 26px color-mix(in srgb, var(--han-color-vermilion-500) 28%, transparent);
+    }
+
+    .lm-text-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--han-color-accent-text);
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-md);
+      font-weight: var(--han-fw-medium);
+      text-decoration: none;
+    }
+    .lm-text-link::after { content: "→"; transition: transform var(--han-duration-normal); }
+    .lm-text-link:hover::after { transform: translateX(0.28rem); }
+
+    .lm-hero__meta {
+      display: flex;
+      gap: var(--han-space-7);
+      margin-top: var(--han-space-8);
+      font-family: var(--han-font-song);
+    }
+    .lm-hero__meta div strong {
+      display: block;
+      font-size: 1.6rem;
+      color: var(--lm-ink);
+    }
+    .lm-hero__meta div span {
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-xs);
+      letter-spacing: 0.06em;
+      color: var(--lm-muted);
+    }
+
+    /* ---------- Hero 数字空间地图（纯 CSS 示意）---------- */
+    .lm-map {
+      position: relative;
+      background: color-mix(in srgb, var(--han-color-paper-50) 82%, transparent);
+      border: 1px solid var(--lm-line);
+      border-radius: var(--han-radius-lg);
+      padding: clamp(1.25rem, 3vw, 1.75rem);
+      box-shadow: 0 22px 48px rgba(30, 26, 20, 0.08);
+    }
+    .lm-map__bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.1rem;
+    }
+    .lm-map__title {
+      font-family: var(--han-font-kai);
+      font-size: var(--han-fs-lg);
+      letter-spacing: 0.06em;
+      color: var(--lm-ink);
+      margin: 0;
+    }
+    .lm-map__total { text-align: right; }
+    .lm-map__total strong {
+      display: block;
+      font-family: var(--han-font-song);
+      font-size: var(--han-fs-xl);
+      color: var(--lm-ink);
+    }
+    .lm-map__total span {
+      font-family: var(--han-font-sans);
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      color: var(--lm-faint);
+      text-transform: uppercase;
+    }
+
+    .lm-map__track {
+      display: flex;
+      height: 1.4rem;
+      border-radius: var(--han-radius-pill);
+      overflow: hidden;
+      background: color-mix(in srgb, var(--han-color-ink-200) 22%, transparent);
+    }
+    .lm-map__seg { height: 100%; }
+    .lm-map__seg--proj { background: var(--han-color-celadon); }
+    .lm-map__seg--media { background: color-mix(in srgb, var(--han-color-gold-500) 78%, white); }
+    .lm-map__seg--docs { background: color-mix(in srgb, var(--han-color-ink-400) 60%, var(--han-color-paper-200)); }
+    .lm-map__seg--dl { background: var(--han-color-vermilion-400); }
+    .lm-map__seg--other { background: color-mix(in srgb, var(--han-color-ink-300) 40%, transparent); }
+
+    .lm-map__legend {
+      list-style: none;
+      margin: 1.1rem 0 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55rem 1.25rem;
+    }
+    .lm-map__legend li {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-sm);
+      color: var(--lm-muted);
+    }
+    .lm-map__legend b {
+      margin-left: auto;
+      color: var(--lm-ink);
+      font-weight: var(--han-fw-medium);
+      font-variant-numeric: tabular-nums;
+    }
+    .lm-dot { width: 0.7rem; height: 0.7rem; border-radius: 3px; flex: none; }
+    .lm-dot--proj { background: var(--han-color-celadon); }
+    .lm-dot--media { background: color-mix(in srgb, var(--han-color-gold-500) 78%, white); }
+    .lm-dot--docs { background: color-mix(in srgb, var(--han-color-ink-400) 60%, var(--han-color-paper-200)); }
+    .lm-dot--dl { background: var(--han-color-vermilion-400); }
+    .lm-dot--other { background: color-mix(in srgb, var(--han-color-ink-300) 40%, transparent); }
+
+    .lm-map__note {
+      margin: 1rem 0 0;
+      font-family: var(--han-font-sans);
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      color: var(--lm-faint);
+    }
+
+    @media (max-width: 900px) {
+      .lm-hero__grid { grid-template-columns: 1fr; }
+      .lm-map { max-width: 30rem; }
+    }
+
+    /* ============================ 通用 section ============================ */
+    .lm-section { padding: clamp(4rem, 9vw, 7.5rem) 0; }
+
+    .lm-heading {
+      display: grid;
+      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+      gap: var(--han-space-8);
+      align-items: end;
+      margin-bottom: var(--han-space-9);
+    }
+    .lm-heading h2 {
+      font-family: var(--han-font-song);
+      font-size: clamp(1.9rem, 4.5vw, 3.2rem);
+      font-weight: var(--han-fw-bold);
+      letter-spacing: 0.03em;
+      line-height: 1.15;
+      margin: 0.6rem 0 0;
+      color: var(--lm-ink);
+    }
+    .lm-heading h2::after {
+      content: "";
+      display: block;
+      width: 3.5rem;
+      height: 2px;
+      margin-top: var(--han-space-4);
+      background: linear-gradient(90deg, var(--han-color-vermilion-500), transparent);
+    }
+    .lm-heading p {
+      max-width: 34rem;
+      margin: 0;
+      color: var(--lm-muted);
+      font-size: clamp(1rem, 1.6vw, 1.1rem);
+      line-height: var(--han-lh-relaxed);
+    }
+    @media (max-width: 720px) {
+      .lm-heading { grid-template-columns: 1fr; gap: var(--han-space-4); }
+    }
+
+    /* 滚动显现 */
+    .lm-reveal {
+      opacity: 0;
+      transform: translateY(22px);
+      transition: opacity 0.7s var(--han-ease-out), transform 0.7s var(--han-ease-out);
+    }
+    .lm-reveal.is-visible { opacity: 1; transform: translateY(0); }
+
+    /* ============================ 双核能力 ============================ */
+    .lm-eyes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--han-space-6);
+    }
+    .lm-eye {
+      position: relative;
+      background: color-mix(in srgb, var(--han-color-paper-50) 78%, transparent);
+      border: 1px solid var(--lm-line);
+      border-radius: var(--han-radius-lg);
+      padding: clamp(1.5rem, 3vw, 2.25rem);
+      overflow: hidden;
+      transition: transform var(--han-duration-normal) var(--han-ease-out), box-shadow var(--han-duration-normal), border-color var(--han-duration-normal);
+    }
+    .lm-eye:hover { transform: translateY(-6px); box-shadow: 0 18px 40px rgba(30,26,20,0.08); border-color: var(--lm-celadon); }
+    .lm-eye__idx {
+      font-family: var(--han-font-kai);
+      font-size: 2.6rem;
+      color: color-mix(in srgb, var(--han-color-vermilion-500) 30%, transparent);
+      line-height: 1;
+    }
+    .lm-eye h3 {
+      font-family: var(--han-font-song);
+      font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+      margin: 0.75rem 0 0.35rem;
+      color: var(--lm-ink);
+    }
+    .lm-eye__en {
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-xs);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--lm-faint);
+    }
+    .lm-eye p {
+      color: var(--lm-muted);
+      line-height: var(--han-lh-relaxed);
+      margin: 1rem 0 0;
+      font-size: var(--han-fs-md);
+    }
+    .lm-eye__tag {
+      display: inline-block;
+      margin-top: 1.25rem;
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-xs);
+      letter-spacing: 0.08em;
+      color: var(--han-color-accent-text);
+      border: 1px solid color-mix(in srgb, var(--han-color-celadon) 60%, transparent);
+      border-radius: var(--han-radius-pill);
+      padding: 0.3rem 0.85rem;
+    }
+    @media (max-width: 720px) { .lm-eyes { grid-template-columns: 1fr; } }
+
+    /* ============================ 洞察（发现）============================ */
+    .lm-insights { background: color-mix(in srgb, var(--han-color-paper-100) 62%, var(--han-color-bg)); }
+    .lm-insight-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--han-space-5);
+    }
+    .lm-insight {
+      background: var(--han-color-bg-elevated);
+      border: 1px solid var(--lm-line);
+      border-radius: var(--han-radius-md);
+      padding: clamp(1.25rem, 2.5vw, 1.6rem);
+      display: flex;
+      flex-direction: column;
+      transition: transform var(--han-duration-normal), border-color var(--han-duration-normal);
+    }
+    .lm-insight:hover { transform: translateY(-4px); border-color: var(--han-color-vermilion-400); }
+    .lm-insight__mark {
+      display: grid;
+      place-items: center;
+      width: 2.5rem; height: 2.5rem;
+      border-radius: var(--han-radius-sm);
+      background: color-mix(in srgb, var(--han-color-celadon) 22%, transparent);
+      color: var(--han-color-ink-700);
+      font-family: var(--han-font-kai);
+      font-size: 1.3rem;
+      margin-bottom: 1rem;
+    }
+    .lm-insight h3 {
+      font-family: var(--han-font-song);
+      font-size: var(--han-fs-lg);
+      margin: 0 0 0.5rem;
+      color: var(--lm-ink);
+    }
+    .lm-insight p {
+      font-size: var(--han-fs-sm);
+      color: var(--lm-muted);
+      line-height: var(--han-lh-relaxed);
+      margin: 0;
+    }
+    @media (max-width: 980px) { .lm-insight-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 520px) { .lm-insight-grid { grid-template-columns: 1fr; } }
+
+    /* ============================ 价值链（流程）============================ */
+    .lm-flow {
+      background: var(--lm-dark);
+      color: var(--han-color-paper-50);
+      position: relative;
+      overflow: hidden;
+    }
+    .lm-flow::before {
+      content: "光";
+      position: absolute;
+      right: -2rem; bottom: -6rem;
+      font-family: var(--han-font-kai);
+      font-size: clamp(18rem, 34vw, 34rem);
+      line-height: 1;
+      color: color-mix(in srgb, var(--han-color-gold-400) 12%, transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .lm-flow .lm-container { position: relative; z-index: 1; }
+    .lm-flow .lm-heading h2 { color: var(--han-color-paper-50); }
+    .lm-flow .lm-heading p { color: color-mix(in srgb, var(--han-color-paper-50) 66%, transparent); }
+    .lm-flow .lm-kicker { color: var(--han-color-gold-400); }
+
+    .lm-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--han-space-5);
+      counter-reset: lm-step;
+    }
+    .lm-step {
+      position: relative;
+      padding: var(--han-space-6) var(--han-space-5);
+      border: 1px solid color-mix(in srgb, var(--han-color-paper-200) 16%, transparent);
+      border-radius: var(--han-radius-md);
+      background: color-mix(in srgb, var(--han-color-paper-50) 5%, transparent);
+    }
+    .lm-step__zh {
+      font-family: var(--han-font-kai);
+      font-size: 2rem;
+      color: var(--han-color-gold-400);
+      line-height: 1;
+    }
+    .lm-step h3 {
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-xs);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--han-color-paper-50) 60%, transparent);
+      margin: 0.9rem 0 0.6rem;
+    }
+    .lm-step p {
+      font-size: var(--han-fs-sm);
+      line-height: var(--han-lh-relaxed);
+      color: color-mix(in srgb, var(--han-color-paper-50) 82%, transparent);
+      margin: 0;
+    }
+    .lm-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -0.9rem; top: 50%;
+      transform: translateY(-50%);
+      color: color-mix(in srgb, var(--han-color-gold-400) 70%, transparent);
+      z-index: 2;
+    }
+    @media (max-width: 900px) {
+      .lm-steps { grid-template-columns: 1fr 1fr; }
+      .lm-step:nth-child(2)::after,
+      .lm-step:last-child::after { content: none; }
+    }
+    @media (max-width: 520px) {
+      .lm-steps { grid-template-columns: 1fr; }
+      .lm-step::after { content: none !important; }
+    }
+
+    /* ============================ 隐私承诺 ============================ */
+    .lm-privacy__grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: clamp(2rem, 5vw, 4rem);
+      align-items: center;
+    }
+    .lm-pledge { list-style: none; margin: var(--han-space-6) 0 0; padding: 0; display: grid; gap: var(--han-space-4); }
+    .lm-pledge li {
+      display: flex;
+      gap: 0.9rem;
+      padding-bottom: var(--han-space-4);
+      border-bottom: 1px solid var(--lm-line);
+    }
+    .lm-pledge li:last-child { border-bottom: none; padding-bottom: 0; }
+    .lm-pledge__seal {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 2.1rem; height: 2.1rem;
+      border: 1px solid var(--han-color-vermilion-500);
+      color: var(--han-color-vermilion-500);
+      font-family: var(--han-font-kai);
+      border-radius: var(--han-radius-sm);
+      font-size: 1rem;
+    }
+    .lm-pledge strong { display: block; color: var(--lm-ink); font-family: var(--han-font-song); font-size: var(--han-fs-md); }
+    .lm-pledge span { color: var(--lm-muted); font-size: var(--han-fs-sm); line-height: var(--han-lh-relaxed); }
+
+    .lm-privacy__card {
+      background: color-mix(in srgb, var(--han-color-celadon) 12%, var(--han-color-paper-50));
+      border: 1px solid var(--lm-line);
+      border-radius: var(--han-radius-lg);
+      padding: clamp(1.75rem, 4vw, 2.5rem);
+      text-align: center;
+    }
+    .lm-privacy__card .lm-big-seal {
+      font-family: var(--han-font-kai);
+      font-size: clamp(4rem, 12vw, 7rem);
+      color: var(--han-color-vermilion-500);
+      line-height: 1;
+      display: block;
+    }
+    .lm-privacy__card p {
+      margin: 1.25rem 0 0;
+      color: var(--lm-muted);
+      line-height: var(--han-lh-relaxed);
+      font-size: var(--han-fs-sm);
+    }
+    @media (max-width: 820px) { .lm-privacy__grid { grid-template-columns: 1fr; } }
+
+    /* ============================ 技术栈 ============================ */
+    .lm-tech { background: color-mix(in srgb, var(--han-color-paper-100) 55%, var(--han-color-bg)); }
+    .lm-tech-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--han-space-5); }
+    .lm-tech-card {
+      background: var(--han-color-bg-elevated);
+      border: 1px solid var(--lm-line);
+      border-radius: var(--han-radius-md);
+      padding: clamp(1.4rem, 3vw, 1.9rem);
+    }
+    .lm-tech-card h3 {
+      font-family: var(--han-font-song);
+      font-size: var(--han-fs-lg);
+      margin: 0 0 0.5rem;
+      color: var(--lm-ink);
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+    .lm-tech-card h3 small {
+      font-family: var(--han-font-sans);
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--han-color-accent-text);
+    }
+    .lm-tech-card p { margin: 0; color: var(--lm-muted); font-size: var(--han-fs-sm); line-height: var(--han-lh-relaxed); }
+    @media (max-width: 820px) { .lm-tech-grid { grid-template-columns: 1fr; } }
+
+    /* ============================ 路线图 ============================ */
+    .lm-road { list-style: none; margin: var(--han-space-8) 0 0; padding: 0; display: grid; gap: 0; }
+    .lm-road li {
+      display: grid;
+      grid-template-columns: 8rem 1fr;
+      gap: var(--han-space-6);
+      padding: var(--han-space-6) 0;
+      border-top: 1px solid var(--lm-line);
+    }
+    .lm-road li:last-child { border-bottom: 1px solid var(--lm-line); }
+    .lm-road__phase {
+      font-family: var(--han-font-kai);
+      font-size: var(--han-fs-xl);
+      color: var(--han-color-vermilion-500);
+      letter-spacing: 0.08em;
+    }
+    .lm-road__phase small {
+      display: block;
+      font-family: var(--han-font-sans);
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--lm-faint);
+      margin-top: 0.3rem;
+    }
+    .lm-road__body h3 { font-family: var(--han-font-song); font-size: var(--han-fs-lg); margin: 0 0 0.4rem; color: var(--lm-ink); }
+    .lm-road__body p { margin: 0; color: var(--lm-muted); font-size: var(--han-fs-sm); line-height: var(--han-lh-relaxed); }
+    .lm-road__now {
+      display: inline-block;
+      margin-left: 0.6rem;
+      font-family: var(--han-font-sans);
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      color: #fff;
+      background: var(--han-color-vermilion-500);
+      border-radius: var(--han-radius-pill);
+      padding: 0.15rem 0.6rem;
+      vertical-align: middle;
+    }
+    @media (max-width: 620px) {
+      .lm-road li { grid-template-columns: 1fr; gap: var(--han-space-3); }
+    }
+
+    /* ============================ 最终 CTA ============================ */
+    .lm-final {
+      text-align: center;
+      padding: clamp(4.5rem, 10vw, 9rem) 0;
+      position: relative;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--han-color-paper-100) 78%, var(--han-color-bg));
+    }
+    .lm-final__inner { position: relative; z-index: 1; max-width: 46rem; margin: 0 auto; }
+    .lm-final h2 {
+      font-family: var(--han-font-song);
+      font-size: clamp(2rem, 5.5vw, 3.6rem);
+      font-weight: var(--han-fw-bold);
+      letter-spacing: 0.03em;
+      margin: 1rem 0 1.25rem;
+      line-height: 1.15;
+      color: var(--lm-ink);
+    }
+    .lm-final p { color: var(--lm-muted); font-size: var(--han-fs-md); line-height: var(--han-lh-relaxed); margin: 0 0 2rem; }
+    .lm-final__actions { display: flex; justify-content: center; gap: var(--han-space-5); flex-wrap: wrap; }
+
+    /* ============================ 页脚 ============================ */
+    .lm-footer { background: var(--lm-dark); color: var(--han-color-paper-50); padding: var(--han-space-10) 0 var(--han-space-6); }
+    .lm-footer__top {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--han-space-8);
+      flex-wrap: wrap;
+      padding-bottom: var(--han-space-7);
+      border-bottom: 1px solid color-mix(in srgb, var(--han-color-paper-200) 14%, transparent);
+    }
+    .lm-footer__brand { display: flex; align-items: center; gap: 0.7rem; }
+    .lm-footer__brand .lm-brand__word { color: var(--han-color-paper-50); }
+    .lm-footer__tag { max-width: 26rem; color: color-mix(in srgb, var(--han-color-paper-50) 58%, transparent); font-size: var(--han-fs-sm); line-height: var(--han-lh-relaxed); }
+    .lm-footer__bottom {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--han-space-4);
+      padding-top: var(--han-space-6);
+      flex-wrap: wrap;
+      font-family: var(--han-font-sans);
+      font-size: var(--han-fs-xs);
+      color: color-mix(in srgb, var(--han-color-paper-50) 45%, transparent);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      .lm-reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="lm-skip" href="#main">跳到主要内容</a>
+
+  <header class="han-navbar lm-nav" id="top">
+    <div class="lm-container lm-nav__inner">
+      <a class="lm-brand" href="#top" aria-label="Luma 首页">
+        <img class="lm-brand__seal" src="assets/luma-logo.svg" alt="">
+        <span class="lm-brand__word">Luma<small>照见数字世界</small></span>
+      </a>
+      <nav aria-label="主导航">
+        <ul class="lm-nav__menu" id="lm-menu">
+          <li><a href="#capabilities">能力</a></li>
+          <li><a href="#insights">发现</a></li>
+          <li><a href="#flow">理解之道</a></li>
+          <li><a href="#privacy">隐私</a></li>
+          <li><a href="#tech">技术</a></li>
+          <li><a href="#roadmap">路线图</a></li>
+        </ul>
+      </nav>
+      <a class="lm-nav__cta lm-nav__cta--top" href="#download">抢先了解</a>
+      <button class="lm-nav__toggle" type="button" aria-expanded="false" aria-controls="lm-menu" aria-label="打开导航菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ==================== Hero ==================== -->
+    <section class="lm-hero" aria-labelledby="hero-title">
+      <div class="lm-hero__seal-col" aria-hidden="true">观其形 · 知其里 · 各归其位</div>
+      <div class="lm-container lm-hero__grid">
+        <div class="lm-hero__copy">
+          <span class="lm-kicker">本地文件理解引擎 · FOR MAC</span>
+          <h1 class="lm-hero__title" id="hero-title">看得见的，<em>才谈得上理解。</em></h1>
+          <p class="lm-hero__en">Luma — AI that understands your digital world.</p>
+          <p class="lm-hero__lead">你的 Mac 里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，画出数字空间的全貌，找出占地的大文件与久未整理的角落 —— 全程只读，数据不离开这台电脑。</p>
+          <div class="lm-hero__actions">
+            <a class="lm-btn-primary" href="#download">抢先了解 Luma</a>
+            <a class="lm-text-link" href="#capabilities">看看它怎么工作</a>
+          </div>
+          <div class="lm-hero__meta">
+            <div><strong>只读</strong><span>Read-only</span></div>
+            <div><strong>本机</strong><span>On-device</span></div>
+            <div><strong>可解释</strong><span>Explainable</span></div>
+          </div>
+        </div>
+
+        <!-- 数字空间地图（示意可视化） -->
+        <div class="lm-map lm-reveal" role="img" aria-label="数字空间地图示意：项目、影音、文档、下载与其他类别在磁盘占用中的比例分布">
+          <div class="lm-map__bar">
+            <p class="lm-map__title">我的数字世界</p>
+            <div class="lm-map__total"><strong>512 GB</strong><span>已建立索引</span></div>
+          </div>
+          <div class="lm-map__track" aria-hidden="true">
+            <div class="lm-map__seg lm-map__seg--proj" style="width:34%"></div>
+            <div class="lm-map__seg lm-map__seg--media" style="width:28%"></div>
+            <div class="lm-map__seg lm-map__seg--docs" style="width:16%"></div>
+            <div class="lm-map__seg lm-map__seg--dl" style="width:12%"></div>
+            <div class="lm-map__seg lm-map__seg--other" style="width:10%"></div>
+          </div>
+          <ul class="lm-map__legend">
+            <li><span class="lm-dot lm-dot--proj" aria-hidden="true"></span>项目 / 代码 <b>174 GB</b></li>
+            <li><span class="lm-dot lm-dot--media" aria-hidden="true"></span>影音 <b>143 GB</b></li>
+            <li><span class="lm-dot lm-dot--docs" aria-hidden="true"></span>文档 <b>82 GB</b></li>
+            <li><span class="lm-dot lm-dot--dl" aria-hidden="true"></span>下载 <b>61 GB</b></li>
+            <li><span class="lm-dot lm-dot--other" aria-hidden="true"></span>其他 <b>52 GB</b></li>
+          </ul>
+          <p class="lm-map__note">* 示意数据，用于说明界面呈现方式，非实测统计。</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="han-divider-ink han-divider-ink--seal lm-container" role="separator" aria-hidden="true">
+      <span class="han-divider-dot han-stamp han-stamp--sm">光</span>
+    </div>
+
+    <!-- ==================== 双核能力 ==================== -->
+    <section class="lm-section" id="capabilities" aria-labelledby="cap-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">两件事，做扎实</span>
+            <h2 id="cap-title">先看清，<br>再理解。</h2>
+          </div>
+          <p>Luma 不急着做一个无所不知的助手。它的第一双眼睛是扫描器，把文件系统看清楚；第二个大脑才是理解，让这些文件真正对你有意义。</p>
+        </div>
+        <div class="lm-eyes">
+          <article class="lm-eye lm-reveal">
+            <div class="lm-eye__idx" aria-hidden="true">一</div>
+            <h3>扫描 · 第一双眼睛</h3>
+            <p class="lm-eye__en">The Scanner</p>
+            <p>选择一个目录，Luma 在后台递归遍历，统计总大小、文件数与目录数，按图片、视频、文档、代码、压缩包等类别聚合占用。扫描过程实时显示进度，随时可以取消。单个文件出错不会中断整场扫描。</p>
+            <span class="lm-eye__tag">实时进度 · 可取消 · 容错</span>
+          </article>
+          <article class="lm-eye lm-reveal">
+            <div class="lm-eye__idx" aria-hidden="true">二</div>
+            <h3>理解 · 第二个大脑</h3>
+            <p class="lm-eye__en">The Understanding</p>
+            <p>扫描结果落进本地 SQLite，重启后依然在。Luma 把零散的文件整理成可查询的空间地图，识别开发项目、区分类别、勾勒结构 —— 为将来的记忆与行动打好地基，而不是把整个硬盘塞给一个模型。</p>
+            <span class="lm-eye__tag">本地索引 · 可恢复 · 结构化</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 发现 / 洞察 ==================== -->
+    <section class="lm-section lm-insights" id="insights" aria-labelledby="ins-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">透明的发现，而非武断的删除</span>
+            <h2 id="ins-title">帮你看见，<br>被忽略的角落。</h2>
+          </div>
+          <p>每一条发现都告诉你命中数量、总大小和判定依据，并留一个查看明细的入口。Luma 只报告，不替你做删除的决定。</p>
+        </div>
+        <div class="lm-insight-grid">
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">巨</div>
+            <h3>大文件</h3>
+            <p>默认高于 1 GiB 的文件，阈值可在界面调整。哪些东西悄悄占了最多的地方，一目了然。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">久</div>
+            <h3>长期未整理</h3>
+            <p>超过 180 天未修改的文件，并说明「修改时间不等于最近使用」，让你自己判断去留。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">冗</div>
+            <h3>开发体积</h3>
+            <p>识别 node_modules、target、dist 这类常见的开发产物目录，只提示，不建议自动清理。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">包</div>
+            <h3>压缩与安装包</h3>
+            <p>按扩展名聚合压缩包与安装包，提示这里可能是一片值得复查的可释放空间。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 价值链 ==================== -->
+    <section class="lm-section lm-flow" id="flow" aria-labelledby="flow-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">Luma 的理解之道</span>
+            <h2 id="flow-title">从文件，<br>到行动。</h2>
+          </div>
+          <p>真正的价值不在「扫描」—— 扫描谁都会。Luma 想走的是一条更长的路：先看见，再理解，然后记住，最后在你确认下行动。</p>
+        </div>
+        <ol class="lm-steps">
+          <li class="lm-step lm-reveal">
+            <div class="lm-step__zh" aria-hidden="true">见</div>
+            <h3>Scan</h3>
+            <p>遍历目录，读取元数据，画出空间全貌。</p>
+          </li>
+          <li class="lm-step lm-reveal">
+            <div class="lm-step__zh" aria-hidden="true">识</div>
+            <h3>Understand</h3>
+            <p>分类、识别项目、勾勒文件之间的结构关系。</p>
+          </li>
+          <li class="lm-step lm-reveal">
+            <div class="lm-step__zh" aria-hidden="true">记</div>
+            <h3>Remember</h3>
+            <p>把稳定的元数据沉淀为可查询、可恢复的本地记忆。</p>
+          </li>
+          <li class="lm-step lm-reveal">
+            <div class="lm-step__zh" aria-hidden="true">行</div>
+            <h3>Act</h3>
+            <p>在你明确确认后，才归档或整理 —— 永远由你做主。</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ==================== 隐私 ==================== -->
+    <section class="lm-section" id="privacy" aria-labelledby="priv-title">
+      <div class="lm-container lm-privacy__grid">
+        <div class="lm-reveal">
+          <span class="lm-kicker">隐私是地基，不是选项</span>
+          <h2 id="priv-title" style="font-family:var(--han-font-song);font-size:clamp(1.9rem,4.5vw,3rem);font-weight:var(--han-fw-bold);letter-spacing:0.03em;line-height:1.15;margin:0.6rem 0 0;color:var(--lm-ink);">你的文件，<br>始终只关你的事。</h2>
+          <ul class="lm-pledge">
+            <li>
+              <span class="lm-pledge__seal" aria-hidden="true">读</span>
+              <div><strong>全程只读</strong><span>MVP 阶段只读取文件系统，只写入 Luma 自己的应用数据目录，不改动你的任何文件。</span></div>
+            </li>
+            <li>
+              <span class="lm-pledge__seal" aria-hidden="true">本</span>
+              <div><strong>数据不出本机</strong><span>路径与索引只保存在本地数据库，不上传、不发往远端、不写进联网日志。</span></div>
+            </li>
+            <li>
+              <span class="lm-pledge__seal" aria-hidden="true">界</span>
+              <div><strong>不越界扫描</strong><span>默认不跟随符号链接，避免循环遍历，也不擅自跨越到其他挂载点。</span></div>
+            </li>
+          </ul>
+        </div>
+        <div class="lm-privacy__card lm-reveal">
+          <span class="lm-big-seal" aria-hidden="true">守</span>
+          <p>你选择哪个目录，Luma 就只看哪个目录。理解你的数字世界，不等于把它交出去。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 技术 ==================== -->
+    <section class="lm-section lm-tech" id="tech" aria-labelledby="tech-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">原生的分量</span>
+            <h2 id="tech-title">为 Mac 而生，<br>快而克制。</h2>
+          </div>
+          <p>Luma 用原生技术栈构建：繁重的遍历交给 Rust 在后台完成，界面保持轻盈流畅，安装包也不臃肿。</p>
+        </div>
+        <div class="lm-tech-grid">
+          <article class="lm-tech-card lm-reveal">
+            <h3>Rust <small>Scanner Core</small></h3>
+            <p>文件遍历与聚合在 Rust 后台阻塞任务中进行，进度节流上报，不占用界面线程，也不把整份文件清单一次性搬进内存。</p>
+          </article>
+          <article class="lm-tech-card lm-reveal">
+            <h3>Tauri <small>Native Shell</small></h3>
+            <p>基于 Tauri 2 打包为原生桌面应用，体积小、启动快，权限受控 —— 每一项能力都对应明确的系统授权。</p>
+          </article>
+          <article class="lm-tech-card lm-reveal">
+            <h3>React <small>Interface</small></h3>
+            <p>React 19 + TypeScript 构建界面，跟随系统的浅色与深色主题，键盘可操作，窄窗口下也不会横向溢出。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 路线图 ==================== -->
+    <section class="lm-section" id="roadmap" aria-labelledby="road-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">诚实的进度</span>
+            <h2 id="road-title">一步一步，<br>把地基打牢。</h2>
+          </div>
+          <p>Luma 还年轻。我们不急着接上 AI，而是先把「看见」和「记住」做到可靠。以下是它正在走的路。</p>
+        </div>
+        <ol class="lm-road">
+          <li class="lm-reveal">
+            <div class="lm-road__phase">扫描原型<small>Milestone 1</small></div>
+            <div class="lm-road__body">
+              <h3>选目录、看进度、可取消 <span class="lm-road__now">进行中</span></h3>
+              <p>选择目录后看到实时的扫描进度与摘要，随时可以取消，坏文件不影响整体结果。</p>
+            </div>
+          </li>
+          <li class="lm-reveal">
+            <div class="lm-road__phase">可恢复<small>Milestone 2</small></div>
+            <div class="lm-road__body">
+              <h3>SQLite 索引与重启恢复</h3>
+              <p>扫描结果落盘为本地索引，重启后仍能查看最近一次成功扫描的完整结果页。</p>
+            </div>
+          </li>
+          <li class="lm-reveal">
+            <div class="lm-road__phase">可用版<small>Milestone 3</small></div>
+            <div class="lm-road__body">
+              <h3>本地发现、性能验证与安装包</h3>
+              <p>大文件、长期未整理等透明发现，经十万文件级的性能回归后，打包为可安装的内部版本。</p>
+            </div>
+          </li>
+          <li class="lm-reveal">
+            <div class="lm-road__phase">远景<small>Beyond</small></div>
+            <div class="lm-road__body">
+              <h3>项目识别、语义层与本地 AI 助手</h3>
+              <p>在数据可靠、持久稳定之后，才让模型基于结构化的本地信息回答问题，而非直接读取整个文件系统。</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ==================== 最终 CTA ==================== -->
+    <section class="lm-final" id="download" aria-labelledby="final-title">
+      <div class="lm-container lm-final__inner">
+        <span class="lm-kicker" style="justify-content:center;">给你的 Mac 一张地图</span>
+        <h2 id="final-title">让计算，<br>回归从容。</h2>
+        <p>Luma 正在开发中，尚未开放公开下载。留意后续进展，成为第一批照见自己数字世界的人。</p>
+        <div class="lm-final__actions">
+          <a class="lm-btn-primary" href="#top">关注开发进展</a>
+          <a class="lm-text-link" href="#capabilities">再看一遍能力</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="lm-footer">
+    <div class="lm-container">
+      <div class="lm-footer__top">
+        <div class="lm-footer__brand">
+          <img class="lm-brand__seal" src="assets/luma-logo.svg" alt="">
+          <span class="lm-brand__word">Luma<small>照见数字世界</small></span>
+        </div>
+        <p class="lm-footer__tag">Luma 是一款为 Mac 打造的本地文件理解工具。看见你的数字空间，理解它，并始终把决定权交还给你。</p>
+      </div>
+      <div class="lm-footer__bottom">
+        <span>© 2026 Luma · 开发预览</span>
+        <span>本页由 Han design skill（宋 · song 主题）构建 · 响应式 · 可访问</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      const nav = document.querySelector('.lm-nav');
+      const toggle = document.querySelector('.lm-nav__toggle');
+      const menu = document.getElementById('lm-menu');
+
+      // 滚动阴影
+      const onScroll = () => nav?.classList.toggle('is-scrolled', window.scrollY > 12);
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+
+      // 移动端菜单
+      const closeMenu = () => {
+        toggle?.setAttribute('aria-expanded', 'false');
+        toggle?.setAttribute('aria-label', '打开导航菜单');
+        nav?.classList.remove('lm-nav--open');
+      };
+      toggle?.addEventListener('click', () => {
+        const open = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', String(!open));
+        toggle.setAttribute('aria-label', open ? '打开导航菜单' : '关闭导航菜单');
+        nav?.classList.toggle('lm-nav--open', !open);
+      });
+      menu?.addEventListener('click', (e) => { if (e.target.closest('a')) closeMenu(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+
+      // 滚动显现
+      const reveals = document.querySelectorAll('.lm-reveal');
+      if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entries, obs) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) { entry.target.classList.add('is-visible'); obs.unobserve(entry.target); }
+          });
+        }, { threshold: 0.12 });
+        reveals.forEach((el) => io.observe(el));
+      } else {
+        reveals.forEach((el) => el.classList.add('is-visible'));
+      }
+    })();
+  </script>
+</body>
+</html>
