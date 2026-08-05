@@ -7,6 +7,7 @@ import type {
   InsightKind,
   InsightSummary,
   ProjectCandidate,
+  ScanComparison,
   ScanSummary,
   StartScanRequest,
 } from "../types/scan";
@@ -73,6 +74,17 @@ export function findDuplicates(
 
 export function listProjects(scanId: string): Promise<ProjectCandidate[]> {
   return invoke("list_projects", { scanId });
+}
+
+export function listScanHistory(scanId: string): Promise<ScanSummary[]> {
+  return invoke("list_scan_history", { scanId });
+}
+
+export function compareScans(
+  baseScanId: string,
+  targetScanId: string,
+): Promise<ScanComparison> {
+  return invoke("compare_scans", { baseScanId, targetScanId });
 }
 
 export function revealPath(path: string): Promise<void> {

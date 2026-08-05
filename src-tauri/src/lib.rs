@@ -76,6 +76,8 @@ pub fn run() {
             commands::list_insight_files,
             commands::find_duplicates,
             commands::list_projects,
+            commands::list_scan_history,
+            commands::compare_scans,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

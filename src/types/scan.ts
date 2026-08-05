@@ -91,3 +91,21 @@ export type ProjectCandidate = {
   size_bytes: number;
   file_count: number;
 };
+
+export type CategoryDelta = {
+  category: string;
+  baseSizeBytes: number;
+  targetSizeBytes: number;
+  baseFileCount: number;
+  targetFileCount: number;
+  sizeDelta: number;
+  fileCountDelta: number;
+};
+
+export type ScanComparison = {
+  base: ScanSummary;
+  target: ScanSummary;
+  totalBytesDelta: number;
+  totalFilesDelta: number;
+  categories: CategoryDelta[];
+};

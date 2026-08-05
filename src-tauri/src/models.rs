@@ -100,6 +100,42 @@ pub struct InsightSummary {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CategoryDelta {
+    pub category: String,
+    pub base_size_bytes: u64,
+    pub target_size_bytes: u64,
+    pub base_file_count: u64,
+    pub target_file_count: u64,
+    pub size_delta: i64,
+    pub file_count_delta: i64,
+}
+
+impl CategoryDelta {
+    pub fn empty(category: &str) -> Self {
+        Self {
+            category: category.to_owned(),
+            base_size_bytes: 0,
+            target_size_bytes: 0,
+            base_file_count: 0,
+            target_file_count: 0,
+            size_delta: 0,
+            file_count_delta: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanComparison {
+    pub base: ScanSummary,
+    pub target: ScanSummary,
+    pub total_bytes_delta: i64,
+    pub total_files_delta: i64,
+    pub categories: Vec<CategoryDelta>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScanFinished {
     pub scan_id: String,
     pub status: ScanStatus,

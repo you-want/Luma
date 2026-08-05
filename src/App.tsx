@@ -7,6 +7,7 @@ import { InsightList } from "./components/InsightList";
 import { LargeFiles } from "./components/LargeFiles";
 import Projects from "./components/Projects";
 import { ScanControls } from "./components/ScanControls";
+import { ScanHistory } from "./components/ScanHistory";
 import { ScanProgress } from "./components/ScanProgress";
 import { StorageOverview } from "./components/StorageOverview";
 import { useScanEvents } from "./hooks/useScanEvents";
@@ -225,6 +226,7 @@ function App() {
             <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
             <Duplicates scanId={app.summary.scanId} />
             <Projects scanId={app.summary.scanId} />
+            <ScanHistory scanId={app.summary.scanId} />
           </div>
         )}
       </div>

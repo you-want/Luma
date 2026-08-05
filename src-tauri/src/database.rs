@@ -1,6 +1,9 @@
 use crate::{
     error::AppError,
-    models::{CategorySummary, FileEntry, InsightSummary, ScanStats, ScanStatus, ScanSummary},
+    models::{
+        CategoryDelta, CategorySummary, FileEntry, InsightSummary, ScanComparison, ScanStats,
+        ScanStatus, ScanSummary,
+    },
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
@@ -391,14 +394,106 @@ fn push_insight(
 }
 
 pub fn prune_old_scans(connection: &Connection) -> Result<(), AppError> {
+    // Retain the three most recent terminal runs *per root path* so each
+    // scanned directory keeps its own history for comparison, instead of
+    // evicting one directory's runs when another directory is scanned.
     connection.execute(
         "DELETE FROM scan_runs WHERE id IN (
-           SELECT id FROM scan_runs WHERE status != 'running'
-           ORDER BY COALESCE(finished_at, started_at) DESC LIMIT -1 OFFSET 3
+           SELECT id FROM (
+             SELECT id, ROW_NUMBER() OVER (
+               PARTITION BY root_path
+               ORDER BY COALESCE(finished_at, started_at) DESC
+             ) AS rn
+             FROM scan_runs WHERE status != 'running'
+           ) WHERE rn > 3
          )",
         [],
     )?;
     Ok(())
+}
+
+/// Returns completed scans for the same root path as `scan_id`, newest first,
+/// so the UI can offer earlier runs to compare against.
+pub fn list_scan_history(path: &Path, scan_id: &str) -> Result<Vec<ScanSummary>, AppError> {
+    let connection = open(path)?;
+    let root_path = connection
+        .query_row(
+            "SELECT root_path FROM scan_runs WHERE id = ?1",
+            [scan_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let Some(root_path) = root_path else {
+        return Ok(Vec::new());
+    };
+
+    let mut statement = connection.prepare(
+        "SELECT id FROM scan_runs
+         WHERE root_path = ?1 AND status = 'completed'
+         ORDER BY COALESCE(finished_at, started_at) DESC",
+    )?;
+    let ids = statement
+        .query_map([root_path], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    ids.iter()
+        .map(|id| scan_summary_with_connection(&connection, id))
+        .collect()
+}
+
+/// Compares two completed scans and reports the per-category and total
+/// deltas between them. `base` is the earlier reference; `target` is the
+/// scan being examined.
+pub fn compare_scans(
+    path: &Path,
+    base_scan_id: &str,
+    target_scan_id: &str,
+) -> Result<ScanComparison, AppError> {
+    let connection = open(path)?;
+    let base = scan_summary_with_connection(&connection, base_scan_id)?;
+    let target = scan_summary_with_connection(&connection, target_scan_id)?;
+
+    let mut categories: std::collections::BTreeMap<String, CategoryDelta> =
+        std::collections::BTreeMap::new();
+    for category in &base.categories {
+        let entry = categories
+            .entry(category.category.clone())
+            .or_insert_with(|| CategoryDelta::empty(&category.category));
+        entry.base_size_bytes = category.size_bytes;
+        entry.base_file_count = category.file_count;
+    }
+    for category in &target.categories {
+        let entry = categories
+            .entry(category.category.clone())
+            .or_insert_with(|| CategoryDelta::empty(&category.category));
+        entry.target_size_bytes = category.size_bytes;
+        entry.target_file_count = category.file_count;
+    }
+
+    let mut category_deltas: Vec<CategoryDelta> = categories
+        .into_values()
+        .map(|mut delta| {
+            delta.size_delta = i128_delta(delta.target_size_bytes, delta.base_size_bytes);
+            delta.file_count_delta = i128_delta(delta.target_file_count, delta.base_file_count);
+            delta
+        })
+        .collect();
+    // Largest absolute size change first so the biggest movers surface on top.
+    category_deltas.sort_by(|a, b| b.size_delta.abs().cmp(&a.size_delta.abs()));
+
+    Ok(ScanComparison {
+        total_bytes_delta: i128_delta(target.total_bytes, base.total_bytes),
+        total_files_delta: i128_delta(target.total_files, base.total_files),
+        categories: category_deltas,
+        base,
+        target,
+    })
+}
+
+/// Signed difference between two unsigned counters, saturating into i64 so a
+/// very large swing can never wrap.
+fn i128_delta(target: u64, base: u64) -> i64 {
+    let delta = i128::from(target) - i128::from(base);
+    delta.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64
 }
 
 fn parse_status(value: &str) -> ScanStatus {
@@ -421,8 +516,9 @@ fn from_i64(value: i64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_scan_run, finish_scan, initialize, insert_file_batch, latest_scan,
-        list_insight_files, list_insights, list_large_files, open, prune_old_scans,
+        compare_scans, create_scan_run, finish_scan, initialize, insert_file_batch, latest_scan,
+        list_insight_files, list_insights, list_large_files, list_scan_history, open,
+        prune_old_scans,
     };
     use crate::models::{FileEntry, ScanStats, ScanStatus};
     use std::fs;
@@ -659,6 +755,131 @@ mod tests {
             .expect("count retained scans");
         assert_eq!(remaining, 3);
         drop(connection);
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    #[test]
+    fn retains_history_per_root_path() {
+        // Two directories each scanned four times: pruning must keep three runs
+        // *per directory*, not three across the whole table.
+        let database_path =
+            std::env::temp_dir().join(format!("luma-per-root-{}.sqlite3", Uuid::new_v4()));
+        initialize(&database_path).expect("initialize database");
+        let connection = open(&database_path).expect("open database");
+        for root in ["/alpha", "/beta"] {
+            for index in 0..4 {
+                connection
+                    .execute(
+                        "INSERT INTO scan_runs (id, root_path, status, started_at, finished_at)
+                         VALUES (?1, ?2, 'completed', ?3, ?3)",
+                        rusqlite::params![format!("{root}-{index}"), root, index],
+                    )
+                    .expect("insert terminal scan");
+            }
+        }
+
+        prune_old_scans(&connection).expect("prune old scans");
+        for root in ["/alpha", "/beta"] {
+            let kept: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM scan_runs WHERE root_path = ?1",
+                    [root],
+                    |row| row.get(0),
+                )
+                .expect("count retained scans");
+            assert_eq!(kept, 3, "each root path keeps its three newest runs");
+        }
+        drop(connection);
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    #[test]
+    fn compares_two_scans_of_the_same_directory() {
+        let database_path =
+            std::env::temp_dir().join(format!("luma-compare-{}.sqlite3", Uuid::new_v4()));
+        initialize(&database_path).expect("initialize database");
+
+        // Base scan: one 100-byte document.
+        create_scan_run(&database_path, "base", "/dir", 10).expect("create base run");
+        let mut connection = open(&database_path).expect("open database");
+        insert_file_batch(
+            &mut connection,
+            "base",
+            &[file("/dir/a.txt", "a.txt", "documents", 100, Some(10))],
+        )
+        .expect("insert base files");
+        finish_scan(
+            &connection,
+            "base",
+            ScanStatus::Completed,
+            &ScanStats {
+                files_scanned: 1,
+                directories_scanned: 0,
+                bytes_scanned: 100,
+                errors: 0,
+            },
+            20,
+        )
+        .expect("finish base scan");
+
+        // Target scan: the document grew and a new video appeared.
+        create_scan_run(&database_path, "target", "/dir", 30).expect("create target run");
+        insert_file_batch(
+            &mut connection,
+            "target",
+            &[
+                file("/dir/a.txt", "a.txt", "documents", 300, Some(30)),
+                file("/dir/b.mp4", "b.mp4", "videos", 5000, Some(30)),
+            ],
+        )
+        .expect("insert target files");
+        finish_scan(
+            &connection,
+            "target",
+            ScanStatus::Completed,
+            &ScanStats {
+                files_scanned: 2,
+                directories_scanned: 0,
+                bytes_scanned: 5300,
+                errors: 0,
+            },
+            40,
+        )
+        .expect("finish target scan");
+        drop(connection);
+
+        // History lists both completed runs of /dir, newest first.
+        let history = list_scan_history(&database_path, "target").expect("list history");
+        assert_eq!(
+            history
+                .iter()
+                .map(|s| s.scan_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["target", "base"]
+        );
+
+        let comparison = compare_scans(&database_path, "base", "target").expect("compare scans");
+        assert_eq!(comparison.total_bytes_delta, 5200);
+        assert_eq!(comparison.total_files_delta, 1);
+
+        // The newly added video is the biggest mover, so it sorts first.
+        let videos = comparison
+            .categories
+            .iter()
+            .find(|c| c.category == "videos")
+            .expect("videos delta present");
+        assert_eq!(videos.size_delta, 5000);
+        assert_eq!(videos.base_size_bytes, 0);
+        assert_eq!(videos.target_size_bytes, 5000);
+
+        let documents = comparison
+            .categories
+            .iter()
+            .find(|c| c.category == "documents")
+            .expect("documents delta present");
+        assert_eq!(documents.size_delta, 200);
+        assert_eq!(documents.file_count_delta, 0);
+
         fs::remove_file(database_path).expect("remove fixture database");
     }
 }

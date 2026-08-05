@@ -2,7 +2,10 @@ use crate::{
     database,
     duplicates::{self, DuplicateGroup},
     error::AppError,
-    models::{FileEntry, InsightSummary, ScanFinished, ScanStatus, ScanSummary, StartScanRequest},
+    models::{
+        FileEntry, InsightSummary, ScanComparison, ScanFinished, ScanStatus, ScanSummary,
+        StartScanRequest,
+    },
     projects::{self, ProjectCandidate},
     scanner,
 };
@@ -215,6 +218,23 @@ pub fn find_duplicates(
 ) -> Result<Vec<DuplicateGroup>, AppError> {
     let size_threshold = min_size.unwrap_or(1024 * 1024); // 默认 1MB
     duplicates::find_duplicate_candidates(&state.database_path, &scan_id, size_threshold)
+}
+
+#[tauri::command]
+pub fn list_scan_history(
+    state: State<'_, AppState>,
+    scan_id: String,
+) -> Result<Vec<ScanSummary>, AppError> {
+    database::list_scan_history(&state.database_path, &scan_id)
+}
+
+#[tauri::command]
+pub fn compare_scans(
+    state: State<'_, AppState>,
+    base_scan_id: String,
+    target_scan_id: String,
+) -> Result<ScanComparison, AppError> {
+    database::compare_scans(&state.database_path, &base_scan_id, &target_scan_id)
 }
 
 fn now_seconds() -> i64 {
