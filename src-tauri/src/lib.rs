@@ -7,6 +7,7 @@ mod scanner;
 use commands::AppState;
 use std::{collections::HashMap, sync::Mutex};
 use tauri::{menu::MenuBuilder, tray::TrayIconBuilder, Manager};
+use tauri_plugin_updater::UpdaterExt;
 
 const TRAY_ICON: tauri::image::Image<'_> = tauri::include_image!("./icons/tray-icon.png");
 
@@ -15,6 +16,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let tray_menu = MenuBuilder::new(app)
                 .text("show", "显示 Luma")
@@ -47,6 +49,20 @@ pub fn run() {
                 database_path,
                 cancellations: Mutex::new(HashMap::new()),
             });
+
+            // 启动后台更新检查
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match handle.updater() {
+                    Ok(updater) => {
+                        if let Ok(Some(update)) = updater.check().await {
+                            let _ = update.download_and_install(|_chunk, _total| {}, || {}).await;
+                        }
+                    }
+                    Err(_) => {}
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -102,6 +102,15 @@ git push origin v0.2.0
 
 当前构建尚未签名和公证，只面向内部构建验证。
 
+## 反馈与支持
+
+遇到问题、有功能建议或想讨论使用场景？
+
+- **报告 Bug 或提出功能需求** — [GitHub Issues](https://github.com/you-want/Luma/issues)
+- **使用讨论与问答** — [GitHub Discussions](https://github.com/you-want/Luma/discussions)
+
+贡献代码或改进文档前，建议先开 Issue 讨论方向。
+
 ## 当前限制
 
 - 首个验收平台是 macOS，尚未承诺 Windows 或 Linux 兼容性。

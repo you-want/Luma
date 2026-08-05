@@ -68,6 +68,7 @@ jobs:
       # tauri-action 会执行 beforeBuildCommand（pnpm build）再打包，
       # 然后用当前 tag 创建 Release 并上传 .dmg / .app。
       - name: Build and release
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,5 +87,37 @@ jobs:
 
             下载 `.dmg`，拖入「应用程序」即可。
 
-            > 该构建未经过 Apple 代码签名与公证。首次打开若提示“无法验证开发者”，
+            > 该构建未经过 Apple 代码签名与公证。首次打开若提示”无法验证开发者”，
             > 请在「访达」中右键点击应用选择「打开」，或在「系统设置 › 隐私与安全性」中允许运行。
+
+      # 生成 latest.json 更新清单并上传，供 Tauri Updater 检查新版本。
+      - name: Generate updater manifest
+        run: |
+          VERSION=”${GITHUB_REF_NAME#v}”
+          DOWNLOAD_URL=”https://github.com/you-want/Luma/releases/download/${{ github.ref_name }}/Luma_${VERSION}_universal.dmg.tar.gz”
+          SIG_URL=”https://github.com/you-want/Luma/releases/download/${{ github.ref_name }}/Luma_${VERSION}_universal.dmg.tar.gz.sig”
+
+          # 读取签名文件内容
+          SIGNATURE=$(cat “src-tauri/target/universal-apple-darwin/release/bundle/dmg/Luma_${VERSION}_universal.dmg.tar.gz.sig”)
+
+          # 生成 latest.json
+          cat > latest.json <<EOF
+          {
+            “version”: “$VERSION”,
+            “date”: “$(date -u +%Y-%m-%dT%H:%M:%SZ)”,
+            “platforms”: {
+              “darwin-universal”: {
+                “url”: “$DOWNLOAD_URL”,
+                “signature”: “$SIGNATURE”
+              }
+            }
+          }
+          EOF
+
+          cat latest.json
+
+      - name: Upload updater manifest
+        uses: softprops/action-gh-release@v1
+        with:
+          files: latest.json
+          tag_name: ${{ github.ref_name }}
