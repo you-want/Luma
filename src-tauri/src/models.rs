@@ -61,6 +61,8 @@ pub struct FileEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified_at: Option<i64>,
     pub is_hidden: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

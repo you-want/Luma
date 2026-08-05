@@ -1,5 +1,6 @@
 mod commands;
 mod database;
+mod duplicates;
 mod error;
 mod models;
 mod scanner;
@@ -73,6 +74,7 @@ pub fn run() {
             commands::list_large_files,
             commands::list_insights,
             commands::list_insight_files,
+            commands::find_duplicates,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

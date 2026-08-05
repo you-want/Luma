@@ -30,6 +30,7 @@ export type FileEntry = {
   sizeBytes: number;
   modifiedAt?: number;
   isHidden: boolean;
+  contentHash?: string;
 };
 
 export type ScanSummary = {
@@ -64,4 +65,12 @@ export type ScanFinished = {
   status: ScanStatus;
   summary?: ScanSummary;
   error?: { code: string; message: string };
+};
+
+export type DuplicateGroup = {
+  contentHash: string;
+  sizeBytes: number;
+  fileCount: number;
+  wastedBytes: number;
+  files: FileEntry[];
 };

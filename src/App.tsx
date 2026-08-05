@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { Database, ShieldCheck, TriangleAlert } from "lucide-react";
 import { appStore, useAppStore } from "./app/store";
 import { CategoryList } from "./components/CategoryList";
+import { Duplicates } from "./components/Duplicates";
 import { InsightList } from "./components/InsightList";
 import { LargeFiles } from "./components/LargeFiles";
 import { ScanControls } from "./components/ScanControls";
@@ -221,6 +222,7 @@ function App() {
               />
             </div>
             <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
+            <Duplicates scanId={app.summary.scanId} />
           </div>
         )}
       </div>

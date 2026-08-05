@@ -1,5 +1,6 @@
 use crate::{
     database,
+    duplicates::{self, DuplicateGroup},
     error::AppError,
     models::{FileEntry, InsightSummary, ScanFinished, ScanStatus, ScanSummary, StartScanRequest},
     scanner,
@@ -195,6 +196,16 @@ pub fn list_insight_files(
         stale_before,
         limit.unwrap_or(10).clamp(1, 100),
     )
+}
+
+#[tauri::command]
+pub fn find_duplicates(
+    state: State<'_, AppState>,
+    scan_id: String,
+    min_size: Option<u64>,
+) -> Result<Vec<DuplicateGroup>, AppError> {
+    let size_threshold = min_size.unwrap_or(1024 * 1024); // 默认 1MB
+    duplicates::find_duplicate_candidates(&state.database_path, &scan_id, size_threshold)
 }
 
 fn now_seconds() -> i64 {

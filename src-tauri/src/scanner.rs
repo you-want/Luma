@@ -196,6 +196,7 @@ fn file_entry(entry: &DirEntry, root: &Path) -> Result<FileEntry, AppError> {
         size_bytes: metadata.len(),
         modified_at,
         is_hidden: is_hidden_path(path, root),
+        content_hash: None,
     })
 }
 

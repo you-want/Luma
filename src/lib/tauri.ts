@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
+  DuplicateGroup,
   FileEntry,
   InsightKind,
   InsightSummary,
@@ -64,4 +65,11 @@ export function listInsightFiles(
 
 export function revealPath(path: string): Promise<void> {
   return revealItemInDir(path);
+}
+
+export function findDuplicates(
+  scanId: string,
+  minSize?: number,
+): Promise<DuplicateGroup[]> {
+  return invoke("find_duplicates", { scanId, minSize });
 }

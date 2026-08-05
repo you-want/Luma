@@ -9,7 +9,7 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
     let connection = open(path)?;
     let schema_version =
         connection.query_row("PRAGMA user_version", [], |row| row.get::<_, u32>(0))?;
-    if schema_version > 1 {
+    if schema_version > 2 {
         return Err(AppError::new(
             "DATABASE_ERROR",
             format!("数据库版本 {schema_version} 高于当前应用支持的版本。"),
@@ -39,20 +39,24 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
           size_bytes INTEGER NOT NULL,
           modified_at INTEGER,
           is_hidden INTEGER NOT NULL DEFAULT 0,
+          content_hash TEXT,
           FOREIGN KEY(scan_id) REFERENCES scan_runs(id) ON DELETE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS idx_files_scan_size ON files(scan_id, size_bytes DESC);
         CREATE INDEX IF NOT EXISTS idx_files_scan_category ON files(scan_id, category);
         CREATE INDEX IF NOT EXISTS idx_files_scan_modified ON files(scan_id, modified_at);
+        CREATE INDEX IF NOT EXISTS idx_files_size_hash ON files(scan_id, size_bytes, content_hash);
 
         UPDATE scan_runs
         SET status = 'failed', finished_at = unixepoch()
         WHERE status = 'running';
-
-        PRAGMA user_version = 1;
         ",
     )?;
+
+    if schema_version < 2 {
+        connection.execute("PRAGMA user_version = 2", [])?;
+    }
     Ok(())
 }
 
@@ -84,8 +88,8 @@ pub fn insert_file_batch(
     {
         let mut statement = transaction.prepare(
             "INSERT INTO files
-             (scan_id, path, name, extension, category, size_bytes, modified_at, is_hidden)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             (scan_id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )?;
         for file in files {
             statement.execute(params![
@@ -97,6 +101,7 @@ pub fn insert_file_batch(
                 to_i64(file.size_bytes),
                 file.modified_at,
                 i64::from(file.is_hidden),
+                file.content_hash,
             ])?;
         }
     }
@@ -211,7 +216,7 @@ pub fn list_large_files(
 ) -> Result<Vec<FileEntry>, AppError> {
     let connection = open(path)?;
     let mut statement = connection.prepare(
-        "SELECT path, name, extension, category, size_bytes, modified_at, is_hidden
+        "SELECT path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
          FROM files WHERE scan_id = ?1 ORDER BY size_bytes DESC LIMIT ?2 OFFSET ?3",
     )?;
     let rows = statement.query_map(params![scan_id, limit, offset], |row| {
@@ -223,6 +228,7 @@ pub fn list_large_files(
             size_bytes: from_i64(row.get(4)?),
             modified_at: row.get(5)?,
             is_hidden: row.get::<_, i64>(6)? != 0,
+            content_hash: row.get(7)?,
         })
     })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -262,7 +268,7 @@ pub fn list_insight_files(
     };
 
     let sql = format!(
-        "SELECT path, name, extension, category, size_bytes, modified_at, is_hidden
+        "SELECT path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
          FROM files WHERE scan_id = ?1 AND {predicate}
          ORDER BY size_bytes DESC LIMIT {limit}"
     );
@@ -276,6 +282,7 @@ pub fn list_insight_files(
             size_bytes: from_i64(row.get(4)?),
             modified_at: row.get(5)?,
             is_hidden: row.get::<_, i64>(6)? != 0,
+            content_hash: row.get(7)?,
         })
     };
     let rows = match extra_param {
@@ -436,6 +443,7 @@ mod tests {
             size_bytes,
             modified_at,
             is_hidden: false,
+            content_hash: None,
         }
     }
 
@@ -455,6 +463,7 @@ mod tests {
                 size_bytes: 400,
                 modified_at: Some(10),
                 is_hidden: false,
+                content_hash: None,
             },
             FileEntry {
                 path: "/fixture/installer.dmg".to_owned(),
@@ -464,6 +473,7 @@ mod tests {
                 size_bytes: 200,
                 modified_at: Some(90),
                 is_hidden: false,
+                content_hash: None,
             },
         ];
         insert_file_batch(&mut connection, "scan-1", &files).expect("insert files");
@@ -598,7 +608,7 @@ mod tests {
             .expect("query schema version");
 
         assert_eq!(status, "failed");
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
         drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");
     }
