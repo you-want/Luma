@@ -85,39 +85,15 @@ jobs:
           releaseBody: |
             Luma ${{ github.ref_name }}
 
+            本版新增：
+            - 重复文件候选检测（本机 BLAKE3 内容哈希）
+            - Node.js、Rust、Python、Git、Xcode、Maven、Gradle 项目识别
+            - 同一目录最近三次扫描的历史对比
+            - 旧版数据库原位迁移与兼容修复
+
             下载 `.dmg`，拖入「应用程序」即可。
 
             > 该构建未经过 Apple 代码签名与公证。首次打开若提示”无法验证开发者”，
             > 请在「访达」中右键点击应用选择「打开」，或在「系统设置 › 隐私与安全性」中允许运行。
 
-      # 生成 latest.json 更新清单并上传，供 Tauri Updater 检查新版本。
-      - name: Generate updater manifest
-        run: |
-          VERSION=”${GITHUB_REF_NAME#v}”
-          DOWNLOAD_URL=”https://github.com/you-want/Luma/releases/download/${{ github.ref_name }}/Luma_${VERSION}_universal.dmg.tar.gz”
-          SIG_URL=”https://github.com/you-want/Luma/releases/download/${{ github.ref_name }}/Luma_${VERSION}_universal.dmg.tar.gz.sig”
-
-          # 读取签名文件内容
-          SIGNATURE=$(cat “src-tauri/target/universal-apple-darwin/release/bundle/dmg/Luma_${VERSION}_universal.dmg.tar.gz.sig”)
-
-          # 生成 latest.json
-          cat > latest.json <<EOF
-          {
-            “version”: “$VERSION”,
-            “date”: “$(date -u +%Y-%m-%dT%H:%M:%SZ)”,
-            “platforms”: {
-              “darwin-universal”: {
-                “url”: “$DOWNLOAD_URL”,
-                “signature”: “$SIGNATURE”
-              }
-            }
-          }
-          EOF
-
-          cat latest.json
-
-      - name: Upload updater manifest
-        uses: softprops/action-gh-release@v1
-        with:
-          files: latest.json
-          tag_name: ${{ github.ref_name }}
+            当前内部预览版暂不启用自动更新，请从 Releases 页面获取后续版本。

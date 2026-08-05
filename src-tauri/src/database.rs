@@ -49,8 +49,28 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
         CREATE INDEX IF NOT EXISTS idx_files_scan_size ON files(scan_id, size_bytes DESC);
         CREATE INDEX IF NOT EXISTS idx_files_scan_category ON files(scan_id, category);
         CREATE INDEX IF NOT EXISTS idx_files_scan_modified ON files(scan_id, modified_at);
-        CREATE INDEX IF NOT EXISTS idx_files_size_hash ON files(scan_id, size_bytes, content_hash);
+",
+    )?;
 
+    // Older databases predate duplicate detection and do not have content_hash.
+    // Migrate them in place before creating the index or running any queries
+    // that select the new column. The PRAGMA check keeps this idempotent.
+    let has_content_hash = connection
+        .prepare("PRAGMA table_info(files)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|name| name == "content_hash");
+    if !has_content_hash {
+        connection.execute("ALTER TABLE files ADD COLUMN content_hash TEXT", [])?;
+    }
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_files_size_hash ON files(scan_id, size_bytes, content_hash)",
+        [],
+    )?;
+
+    connection.execute_batch(
+        "
         UPDATE scan_runs
         SET status = 'failed', finished_at = unixepoch()
         WHERE status = 'running';
@@ -729,6 +749,76 @@ mod tests {
 
         assert_eq!(status, "failed");
         assert_eq!(version, 2);
+        drop(connection);
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    #[test]
+    fn migrates_version_one_database_without_losing_files() {
+        let database_path =
+            std::env::temp_dir().join(format!("luma-v1-migration-{}.sqlite3", Uuid::new_v4()));
+        let connection = open(&database_path).expect("open legacy database");
+        connection
+            .execute_batch(
+                "
+                CREATE TABLE scan_runs (
+                  id TEXT PRIMARY KEY,
+                  root_path TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  started_at INTEGER NOT NULL,
+                  finished_at INTEGER,
+                  total_files INTEGER NOT NULL DEFAULT 0,
+                  total_directories INTEGER NOT NULL DEFAULT 0,
+                  total_bytes INTEGER NOT NULL DEFAULT 0,
+                  error_count INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE TABLE files (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  scan_id TEXT NOT NULL,
+                  path TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  extension TEXT,
+                  category TEXT NOT NULL,
+                  size_bytes INTEGER NOT NULL,
+                  modified_at INTEGER,
+                  is_hidden INTEGER NOT NULL DEFAULT 0,
+                  FOREIGN KEY(scan_id) REFERENCES scan_runs(id) ON DELETE CASCADE
+                );
+                INSERT INTO scan_runs (
+                  id, root_path, status, started_at, finished_at, total_files, total_bytes
+                ) VALUES ('legacy', '/fixture', 'completed', 100, 200, 1, 42);
+                INSERT INTO files (
+                  scan_id, path, name, category, size_bytes
+                ) VALUES ('legacy', '/fixture/keep.txt', 'keep.txt', 'documents', 42);
+                PRAGMA user_version = 1;
+                ",
+            )
+            .expect("create legacy schema");
+        drop(connection);
+
+        initialize(&database_path).expect("migrate legacy database");
+        let connection = open(&database_path).expect("reopen migrated database");
+        let version: u32 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("query schema version");
+        let columns = connection
+            .prepare("PRAGMA table_info(files)")
+            .expect("prepare column query")
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query columns")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect columns");
+        let retained_path: String = connection
+            .query_row(
+                "SELECT path FROM files WHERE scan_id = 'legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query retained file");
+
+        assert_eq!(version, 2);
+        assert!(columns.iter().any(|column| column == "content_hash"));
+        assert_eq!(retained_path, "/fixture/keep.txt");
         drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");
     }

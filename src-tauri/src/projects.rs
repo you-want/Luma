@@ -3,6 +3,7 @@ use rusqlite::{params, Connection};
 use std::path::Path;
 
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectCandidate {
     pub path: String,
     pub name: String,
@@ -325,6 +326,24 @@ mod tests {
     use crate::models::FileEntry;
     use std::fs;
     use uuid::Uuid;
+
+    #[test]
+    fn serializes_project_candidate_with_camel_case_fields() {
+        let project = ProjectCandidate {
+            path: "/test/my-app".to_owned(),
+            name: "my-app".to_owned(),
+            kind: ProjectKind::NodeJs,
+            size_bytes: 51_024,
+            file_count: 2,
+        };
+
+        let value = serde_json::to_value(project).expect("serialize project candidate");
+
+        assert_eq!(value["sizeBytes"], 51_024);
+        assert_eq!(value["fileCount"], 2);
+        assert!(value.get("size_bytes").is_none());
+        assert!(value.get("file_count").is_none());
+    }
 
     #[test]
     fn identifies_nodejs_project() {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Luma · 照见你的数字世界</title>
-  <meta name="description" content="Luma 是一款为 Mac 打造的本地文件理解工具。它扫描你的目录，建立数字空间地图，找出大文件与长期未整理的角落 —— 全程只读、数据不出本机。">
+  <meta name="description" content="Luma 0.2.0 是一款为 Mac 打造的本地文件空间观察工具，可查看空间分类、重复文件候选、开发项目与扫描历史。只读运行，数据不出本机。">
   <meta name="theme-color" content="#17211f">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -544,7 +544,7 @@
     .lm-insights { background: color-mix(in srgb, var(--han-color-paper-100) 62%, var(--han-color-bg)); }
     .lm-insight-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(3, 1fr);
       gap: var(--han-space-5);
     }
     .lm-insight {
@@ -850,7 +850,7 @@
           <li><a href="#roadmap">路线图</a></li>
         </ul>
       </nav>
-      <a class="lm-nav__cta lm-nav__cta--top" href="#download">抢先了解</a>
+      <a class="lm-nav__cta lm-nav__cta--top" href="#download">获取预览版</a>
       <button class="lm-nav__toggle" type="button" aria-expanded="false" aria-controls="lm-menu" aria-label="打开导航菜单">
         <span></span><span></span><span></span>
       </button>
@@ -863,12 +863,12 @@
       <div class="lm-hero__seal-col" aria-hidden="true">观其形 · 知其里 · 各归其位</div>
       <div class="lm-container lm-hero__grid">
         <div class="lm-hero__copy">
-          <span class="lm-kicker">本地文件理解引擎 · FOR MAC</span>
+          <span class="lm-kicker">v0.2.0 内部预览 · FOR MAC</span>
           <h1 class="lm-hero__title" id="hero-title">看得见的，<em>才谈得上理解。</em></h1>
-          <p class="lm-hero__en">Luma — AI that understands your digital world.</p>
-          <p class="lm-hero__lead">你的 Mac 里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，画出数字空间的全貌，找出占地的大文件与久未整理的角落 —— 全程只读，数据不离开这台电脑。</p>
+          <p class="lm-hero__en">Luma — Local insight for your digital world.</p>
+          <p class="lm-hero__lead">你的 Mac 里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化。它不修改任何原文件，所有分析都留在这台电脑。</p>
           <div class="lm-hero__actions">
-            <a class="lm-btn-primary" href="#download">抢先了解 Luma</a>
+            <a class="lm-btn-primary" href="#download">获取 Luma 0.2.0</a>
             <a class="lm-text-link" href="#capabilities">看看它怎么工作</a>
           </div>
           <div class="lm-hero__meta">
@@ -929,8 +929,8 @@
             <div class="lm-eye__idx" aria-hidden="true">二</div>
             <h3>理解 · 第二个大脑</h3>
             <p class="lm-eye__en">The Understanding</p>
-            <p>扫描结果落进本地 SQLite，重启后依然在。Luma 把零散的文件整理成可查询的空间地图，识别开发项目、区分类别、勾勒结构 —— 为将来的记忆与行动打好地基，而不是把整个硬盘塞给一个模型。</p>
-            <span class="lm-eye__tag">本地索引 · 可恢复 · 结构化</span>
+            <p>扫描结果落进本地 SQLite，重启后依然在。Luma 把零散的文件整理成可查询的空间地图，识别开发项目，并对比同一目录最近三次扫描的容量与分类变化。</p>
+            <span class="lm-eye__tag">本地索引 · 项目识别 · 历史对比</span>
           </article>
         </div>
       </div>
@@ -967,6 +967,16 @@
             <h3>压缩与安装包</h3>
             <p>按扩展名聚合压缩包与安装包，提示这里可能是一片值得复查的可释放空间。</p>
           </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">同</div>
+            <h3>重复文件候选</h3>
+            <p>由你主动发起后，Luma 才读取候选文件内容并在本机计算 BLAKE3 哈希，确认内容完全相同的文件组。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">变</div>
+            <h3>项目与历史</h3>
+            <p>识别常见开发项目，并比较同一目录最近三次扫描，查看总容量、文件数和分类变化。</p>
+          </article>
         </div>
       </div>
     </section>
@@ -990,7 +1000,7 @@
           <li class="lm-step lm-reveal">
             <div class="lm-step__zh" aria-hidden="true">识</div>
             <h3>Understand</h3>
-            <p>分类、识别项目、勾勒文件之间的结构关系。</p>
+            <p>分类、识别开发项目、确认重复候选并呈现历史变化。</p>
           </li>
           <li class="lm-step lm-reveal">
             <div class="lm-step__zh" aria-hidden="true">记</div>
@@ -1015,7 +1025,7 @@
           <ul class="lm-pledge">
             <li>
               <span class="lm-pledge__seal" aria-hidden="true">读</span>
-              <div><strong>全程只读</strong><span>MVP 阶段只读取文件系统，只写入 Luma 自己的应用数据目录，不改动你的任何文件。</span></div>
+              <div><strong>只读、不改文件</strong><span>普通扫描只读取路径和元数据；只有你主动查找重复时才读取候选文件内容。Luma 不修改、移动或删除任何原文件。</span></div>
             </li>
             <li>
               <span class="lm-pledge__seal" aria-hidden="true">本</span>
@@ -1069,13 +1079,13 @@
             <span class="lm-kicker">诚实的进度</span>
             <h2 id="road-title">一步一步，<br>把地基打牢。</h2>
           </div>
-          <p>Luma 还年轻。我们不急着接上 AI，而是先把「看见」和「记住」做到可靠。以下是它正在走的路。</p>
+          <p>Luma 还年轻。v0.2.0 先把「看见、复查、比较」做到可靠，再继续探索更深的本地理解能力。</p>
         </div>
         <ol class="lm-road">
           <li class="lm-reveal">
             <div class="lm-road__phase">扫描原型<small>Milestone 1</small></div>
             <div class="lm-road__body">
-              <h3>选目录、看进度、可取消 <span class="lm-road__now">进行中</span></h3>
+              <h3>选目录、看进度、可取消</h3>
               <p>选择目录后看到实时的扫描进度与摘要，随时可以取消，坏文件不影响整体结果。</p>
             </div>
           </li>
@@ -1089,15 +1099,15 @@
           <li class="lm-reveal">
             <div class="lm-road__phase">可用版<small>Milestone 3</small></div>
             <div class="lm-road__body">
-              <h3>本地发现、性能验证与安装包</h3>
-              <p>大文件、长期未整理等透明发现，经十万文件级的性能回归后，打包为可安装的内部版本。</p>
+              <h3>重复候选、项目识别与历史对比 <span class="lm-road__now">v0.2.0</span></h3>
+              <p>在透明发现之上增加内容重复确认、开发项目识别和同目录历史比较，并打包为可安装的内部预览版。</p>
             </div>
           </li>
           <li class="lm-reveal">
             <div class="lm-road__phase">远景<small>Beyond</small></div>
             <div class="lm-road__body">
-              <h3>项目识别、语义层与本地 AI 助手</h3>
-              <p>在数据可靠、持久稳定之后，才让模型基于结构化的本地信息回答问题，而非直接读取整个文件系统。</p>
+              <h3>语义层与本地 AI 助手</h3>
+              <p>在数据可靠、持久稳定之后，再让模型基于结构化的本地信息回答问题，而非直接读取整个文件系统。</p>
             </div>
           </li>
         </ol>
@@ -1109,10 +1119,10 @@
       <div class="lm-container lm-final__inner">
         <span class="lm-kicker" style="justify-content:center;">给你的 Mac 一张地图</span>
         <h2 id="final-title">让计算，<br>回归从容。</h2>
-        <p>Luma 正在开发中，尚未开放公开下载。留意后续进展，成为第一批照见自己数字世界的人。</p>
+        <p>Luma 0.2.0 是面向 macOS 的内部预览版。安装包尚未签名和公证，首次打开需在访达中右键选择“打开”。</p>
         <div class="lm-final__actions">
-          <a class="lm-btn-primary" href="#top">关注开发进展</a>
-          <a class="lm-text-link" href="#capabilities">再看一遍能力</a>
+          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases" rel="noopener noreferrer">前往 GitHub Releases</a>
+          <a class="lm-text-link" href="https://github.com/you-want/Luma" rel="noopener noreferrer">查看源代码</a>
         </div>
       </div>
     </section>
@@ -1128,7 +1138,7 @@
         <p class="lm-footer__tag">Luma 是一款为 Mac 打造的本地文件理解工具。看见你的数字空间，理解它，并始终把决定权交还给你。</p>
       </div>
       <div class="lm-footer__bottom">
-        <span>© 2026 Luma · 开发预览</span>
+        <span>© 2026 Luma · v0.2.0 内部预览</span>
         <span>本页由 Han design skill（宋 · song 主题）构建 · 响应式 · 可访问</span>
       </div>
     </div>

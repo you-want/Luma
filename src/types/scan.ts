@@ -88,8 +88,8 @@ export type ProjectCandidate = {
   path: string;
   name: string;
   kind: ProjectKind;
-  size_bytes: number;
-  file_count: number;
+  sizeBytes: number;
+  fileCount: number;
 };
 
 export type CategoryDelta = {

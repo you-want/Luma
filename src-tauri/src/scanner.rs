@@ -238,11 +238,95 @@ pub fn classify_extension(extension: Option<&str>) -> &'static str {
 mod tests {
     use super::{classify_extension, scan_directory};
     use crate::models::{ScanStatus, StartScanRequest};
+    use crate::{
+        database::{
+            compare_scans, create_scan_run, finish_scan, initialize, insert_file_batch,
+            list_scan_history, open,
+        },
+        duplicates::find_duplicate_candidates,
+        projects::identify_projects,
+    };
     use std::{
         fs,
         sync::{atomic::AtomicBool, Arc},
     };
     use uuid::Uuid;
+
+    #[test]
+    fn scans_real_fixture_for_history_duplicates_and_projects() {
+        let root = std::env::temp_dir().join(format!("luma-regression-{}", Uuid::new_v4()));
+        let database_path = root.with_extension("sqlite3");
+        fs::create_dir_all(root.join("sample-project/node_modules/demo")).expect("create fixture");
+        fs::create_dir_all(root.join("sample-project/src")).expect("create source directory");
+        fs::write(
+            root.join("sample-project/package.json"),
+            b"{\"name\":\"sample\"}",
+        )
+        .expect("write package");
+        fs::write(
+            root.join("sample-project/node_modules/demo/index.js"),
+            b"module",
+        )
+        .expect("write module");
+        fs::write(root.join("sample-project/src/copy-a.txt"), b"same content")
+            .expect("write copy a");
+        fs::write(root.join("sample-project/src/copy-b.txt"), b"same content")
+            .expect("write copy b");
+        initialize(&database_path).expect("initialize database");
+
+        let request = StartScanRequest {
+            root_path: root.to_string_lossy().into_owned(),
+            include_hidden: false,
+            stay_on_file_system: true,
+        };
+
+        let run = |scan_id: &str, finished_at: i64| {
+            create_scan_run(&database_path, scan_id, &request.root_path, finished_at)
+                .expect("create scan run");
+            let mut connection = open(&database_path).expect("open database");
+            let outcome = scan_directory(
+                &request,
+                scan_id,
+                Arc::new(AtomicBool::new(false)),
+                |batch| insert_file_batch(&mut connection, scan_id, &batch),
+                |_| {},
+            )
+            .expect("scan fixture");
+            finish_scan(
+                &connection,
+                scan_id,
+                outcome.status,
+                &outcome.stats,
+                finished_at,
+            )
+            .expect("finish scan");
+        };
+
+        run("first", 100);
+        fs::write(root.join("sample-project/src/new.txt"), b"new file")
+            .expect("write changed file");
+        run("second", 200);
+
+        let history = list_scan_history(&database_path, "second").expect("list scan history");
+        assert_eq!(history.len(), 2);
+        let comparison = compare_scans(&database_path, "first", "second").expect("compare scans");
+        assert_eq!(comparison.total_files_delta, 1);
+
+        let duplicates =
+            find_duplicate_candidates(&database_path, "second", 1).expect("find duplicates");
+        assert_eq!(duplicates.len(), 1);
+        assert_eq!(duplicates[0].file_count, 2);
+
+        let projects = identify_projects(&database_path, "second").expect("identify projects");
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].name, "sample-project");
+        assert_eq!(projects[0].file_count, 5);
+
+        fs::remove_dir_all(&root).expect("remove fixture directory");
+        fs::remove_file(&database_path).expect("remove fixture database");
+        fs::remove_file(database_path.with_extension("sqlite3-shm")).ok();
+        fs::remove_file(database_path.with_extension("sqlite3-wal")).ok();
+    }
 
     #[test]
     fn classifies_common_extensions_case_insensitively() {

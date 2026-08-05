@@ -74,7 +74,7 @@ export default function Projects({ scanId }: ProjectsProps) {
       <div className="projects-summary">
         发现 <strong>{projects.length}</strong> 个开发项目，共占用{' '}
         <strong>
-          {formatBytes(projects.reduce((sum, p) => sum + p.size_bytes, 0))}
+          {formatBytes(projects.reduce((sum, p) => sum + p.sizeBytes, 0))}
         </strong>
       </div>
 
@@ -88,8 +88,8 @@ export default function Projects({ scanId }: ProjectsProps) {
               <div className="project-name">{project.name}</div>
               <div className="project-meta">
                 {PROJECT_LABELS[project.kind] || project.kind} ·{' '}
-                {formatCount(project.file_count)} 文件 ·{' '}
-                {formatBytes(project.size_bytes)}
+                {formatCount(project.fileCount)} 文件 ·{' '}
+                {formatBytes(project.sizeBytes)}
               </div>
               <div className="project-path">{project.path}</div>
             </div>
