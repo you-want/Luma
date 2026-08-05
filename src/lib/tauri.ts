@@ -6,6 +6,7 @@ import type {
   FileEntry,
   InsightKind,
   InsightSummary,
+  ProjectCandidate,
   ScanSummary,
   StartScanRequest,
 } from "../types/scan";
@@ -63,13 +64,17 @@ export function listInsightFiles(
   });
 }
 
-export function revealPath(path: string): Promise<void> {
-  return revealItemInDir(path);
-}
-
 export function findDuplicates(
   scanId: string,
   minSize?: number,
 ): Promise<DuplicateGroup[]> {
   return invoke("find_duplicates", { scanId, minSize });
+}
+
+export function listProjects(scanId: string): Promise<ProjectCandidate[]> {
+  return invoke("list_projects", { scanId });
+}
+
+export function revealPath(path: string): Promise<void> {
+  return revealItemInDir(path);
 }

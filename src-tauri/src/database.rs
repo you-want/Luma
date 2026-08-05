@@ -421,8 +421,8 @@ fn from_i64(value: i64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_scan_run, finish_scan, initialize, insert_file_batch, latest_scan, list_insight_files,
-        list_insights, list_large_files, open, prune_old_scans,
+        create_scan_run, finish_scan, initialize, insert_file_batch, latest_scan,
+        list_insight_files, list_insights, list_large_files, open, prune_old_scans,
     };
     use crate::models::{FileEntry, ScanStats, ScanStatus};
     use std::fs;
@@ -527,7 +527,13 @@ mod tests {
         let mut connection = open(&database_path).expect("open database");
         let files = vec![
             file("/fixture/big-a.iso", "big-a.iso", "other", 5000, Some(1000)),
-            file("/fixture/big-b.mp4", "big-b.mp4", "videos", 3000, Some(1000)),
+            file(
+                "/fixture/big-b.mp4",
+                "big-b.mp4",
+                "videos",
+                3000,
+                Some(1000),
+            ),
             file(
                 "/fixture/node_modules/pkg/lib.js",
                 "lib.js",
@@ -537,7 +543,13 @@ mod tests {
             ),
             file("/fixture/old.txt", "old.txt", "documents", 50, Some(5)),
             file("/fixture/data.zip", "data.zip", "archives", 800, Some(1000)),
-            file("/fixture/app.dmg", "app.dmg", "applications", 700, Some(1000)),
+            file(
+                "/fixture/app.dmg",
+                "app.dmg",
+                "applications",
+                700,
+                Some(1000),
+            ),
         ];
         insert_file_batch(&mut connection, "scan-1", &files).expect("insert files");
         drop(connection);
@@ -557,24 +569,36 @@ mod tests {
         // Each remaining predicate selects exactly its matching fixture file.
         let stale = list_insight_files(&database_path, "scan-1", "staleFiles", 1000, 100, 10)
             .expect("query stale files");
-        assert_eq!(stale.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), vec!["old.txt"]);
+        assert_eq!(
+            stale.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            vec!["old.txt"]
+        );
 
         let development =
             list_insight_files(&database_path, "scan-1", "development", 1000, 100, 10)
                 .expect("query development files");
         assert_eq!(
-            development.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            development
+                .iter()
+                .map(|f| f.name.as_str())
+                .collect::<Vec<_>>(),
             vec!["lib.js"]
         );
 
         let archives = list_insight_files(&database_path, "scan-1", "archives", 1000, 100, 10)
             .expect("query archive files");
-        assert_eq!(archives.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), vec!["data.zip"]);
+        assert_eq!(
+            archives.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            vec!["data.zip"]
+        );
 
         let installers = list_insight_files(&database_path, "scan-1", "installers", 1000, 100, 10)
             .expect("query installer files");
         assert_eq!(
-            installers.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            installers
+                .iter()
+                .map(|f| f.name.as_str())
+                .collect::<Vec<_>>(),
             vec!["app.dmg"]
         );
 

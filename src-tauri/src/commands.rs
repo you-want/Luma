@@ -3,6 +3,7 @@ use crate::{
     duplicates::{self, DuplicateGroup},
     error::AppError,
     models::{FileEntry, InsightSummary, ScanFinished, ScanStatus, ScanSummary, StartScanRequest},
+    projects::{self, ProjectCandidate},
     scanner,
 };
 use std::{
@@ -174,6 +175,14 @@ pub fn list_insights(
         stale_before,
         days,
     )
+}
+
+#[tauri::command]
+pub fn list_projects(
+    state: State<'_, AppState>,
+    scan_id: String,
+) -> Result<Vec<ProjectCandidate>, AppError> {
+    projects::identify_projects(&state.database_path, &scan_id)
 }
 
 #[tauri::command]

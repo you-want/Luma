@@ -5,6 +5,7 @@ import { CategoryList } from "./components/CategoryList";
 import { Duplicates } from "./components/Duplicates";
 import { InsightList } from "./components/InsightList";
 import { LargeFiles } from "./components/LargeFiles";
+import Projects from "./components/Projects";
 import { ScanControls } from "./components/ScanControls";
 import { ScanProgress } from "./components/ScanProgress";
 import { StorageOverview } from "./components/StorageOverview";
@@ -223,6 +224,7 @@ function App() {
             </div>
             <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
             <Duplicates scanId={app.summary.scanId} />
+            <Projects scanId={app.summary.scanId} />
           </div>
         )}
       </div>

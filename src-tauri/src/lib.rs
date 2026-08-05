@@ -3,6 +3,7 @@ mod database;
 mod duplicates;
 mod error;
 mod models;
+mod projects;
 mod scanner;
 
 use commands::AppState;
@@ -54,13 +55,12 @@ pub fn run() {
             // 启动后台更新检查
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                match handle.updater() {
-                    Ok(updater) => {
-                        if let Ok(Some(update)) = updater.check().await {
-                            let _ = update.download_and_install(|_chunk, _total| {}, || {}).await;
-                        }
+                if let Ok(updater) = handle.updater() {
+                    if let Ok(Some(update)) = updater.check().await {
+                        let _ = update
+                            .download_and_install(|_chunk, _total| {}, || {})
+                            .await;
                     }
-                    Err(_) => {}
                 }
             });
 
@@ -75,6 +75,7 @@ pub fn run() {
             commands::list_insights,
             commands::list_insight_files,
             commands::find_duplicates,
+            commands::list_projects,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

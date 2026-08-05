@@ -74,3 +74,20 @@ export type DuplicateGroup = {
   wastedBytes: number;
   files: FileEntry[];
 };
+
+export type ProjectKind =
+  | "nodejs"
+  | "rust"
+  | "python"
+  | "git"
+  | "xcode"
+  | "maven"
+  | "gradle";
+
+export type ProjectCandidate = {
+  path: string;
+  name: string;
+  kind: ProjectKind;
+  size_bytes: number;
+  file_count: number;
+};
