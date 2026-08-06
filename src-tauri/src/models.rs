@@ -52,6 +52,7 @@ pub struct ScanProgress {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
+    pub id: i64,
     pub path: String,
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -95,7 +96,79 @@ pub struct InsightSummary {
     pub kind: String,
     pub file_count: u64,
     pub size_bytes: u64,
-    pub basis: String,
+}
+
+/// How search results are ordered. A closed enum (not a raw column string from
+/// the client) so the backend never interpolates untrusted text into `ORDER BY`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchSort {
+    NameAsc,
+    NameDesc,
+    SizeAsc,
+    #[default]
+    SizeDesc,
+    ModifiedAsc,
+    ModifiedDesc,
+}
+
+impl SearchSort {
+    /// The `ORDER BY` clause for this sort. Every arm is a compile-time constant,
+    /// so this is safe to embed in SQL. A stable `id` tiebreaker keeps pagination
+    /// deterministic when the primary key ties.
+    pub fn order_by(self) -> &'static str {
+        match self {
+            Self::NameAsc => "name COLLATE NOCASE ASC, id ASC",
+            Self::NameDesc => "name COLLATE NOCASE DESC, id ASC",
+            Self::SizeAsc => "size_bytes ASC, id ASC",
+            Self::SizeDesc => "size_bytes DESC, id ASC",
+            Self::ModifiedAsc => "modified_at ASC, id ASC",
+            Self::ModifiedDesc => "modified_at DESC, id ASC",
+        }
+    }
+}
+
+/// A search over one scan snapshot. All filters are optional and combine with
+/// AND; `query` matches name or path. Only the current scan's indexed rows are
+/// searched — no filesystem access, no file contents.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchRequest {
+    pub scan_id: String,
+    #[serde(default)]
+    pub query: String,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub extension: Option<String>,
+    #[serde(default)]
+    pub min_size: Option<u64>,
+    #[serde(default)]
+    pub max_size: Option<u64>,
+    #[serde(default)]
+    pub modified_after: Option<i64>,
+    #[serde(default)]
+    pub modified_before: Option<i64>,
+    #[serde(default)]
+    pub include_hidden: bool,
+    #[serde(default)]
+    pub sort: SearchSort,
+    #[serde(default)]
+    pub limit: Option<u32>,
+    #[serde(default)]
+    pub offset: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResponse {
+    /// Rows for the requested page.
+    pub files: Vec<FileEntry>,
+    /// Total rows matching the filters across all pages, so the UI can show
+    /// "N results" and drive pagination without loading every row.
+    pub total: u64,
+    pub limit: u32,
+    pub offset: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -2,6 +2,7 @@ mod commands;
 mod database;
 mod duplicates;
 mod error;
+mod i18n;
 mod models;
 mod projects;
 mod scanner;
@@ -18,15 +19,18 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // The tray is built once at startup, so it follows the system
+            // language. See `i18n.rs` for why a live switch is out of scope.
+            let tray = i18n::tray_strings(i18n::Language::detect());
             let tray_menu = MenuBuilder::new(app)
-                .text("show", "显示 Luma")
+                .text("show", tray.show)
                 .separator()
-                .text("quit", "退出 Luma")
+                .text("quit", tray.quit)
                 .build()?;
             TrayIconBuilder::with_id("main")
                 .icon(TRAY_ICON)
                 .icon_as_template(true)
-                .tooltip("Luma · 本地空间观察")
+                .tooltip(tray.tooltip)
                 .menu(&tray_menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id().as_ref() {
@@ -64,6 +68,8 @@ pub fn run() {
             commands::list_projects,
             commands::list_scan_history,
             commands::compare_scans,
+            commands::search_files,
+            commands::reveal_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

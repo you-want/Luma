@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import type {
   DuplicateGroup,
   FileEntry,
@@ -9,6 +8,8 @@ import type {
   ProjectCandidate,
   ScanComparison,
   ScanSummary,
+  SearchRequest,
+  SearchResponse,
   StartScanRequest,
 } from "../types/scan";
 
@@ -87,6 +88,13 @@ export function compareScans(
   return invoke("compare_scans", { baseScanId, targetScanId });
 }
 
+export function searchFiles(request: SearchRequest): Promise<SearchResponse> {
+  return invoke("search_files", { request });
+}
+
 export function revealPath(path: string): Promise<void> {
-  return revealItemInDir(path);
+  // Routed through a Rust command (not the opener plugin directly) so the
+  // canonical `/`-separated stored path is converted back to native separators
+  // before the OS file manager selects the item. See `commands::reveal_path`.
+  return invoke("reveal_path", { path });
 }

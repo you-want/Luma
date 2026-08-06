@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowRight, GitCompareArrows } from "lucide-react";
 import { compareScans, listScanHistory } from "../lib/tauri";
-import { categoryColor, categoryIcon } from "../lib/categories";
+import { categoryColor, categoryIcon, categoryLabelKey } from "../lib/categories";
+import { errorMessage } from "../lib/errors";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
 import type { ScanComparison, ScanSummary } from "../types/scan";
 
@@ -36,6 +38,7 @@ function deltaClass(delta: number): string {
 }
 
 export function ScanHistory({ scanId }: ScanHistoryProps) {
+  const { t } = useTranslation();
   const [history, setHistory] = useState<ScanSummary[] | null>(null);
   const [baseId, setBaseId] = useState<string | null>(null);
   const [compare, setCompare] = useState<CompareState>({ status: "idle" });
@@ -77,13 +80,13 @@ export function ScanHistory({ scanId }: ScanHistoryProps) {
         if (disposed) return;
         setCompare({
           status: "error",
-          message: error instanceof Error ? error.message : "对比扫描失败。",
+          message: errorMessage(error, t("history.compareError")),
         });
       });
     return () => {
       disposed = true;
     };
-  }, [baseId, scanId]);
+  }, [baseId, scanId, t]);
 
   // Earlier runs the user can compare the current scan against.
   const earlierRuns = useMemo(
@@ -95,9 +98,9 @@ export function ScanHistory({ scanId }: ScanHistoryProps) {
     return (
       <section className="result-section" aria-labelledby="history-title">
         <div className="section-heading compact-heading">
-          <h2 id="history-title">历史对比</h2>
+          <h2 id="history-title">{t("history.title")}</h2>
         </div>
-        <p className="empty-inline">正在读取扫描历史...</p>
+        <p className="empty-inline">{t("history.loading")}</p>
       </section>
     );
   }
@@ -106,11 +109,9 @@ export function ScanHistory({ scanId }: ScanHistoryProps) {
     return (
       <section className="result-section" aria-labelledby="history-title">
         <div className="section-heading compact-heading">
-          <h2 id="history-title">历史对比</h2>
+          <h2 id="history-title">{t("history.title")}</h2>
         </div>
-        <p className="empty-inline">
-          这个目录还没有更早的扫描记录。再次扫描同一目录后，这里会显示空间变化。
-        </p>
+        <p className="empty-inline">{t("history.noEarlier")}</p>
       </section>
     );
   }
@@ -118,12 +119,12 @@ export function ScanHistory({ scanId }: ScanHistoryProps) {
   return (
     <section className="result-section" aria-labelledby="history-title">
       <div className="section-heading compact-heading">
-        <h2 id="history-title">历史对比</h2>
-        <span>同一目录最近 {history.length} 次</span>
+        <h2 id="history-title">{t("history.title")}</h2>
+        <span>{t("history.recentN", { count: history.length })}</span>
       </div>
 
       <label className="history-picker">
-        对比基准
+        {t("history.base")}
         <select
           value={baseId ?? ""}
           onChange={(event) => setBaseId(event.target.value || null)}
@@ -137,7 +138,7 @@ export function ScanHistory({ scanId }: ScanHistoryProps) {
       </label>
 
       {compare.status === "loading" && (
-        <p className="empty-inline">正在对比...</p>
+        <p className="empty-inline">{t("history.comparing")}</p>
       )}
       {compare.status === "error" && (
         <p className="empty-inline">{compare.message}</p>
@@ -150,6 +151,7 @@ export function ScanHistory({ scanId }: ScanHistoryProps) {
 }
 
 function ComparisonView({ comparison }: { comparison: ScanComparison }) {
+  const { t } = useTranslation();
   const { base, target, totalBytesDelta, totalFilesDelta, categories } = comparison;
   // Only categories that actually moved are worth showing.
   const changed = categories.filter(
@@ -166,7 +168,7 @@ function ComparisonView({ comparison }: { comparison: ScanComparison }) {
 
       <div className="history-totals">
         <div className="history-total">
-          <span>总占用变化</span>
+          <span>{t("history.totalChange")}</span>
           <strong className={deltaClass(totalBytesDelta)}>
             {formatSignedBytes(totalBytesDelta)}
           </strong>
@@ -175,7 +177,7 @@ function ComparisonView({ comparison }: { comparison: ScanComparison }) {
           </span>
         </div>
         <div className="history-total">
-          <span>文件数变化</span>
+          <span>{t("history.fileChange")}</span>
           <strong className={deltaClass(totalFilesDelta)}>
             {formatSignedCount(totalFilesDelta)}
           </strong>
@@ -199,7 +201,7 @@ function ComparisonView({ comparison }: { comparison: ScanComparison }) {
                   <Icon size={16} />
                 </span>
                 <div className="file-copy">
-                  <strong>{category.category}</strong>
+                  <strong>{t(categoryLabelKey(category.category))}</strong>
                   <span>
                     {formatBytes(category.baseSizeBytes)} →{" "}
                     {formatBytes(category.targetSizeBytes)}
@@ -216,12 +218,10 @@ function ComparisonView({ comparison }: { comparison: ScanComparison }) {
         </div>
       ) : (
         <p className="empty-inline">
-          <GitCompareArrows size={14} /> 两次扫描之间没有分类级别的变化。
+          <GitCompareArrows size={14} /> {t("history.noChange")}
         </p>
       )}
-      <p className="insight-note">
-        对比只反映两次扫描的快照差异，不代表期间发生的所有增删。
-      </p>
+      <p className="insight-note">{t("history.note")}</p>
     </div>
   );
 }

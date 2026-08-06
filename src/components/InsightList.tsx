@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Archive,
   ChevronRight,
@@ -10,17 +11,15 @@ import {
 import { listInsightFiles, revealPath } from "../lib/tauri";
 import { categoryColor, categoryIcon } from "../lib/categories";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
+import { errorMessage } from "../lib/errors";
 import type { FileEntry, InsightKind, InsightSummary } from "../types/scan";
 
-const insightMeta: Record<
-  InsightKind,
-  { icon: typeof PackageSearch; title: string; color: string }
-> = {
-  largeFiles: { icon: PackageSearch, title: "超大文件", color: "#FF9F0A" },
-  staleFiles: { icon: Clock3, title: "长期未修改", color: "#8E8E93" },
-  development: { icon: Code2, title: "开发构建内容", color: "#5E5CE6" },
-  archives: { icon: Archive, title: "压缩包", color: "#BF5AF2" },
-  installers: { icon: Package, title: "应用与安装包", color: "#64D2FF" },
+const insightMeta: Record<InsightKind, { icon: typeof PackageSearch; color: string }> = {
+  largeFiles: { icon: PackageSearch, color: "#FF9F0A" },
+  staleFiles: { icon: Clock3, color: "#8E8E93" },
+  development: { icon: Code2, color: "#5E5CE6" },
+  archives: { icon: Archive, color: "#BF5AF2" },
+  installers: { icon: Package, color: "#64D2FF" },
 };
 
 type InsightListProps = {
@@ -43,6 +42,7 @@ export function InsightList({
   staleDays,
   onSettingsChange,
 }: InsightListProps) {
+  const { t } = useTranslation();
   const [openKind, setOpenKind] = useState<InsightKind | null>(null);
   const [files, setFiles] = useState<Partial<Record<InsightKind, FileState>>>({});
 
@@ -52,6 +52,20 @@ export function InsightList({
     setOpenKind(null);
     setFiles({});
   }, [scanId, largeFileThreshold, staleDays]);
+
+  // Rebuild the human-readable rule ("basis") on the frontend from the insight
+  // kind plus the current thresholds, so the rationale is translatable instead
+  // of being a fixed sentence returned by the backend.
+  function basisFor(kind: InsightKind): string {
+    switch (kind) {
+      case "largeFiles":
+        return t("insight.basis.largeFiles", { size: formatBytes(largeFileThreshold) });
+      case "staleFiles":
+        return t("insight.basis.staleFiles", { days: formatNumber(staleDays) });
+      default:
+        return t(`insight.basis.${kind}`);
+    }
+  }
 
   async function toggle(kind: InsightKind) {
     if (openKind === kind) {
@@ -75,7 +89,7 @@ export function InsightList({
         ...prev,
         [kind]: {
           status: "error",
-          message: error instanceof Error ? error.message : "读取文件明细失败。",
+          message: errorMessage(error, t("insight.loadFilesError")),
         },
       }));
     }
@@ -84,36 +98,36 @@ export function InsightList({
   return (
     <section className="result-section insight-section" aria-labelledby="insight-title">
       <div className="section-heading compact-heading">
-        <h2 id="insight-title">值得留意</h2>
+        <h2 id="insight-title">{t("insight.title")}</h2>
       </div>
-      <div className="insight-filters" aria-label="发现规则">
+      <div className="insight-filters" aria-label={t("insight.filtersLabel")}>
         <label>
-          大文件
+          {t("insight.largeFile")}
           <select
             value={largeFileThreshold}
             onChange={(event) => onSettingsChange(Number(event.target.value), staleDays)}
           >
-            <option value={256 * 1024 ** 2}>超过 256 MB</option>
-            <option value={1024 ** 3}>超过 1 GB</option>
-            <option value={5 * 1024 ** 3}>超过 5 GB</option>
+            <option value={256 * 1024 ** 2}>{t("insight.over256mb")}</option>
+            <option value={1024 ** 3}>{t("insight.over1gb")}</option>
+            <option value={5 * 1024 ** 3}>{t("insight.over5gb")}</option>
           </select>
         </label>
         <label>
-          未修改
+          {t("insight.unmodified")}
           <select
             value={staleDays}
             onChange={(event) => onSettingsChange(largeFileThreshold, Number(event.target.value))}
           >
-            <option value={90}>超过 90 天</option>
-            <option value={180}>超过 180 天</option>
-            <option value={365}>超过 1 年</option>
+            <option value={90}>{t("insight.over90d")}</option>
+            <option value={180}>{t("insight.over180d")}</option>
+            <option value={365}>{t("insight.over1y")}</option>
           </select>
         </label>
       </div>
       {insights.length ? (
         <div className="insight-list">
           {insights.map((insight) => {
-            const { icon: Icon, title, color } = insightMeta[insight.kind];
+            const { icon: Icon, color } = insightMeta[insight.kind];
             const expanded = openKind === insight.kind;
             const detail = files[insight.kind];
             return (
@@ -131,10 +145,13 @@ export function InsightList({
                     <Icon size={16} />
                   </span>
                   <div className="insight-copy">
-                    <strong>{title}</strong>
+                    <strong>{t(`insight.${insight.kind}`)}</strong>
                     <p>
-                      {formatNumber(insight.fileCount)} 个文件，合计{" "}
-                      {formatBytes(insight.sizeBytes)}。{insight.basis}
+                      {t("insight.summary", {
+                        count: formatNumber(insight.fileCount),
+                        size: formatBytes(insight.sizeBytes),
+                        basis: basisFor(insight.kind),
+                      })}
                     </p>
                   </div>
                   <ChevronRight
@@ -145,7 +162,7 @@ export function InsightList({
                 {expanded && (
                   <div className="insight-files">
                     {detail?.status === "loading" && (
-                      <p className="empty-inline">正在读取文件明细...</p>
+                      <p className="empty-inline">{t("insight.loadingFiles")}</p>
                     )}
                     {detail?.status === "error" && (
                       <p className="empty-inline">{detail.message}</p>
@@ -176,8 +193,8 @@ export function InsightList({
                                   <button
                                     className="icon-button"
                                     type="button"
-                                    title="在 Finder 中显示"
-                                    aria-label={`在 Finder 中显示 ${file.name}`}
+                                    title={t("common.reveal")}
+                                    aria-label={t("common.revealNamed", { name: file.name })}
                                     onClick={() =>
                                       void revealPath(file.path).catch(() => undefined)
                                     }
@@ -190,13 +207,15 @@ export function InsightList({
                           </div>
                           {insight.fileCount > detail.files.length && (
                             <p className="insight-more">
-                              仅显示最大的 {detail.files.length} 个，共{" "}
-                              {formatNumber(insight.fileCount)} 个。
+                              {t("insight.showingTop", {
+                                shown: formatNumber(detail.files.length),
+                                total: formatNumber(insight.fileCount),
+                              })}
                             </p>
                           )}
                         </>
                       ) : (
-                        <p className="empty-inline">没有可列出的文件。</p>
+                        <p className="empty-inline">{t("insight.noFiles")}</p>
                       ))}
                   </div>
                 )}
@@ -205,9 +224,9 @@ export function InsightList({
           })}
         </div>
       ) : (
-        <p className="empty-inline">当前规则下没有需要特别留意的项目。</p>
+        <p className="empty-inline">{t("insight.empty")}</p>
       )}
-      <p className="insight-note">修改时间不等于最近使用时间；所有发现仅供复查，不代表文件可以安全删除。</p>
+      <p className="insight-note">{t("insight.note")}</p>
     </section>
   );
 }
