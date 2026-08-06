@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Luma · 照见你的数字世界</title>
-  <meta name="description" content="Luma 0.2.0 是一款为 Mac 打造的本地文件空间观察工具，可查看空间分类、重复文件候选、开发项目与扫描历史。只读运行，数据不出本机。">
+  <meta name="description" content="Luma 0.2.0 是一款为 Mac 打造的本地文件空间观察工具，可查看空间分类、搜索过滤、批量选择、重复文件候选、开发项目与扫描历史，界面支持简体中文与英文。只读运行，数据不出本机。">
   <meta name="theme-color" content="#17211f">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -844,6 +844,7 @@
         <ul class="lm-nav__menu" id="lm-menu">
           <li><a href="#capabilities">能力</a></li>
           <li><a href="#insights">发现</a></li>
+          <li><a href="#search">检索</a></li>
           <li><a href="#flow">理解之道</a></li>
           <li><a href="#privacy">隐私</a></li>
           <li><a href="#tech">技术</a></li>
@@ -866,7 +867,7 @@
           <span class="lm-kicker">v0.2.0 内部预览 · FOR MAC</span>
           <h1 class="lm-hero__title" id="hero-title">看得见的，<em>才谈得上理解。</em></h1>
           <p class="lm-hero__en">Luma — Local insight for your digital world.</p>
-          <p class="lm-hero__lead">你的 Mac 里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化。它不修改任何原文件，所有分析都留在这台电脑。</p>
+          <p class="lm-hero__lead">你的 Mac 里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化，并支持按名称、大小、时间检索与批量整理。它不修改任何原文件，所有分析都留在这台电脑。</p>
           <div class="lm-hero__actions">
             <a class="lm-btn-primary" href="#download">获取 Luma 0.2.0</a>
             <a class="lm-text-link" href="#capabilities">看看它怎么工作</a>
@@ -929,8 +930,8 @@
             <div class="lm-eye__idx" aria-hidden="true">二</div>
             <h3>理解 · 第二个大脑</h3>
             <p class="lm-eye__en">The Understanding</p>
-            <p>扫描结果落进本地 SQLite，重启后依然在。Luma 把零散的文件整理成可查询的空间地图，识别开发项目，并对比同一目录最近三次扫描的容量与分类变化。</p>
-            <span class="lm-eye__tag">本地索引 · 项目识别 · 历史对比</span>
+            <p>扫描结果落进本地 SQLite，重启后依然在。Luma 把零散的文件整理成可查询的空间地图：按名称、分类、大小、修改时间检索并分页排序，识别开发项目，对比同一目录最近三次扫描的容量与分类变化，还能跨页批量选择、复制路径或导出清单。</p>
+            <span class="lm-eye__tag">本地索引 · 检索过滤 · 项目识别 · 历史对比 · 批量导出</span>
           </article>
         </div>
       </div>
@@ -976,6 +977,35 @@
             <div class="lm-insight__mark" aria-hidden="true">变</div>
             <h3>项目与历史</h3>
             <p>识别常见开发项目，并比较同一目录最近三次扫描，查看总容量、文件数和分类变化。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 检索与批量 ==================== -->
+    <section class="lm-section" id="search" aria-labelledby="search-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">找得到，才用得上</span>
+            <h2 id="search-title">检索与批量，<br>都在本地索引上。</h2>
+          </div>
+          <p>扫描建立的本地索引不只是用来看的。你可以在其中检索、筛选，选中一批文件，把它们的路径导出——全部只读，不碰原文件。</p>
+        </div>
+        <div class="lm-eyes">
+          <article class="lm-eye lm-reveal">
+            <div class="lm-eye__idx" aria-hidden="true">检</div>
+            <h3>检索 · 在索引里找</h3>
+            <p class="lm-eye__en">Search &amp; Filter</p>
+            <p>按文件名或路径搜索已索引的文件，并叠加分类、扩展名、大小范围、修改时间等条件筛选。结果分页返回、可排序，也能直接在访达中定位。检索只针对当前扫描快照，不触碰未索引的目录，也不读取文件内容。</p>
+            <span class="lm-eye__tag">名称/路径 · 多条件筛选 · 分页排序</span>
+          </article>
+          <article class="lm-eye lm-reveal">
+            <div class="lm-eye__idx" aria-hidden="true">选</div>
+            <h3>批量 · 选中后导出</h3>
+            <p class="lm-eye__en">Bulk Selection</p>
+            <p>跨分页勾选文件，或一键选中全部筛选结果，界面实时显示已选数量。首版只提供非破坏性操作：复制路径列表到剪贴板、导出清单为 CSV——交给你自己的脚本或表格去处理。Luma 不移动、不删除任何文件。</p>
+            <span class="lm-eye__tag">跨页选择 · 复制路径 · 导出 CSV</span>
           </article>
         </div>
       </div>
@@ -1065,7 +1095,7 @@
           </article>
           <article class="lm-tech-card lm-reveal">
             <h3>React <small>Interface</small></h3>
-            <p>React 19 + TypeScript 构建界面，跟随系统的浅色与深色主题，键盘可操作，窄窗口下也不会横向溢出。</p>
+            <p>React 19 + TypeScript 构建界面，内置简体中文与英文并跟随系统语言，跟随系统的浅色与深色主题，键盘可操作，窄窗口下也不会横向溢出。</p>
           </article>
         </div>
       </div>
@@ -1099,8 +1129,15 @@
           <li class="lm-reveal">
             <div class="lm-road__phase">可用版<small>Milestone 3</small></div>
             <div class="lm-road__body">
-              <h3>重复候选、项目识别与历史对比 <span class="lm-road__now">v0.2.0</span></h3>
+              <h3>重复候选、项目识别与历史对比</h3>
               <p>在透明发现之上增加内容重复确认、开发项目识别和同目录历史比较，并打包为可安装的内部预览版。</p>
+            </div>
+          </li>
+          <li class="lm-reveal">
+            <div class="lm-road__phase">检索与多语言<small>Milestone 4</small></div>
+            <div class="lm-road__body">
+              <h3>索引检索、批量导出与中英文界面 <span class="lm-road__now">开发中</span></h3>
+              <p>在本地索引上按名称、分类、大小、时间检索与分页排序；跨页批量选择并复制路径或导出清单（非破坏性，不移动删除）；界面内置简体中文与英文，跟随系统语言并可手动切换。Windows 11 x64 的代码适配也已完成，正在等待真机回归验证。</p>
             </div>
           </li>
           <li class="lm-reveal">

@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, GitCompareArrows } from "lucide-react";
 import { compareScans, listScanHistory } from "../lib/tauri";
-import { categoryColor, categoryIcon, categoryLabelKey } from "../lib/categories";
+import {
+  categoryColor,
+  categoryIcon,
+  categoryLabelKey,
+  categoryTint,
+} from "../lib/categories";
 import { errorMessage } from "../lib/errors";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
 import type { ScanComparison, ScanSummary } from "../types/scan";
@@ -196,7 +201,10 @@ function ComparisonView({ comparison }: { comparison: ScanComparison }) {
               <div className="history-category" key={category.category}>
                 <span
                   className="file-icon"
-                  style={{ color: tint, background: `${tint}1f` }}
+                  style={{
+                    color: tint,
+                    background: categoryTint(category.category),
+                  }}
                 >
                   <Icon size={16} />
                 </span>

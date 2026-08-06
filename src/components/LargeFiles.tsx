@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
-import { categoryColor, categoryIcon } from "../lib/categories";
+import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
 import { formatBytes, formatDate } from "../lib/format";
 import type { FileEntry } from "../types/scan";
 
@@ -27,7 +27,7 @@ export function LargeFiles({
               <div className="file-row" key={file.path}>
                 <span
                   className="file-icon"
-                  style={{ color: tint, background: `${tint}1f` }}
+                  style={{ color: tint, background: categoryTint(file.category) }}
                 >
                   <Icon size={16} />
                 </span>
