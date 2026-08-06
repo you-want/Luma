@@ -1,5 +1,35 @@
 export type ScanStatus = "running" | "completed" | "cancelled" | "failed";
 
+export type SearchSort =
+  | "nameAsc"
+  | "nameDesc"
+  | "sizeAsc"
+  | "sizeDesc"
+  | "modifiedAsc"
+  | "modifiedDesc";
+
+export type SearchRequest = {
+  scanId: string;
+  query: string;
+  category?: string;
+  extension?: string;
+  minSize?: number;
+  maxSize?: number;
+  modifiedAfter?: number;
+  modifiedBefore?: number;
+  includeHidden: boolean;
+  sort: SearchSort;
+  limit?: number;
+  offset?: number;
+};
+
+export type SearchResponse = {
+  files: FileEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type StartScanRequest = {
   rootPath: string;
   includeHidden: boolean;
@@ -23,6 +53,7 @@ export type CategorySummary = {
 };
 
 export type FileEntry = {
+  id: number;
   path: string;
   name: string;
   extension?: string;
@@ -57,7 +88,6 @@ export type InsightSummary = {
   kind: InsightKind;
   fileCount: number;
   sizeBytes: number;
-  basis: string;
 };
 
 export type ScanFinished = {

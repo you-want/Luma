@@ -189,15 +189,36 @@ fn file_entry(entry: &DirEntry, root: &Path) -> Result<FileEntry, AppError> {
     let modified_at = metadata.modified().ok().and_then(system_time_seconds);
 
     Ok(FileEntry {
-        path: path.to_string_lossy().into_owned(),
+        id: 0, // Assigned by database on insert
+        // Hidden = the Unix dotfile convention (cross-platform, since dev tools
+        // use dotfiles on Windows too) OR the Windows hidden/system attribute.
+        // Runs on the native `path`; the stored string is separator-normalized
+        // so all downstream SQL uses a single `/` form.
+        is_hidden: has_hidden_attribute(&metadata) || is_hidden_path(path, root),
+        path: normalize_separators(path.to_string_lossy().into_owned()),
         name,
         category: classify_extension(extension.as_deref()).to_owned(),
         extension,
         size_bytes: metadata.len(),
         modified_at,
-        is_hidden: is_hidden_path(path, root),
         content_hash: None,
     })
+}
+
+/// Canonicalize a path string for storage so every downstream SQL query and
+/// name-extraction uses a single separator (`/`). On Windows `walkdir` yields
+/// `\` separators; rewriting them to `/` makes `LIKE '%/target/%'`-style
+/// queries and `rsplit('/')` name extraction behave identically on both
+/// platforms. On Unix `\` is a legal filename character, so paths are stored
+/// verbatim.
+#[cfg(windows)]
+fn normalize_separators(path: String) -> String {
+    path.replace('\\', "/")
+}
+
+#[cfg(not(windows))]
+fn normalize_separators(path: String) -> String {
+    path
 }
 
 fn system_time_seconds(time: SystemTime) -> Option<i64> {
@@ -207,7 +228,13 @@ fn system_time_seconds(time: SystemTime) -> Option<i64> {
 }
 
 fn is_hidden(entry: &DirEntry, root: &Path) -> bool {
-    is_hidden_path(entry.path(), root)
+    // Attribute lookup needs metadata; if it is unavailable, fall back to the
+    // path-based dotfile rule alone rather than failing the whole entry.
+    let attribute_hidden = entry
+        .metadata()
+        .map(|metadata| has_hidden_attribute(&metadata))
+        .unwrap_or(false);
+    attribute_hidden || is_hidden_path(entry.path(), root)
 }
 
 fn is_hidden_path(path: &Path, root: &Path) -> bool {
@@ -215,6 +242,23 @@ fn is_hidden_path(path: &Path, root: &Path) -> bool {
         .unwrap_or(path)
         .components()
         .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
+}
+
+/// Whether the filesystem marks this entry hidden or system. This is the native
+/// Windows notion of "hidden" (`FILE_ATTRIBUTE_HIDDEN` / `FILE_ATTRIBUTE_SYSTEM`);
+/// Unix has no such attribute, so it is always `false` there and only the
+/// dotfile convention applies.
+#[cfg(windows)]
+fn has_hidden_attribute(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+    const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4;
+    metadata.file_attributes() & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) != 0
+}
+
+#[cfg(not(windows))]
+fn has_hidden_attribute(_metadata: &std::fs::Metadata) -> bool {
+    false
 }
 
 pub fn classify_extension(extension: Option<&str>) -> &'static str {
@@ -236,7 +280,7 @@ pub fn classify_extension(extension: Option<&str>) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_extension, scan_directory};
+    use super::{classify_extension, normalize_separators, scan_directory};
     use crate::models::{ScanStatus, StartScanRequest};
     use crate::{
         database::{
@@ -470,5 +514,24 @@ mod tests {
         assert_eq!(outcome.stats.files_scanned, 1);
         assert_eq!(outcome.stats.directories_scanned, 1);
         fs::remove_dir_all(root).expect("remove fixture directory");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn normalizes_backslashes_to_forward_slashes_on_windows() {
+        assert_eq!(
+            normalize_separators("C:\\Users\\me\\project\\node_modules".to_owned()),
+            "C:/Users/me/project/node_modules"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn preserves_paths_verbatim_on_unix() {
+        // On Unix a backslash is a legal filename character, so it must survive.
+        assert_eq!(
+            normalize_separators("/home/me/weird\\name".to_owned()),
+            "/home/me/weird\\name"
+        );
     }
 }

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Copy, ChevronRight, AlertCircle } from "lucide-react";
 import { findDuplicates, revealPath } from "../lib/tauri";
 import { categoryColor, categoryIcon } from "../lib/categories";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
+import { errorMessage } from "../lib/errors";
 import type { DuplicateGroup, FileEntry } from "../types/scan";
 
 type DuplicatesProps = {
@@ -16,9 +18,10 @@ type DuplicateState =
   | { status: "ready"; groups: DuplicateGroup[] };
 
 export function Duplicates({ scanId }: DuplicatesProps) {
+  const { t } = useTranslation();
   const [state, setState] = useState<DuplicateState>({ status: "idle" });
   const [expandedHash, setExpandedHash] = useState<string | null>(null);
-  const [minSize, setMinSize] = useState(1024 * 1024); // 默认 1MB
+  const [minSize, setMinSize] = useState(1024 * 1024); // default 1MB
 
   useEffect(() => {
     setState({ status: "idle" });
@@ -33,7 +36,7 @@ export function Duplicates({ scanId }: DuplicatesProps) {
     } catch (error) {
       setState({
         status: "error",
-        message: error instanceof Error ? error.message : "查找重复文件失败。",
+        message: errorMessage(error, t("duplicates.findError")),
       });
     }
   }
@@ -45,12 +48,12 @@ export function Duplicates({ scanId }: DuplicatesProps) {
   return (
     <section className="result-section duplicates-section" aria-labelledby="duplicates-title">
       <div className="section-heading compact-heading">
-        <h2 id="duplicates-title">重复文件候选</h2>
+        <h2 id="duplicates-title">{t("duplicates.title")}</h2>
       </div>
 
       <div className="duplicates-controls">
         <label>
-          最小文件大小
+          {t("duplicates.minSize")}
           <select value={minSize} onChange={(e) => setMinSize(Number(e.target.value))}>
             <option value={1024 * 1024}>1 MB</option>
             <option value={10 * 1024 * 1024}>10 MB</option>
@@ -64,19 +67,19 @@ export function Duplicates({ scanId }: DuplicatesProps) {
           onClick={handleFind}
           disabled={state.status === "loading"}
         >
-          {state.status === "loading" ? "正在查找..." : "查找重复"}
+          {state.status === "loading" ? t("duplicates.finding") : t("duplicates.find")}
         </button>
       </div>
 
       {state.status === "loading" && (
-        <p className="empty-inline">正在分析文件内容，可能需要一段时间...</p>
+        <p className="empty-inline">{t("duplicates.findingBody")}</p>
       )}
 
       {state.status === "error" && (
         <div className="status-message status-error" role="alert">
           <AlertCircle size={20} />
           <div>
-            <strong>查找失败</strong>
+            <strong>{t("duplicates.findFailedTitle")}</strong>
             <p>{state.message}</p>
           </div>
         </div>
@@ -87,11 +90,12 @@ export function Duplicates({ scanId }: DuplicatesProps) {
           <>
             <div className="duplicates-summary">
               <p>
-                找到 <strong>{state.groups.length}</strong> 组重复文件，可节省约{" "}
-                <strong>
-                  {formatBytes(state.groups.reduce((sum, g) => sum + g.wastedBytes, 0))}
-                </strong>{" "}
-                空间。
+                {t("duplicates.foundSummary", {
+                  groups: formatNumber(state.groups.length),
+                  size: formatBytes(
+                    state.groups.reduce((sum, g) => sum + g.wastedBytes, 0),
+                  ),
+                })}
               </p>
             </div>
             <div className="duplicate-list">
@@ -110,10 +114,12 @@ export function Duplicates({ scanId }: DuplicatesProps) {
                       </span>
                       <div className="duplicate-copy">
                         <strong>
-                          {formatNumber(group.fileCount)} 个相同文件 · 每个{" "}
-                          {formatBytes(group.sizeBytes)}
+                          {t("duplicates.groupSummary", {
+                            count: formatNumber(group.fileCount),
+                            size: formatBytes(group.sizeBytes),
+                          })}
                         </strong>
-                        <p>可节省 {formatBytes(group.wastedBytes)}</p>
+                        <p>{t("duplicates.canSave", { size: formatBytes(group.wastedBytes) })}</p>
                       </div>
                       <ChevronRight
                         className={`duplicate-chevron${expanded ? " is-open" : ""}`}
@@ -135,17 +141,16 @@ export function Duplicates({ scanId }: DuplicatesProps) {
             </div>
           </>
         ) : (
-          <p className="empty-inline">在当前条件下未找到重复文件。</p>
+          <p className="empty-inline">{t("duplicates.notFound")}</p>
         ))}
 
-      <p className="insight-note">
-        内容完全相同的文件才会被识别为重复。删除前请确认文件不再需要，某些应用或系统依赖可能需要保留。
-      </p>
+      <p className="insight-note">{t("duplicates.note")}</p>
     </section>
   );
 }
 
 function DuplicateFileRow({ file }: { file: FileEntry }) {
+  const { t } = useTranslation();
   const FileIcon = categoryIcon(file.category);
   const tint = categoryColor(file.category);
 
@@ -160,13 +165,13 @@ function DuplicateFileRow({ file }: { file: FileEntry }) {
       </div>
       <div className="file-meta">
         <strong>{formatBytes(file.sizeBytes)}</strong>
-        <span>{file.modifiedAt ? formatDate(file.modifiedAt) : "—"}</span>
+        <span>{file.modifiedAt ? formatDate(file.modifiedAt) : t("common.missing")}</span>
       </div>
       <button
         className="icon-button"
         type="button"
-        title="在 Finder 中显示"
-        aria-label={`在 Finder 中显示 ${file.name}`}
+        title={t("common.reveal")}
+        aria-label={t("common.revealNamed", { name: file.name })}
         onClick={() => void revealPath(file.path).catch(() => undefined)}
       >
         <ChevronRight size={16} />

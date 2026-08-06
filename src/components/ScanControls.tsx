@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { FolderOpen, Play, Square } from "lucide-react";
 import { basename } from "../lib/format";
 
@@ -20,12 +21,13 @@ export function ScanControls({
   onCancel,
   onIncludeHiddenChange,
 }: ScanControlsProps) {
+  const { t } = useTranslation();
   return (
     <section className="scan-controls" aria-labelledby="scan-title">
       <div className="section-heading">
-        <h2 id="scan-title">选择要了解的文件夹</h2>
+        <h2 id="scan-title">{t("scanControls.title")}</h2>
         <label className="toggle-control">
-          包含隐藏文件
+          {t("scanControls.includeHidden")}
           <input
             type="checkbox"
             checked={includeHidden}
@@ -45,15 +47,15 @@ export function ScanControls({
         >
           <FolderOpen size={19} />
           <span className="path-copy">
-            <strong>{selectedPath ? basename(selectedPath) : "尚未选择目录"}</strong>
-            <span title={selectedPath}>{selectedPath || "从一个明确的目录开始只读扫描"}</span>
+            <strong>{selectedPath ? basename(selectedPath) : t("scanControls.notSelected")}</strong>
+            <span title={selectedPath}>{selectedPath || t("scanControls.startHint")}</span>
           </span>
         </button>
 
         {isRunning ? (
           <button className="button button-danger" type="button" onClick={onCancel}>
             <Square size={14} fill="currentColor" />
-            取消
+            {t("scanControls.cancel")}
           </button>
         ) : (
           <button
@@ -63,7 +65,7 @@ export function ScanControls({
             disabled={!selectedPath}
           >
             <Play size={15} fill="currentColor" />
-            扫描
+            {t("scanControls.scan")}
           </button>
         )}
       </div>
