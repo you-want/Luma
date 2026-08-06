@@ -1,5 +1,6 @@
+import { useTranslation } from "react-i18next";
 import { ChevronRight } from "lucide-react";
-import { categoryColor, categoryIcon } from "../lib/categories";
+import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
 import { formatBytes, formatDate } from "../lib/format";
 import type { FileEntry } from "../types/scan";
 
@@ -10,11 +11,12 @@ export function LargeFiles({
   files: FileEntry[];
   onReveal: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="result-section" aria-labelledby="large-files-title">
       <div className="section-heading compact-heading">
-        <h2 id="large-files-title">最大文件</h2>
-        <span>前 {files.length} 项</span>
+        <h2 id="large-files-title">{t("largeFiles.title")}</h2>
+        <span>{t("largeFiles.topN", { count: files.length })}</span>
       </div>
       {files.length ? (
         <div className="file-list">
@@ -25,7 +27,7 @@ export function LargeFiles({
               <div className="file-row" key={file.path}>
                 <span
                   className="file-icon"
-                  style={{ color: tint, background: `${tint}1f` }}
+                  style={{ color: tint, background: categoryTint(file.category) }}
                 >
                   <Icon size={16} />
                 </span>
@@ -40,8 +42,8 @@ export function LargeFiles({
                 <button
                   className="icon-button"
                   type="button"
-                  title="在 Finder 中显示"
-                  aria-label={`在 Finder 中显示 ${file.name}`}
+                  title={t("common.reveal")}
+                  aria-label={t("common.revealNamed", { name: file.name })}
                   onClick={() => onReveal(file.path)}
                 >
                   <ChevronRight size={16} />
@@ -51,7 +53,7 @@ export function LargeFiles({
           })}
         </div>
       ) : (
-        <p className="empty-inline">这个目录里没有可列出的文件。</p>
+        <p className="empty-inline">{t("largeFiles.empty")}</p>
       )}
     </section>
   );

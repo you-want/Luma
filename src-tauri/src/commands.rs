@@ -4,7 +4,7 @@ use crate::{
     error::AppError,
     models::{
         FileEntry, InsightSummary, ScanComparison, ScanFinished, ScanStatus, ScanSummary,
-        StartScanRequest,
+        SearchRequest, SearchResponse, StartScanRequest,
     },
     projects::{self, ProjectCandidate},
     scanner,
@@ -19,6 +19,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 pub struct AppState {
@@ -171,13 +172,7 @@ pub fn list_insights(
     let threshold = large_file_threshold.unwrap_or(1024_u64.pow(3));
     let days = stale_days.unwrap_or(180).clamp(1, 3650);
     let stale_before = now_seconds().saturating_sub(i64::from(days) * 24 * 60 * 60);
-    database::list_insights(
-        &state.database_path,
-        &scan_id,
-        threshold,
-        stale_before,
-        days,
-    )
+    database::list_insights(&state.database_path, &scan_id, threshold, stale_before)
 }
 
 #[tauri::command]
@@ -235,6 +230,30 @@ pub fn compare_scans(
     target_scan_id: String,
 ) -> Result<ScanComparison, AppError> {
     database::compare_scans(&state.database_path, &base_scan_id, &target_scan_id)
+}
+
+/// Search one scan snapshot's indexed rows. Pagination and total count are
+/// computed by SQLite so the frontend never loads the full file table.
+#[tauri::command]
+pub fn search_files(
+    state: State<'_, AppState>,
+    request: SearchRequest,
+) -> Result<SearchResponse, AppError> {
+    database::search_files(&state.database_path, &request)
+}
+
+/// Reveal a file in the OS file manager (Finder / Explorer). Paths are stored
+/// in canonical `/`-separated form (see `scanner::normalize_stored_path`); a
+/// `PathBuf` treats `/` and the native separator equivalently, so converting
+/// back to a native path here lets Explorer's "select item" work on Windows.
+#[tauri::command]
+pub fn reveal_path(app: AppHandle, path: String) -> Result<(), AppError> {
+    // Rewrite the canonical `/` back to the platform separator: no-op on Unix
+    // (MAIN_SEPARATOR is `/`), `\` on Windows, which Explorer's select needs.
+    let native = PathBuf::from(path.replace('/', std::path::MAIN_SEPARATOR_STR));
+    app.opener()
+        .reveal_item_in_dir(&native)
+        .map_err(|error| AppError::new("REVEAL_FAILED", error.to_string()))
 }
 
 fn now_seconds() -> i64 {

@@ -36,7 +36,7 @@ pub fn find_duplicate_candidates(
     // 第二步：对每个大小组，获取文件列表并计算哈希
     for (size_bytes, _count) in size_groups {
         let mut size_statement = connection.prepare(
-            "SELECT path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
+            "SELECT id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
              FROM files
              WHERE scan_id = ?1 AND size_bytes = ?2
              ORDER BY path",
@@ -45,14 +45,15 @@ pub fn find_duplicate_candidates(
         let files = size_statement
             .query_map(params![scan_id, to_i64(size_bytes)], |row| {
                 Ok(FileEntry {
-                    path: row.get(0)?,
-                    name: row.get(1)?,
-                    extension: row.get(2)?,
-                    category: row.get(3)?,
-                    size_bytes: from_i64(row.get(4)?),
-                    modified_at: row.get(5)?,
-                    is_hidden: row.get::<_, i64>(6)? != 0,
-                    content_hash: row.get(7)?,
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    name: row.get(2)?,
+                    extension: row.get(3)?,
+                    category: row.get(4)?,
+                    size_bytes: from_i64(row.get(5)?),
+                    modified_at: row.get(6)?,
+                    is_hidden: row.get::<_, i64>(7)? != 0,
+                    content_hash: row.get(8)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -178,6 +179,7 @@ mod tests {
         let mut connection = open(&db_path).expect("open db");
         let files = vec![
             FileEntry {
+                id: 0,
                 path: file_a.to_string_lossy().into_owned(),
                 name: "a.txt".to_owned(),
                 extension: Some("txt".to_owned()),
@@ -188,6 +190,7 @@ mod tests {
                 content_hash: None,
             },
             FileEntry {
+                id: 0,
                 path: file_b.to_string_lossy().into_owned(),
                 name: "b.txt".to_owned(),
                 extension: Some("txt".to_owned()),
@@ -198,6 +201,7 @@ mod tests {
                 content_hash: None,
             },
             FileEntry {
+                id: 0,
                 path: file_c.to_string_lossy().into_owned(),
                 name: "c.txt".to_owned(),
                 extension: Some("txt".to_owned()),

@@ -2,7 +2,7 @@ use crate::{
     error::AppError,
     models::{
         CategoryDelta, CategorySummary, FileEntry, InsightSummary, ScanComparison, ScanStats,
-        ScanStatus, ScanSummary,
+        ScanStatus, ScanSummary, SearchRequest, SearchResponse,
     },
 };
 use rusqlite::{params, Connection, OptionalExtension};
@@ -49,6 +49,7 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
         CREATE INDEX IF NOT EXISTS idx_files_scan_size ON files(scan_id, size_bytes DESC);
         CREATE INDEX IF NOT EXISTS idx_files_scan_category ON files(scan_id, category);
         CREATE INDEX IF NOT EXISTS idx_files_scan_modified ON files(scan_id, modified_at);
+        CREATE INDEX IF NOT EXISTS idx_files_scan_name ON files(scan_id, name);
 ",
     )?;
 
@@ -239,19 +240,20 @@ pub fn list_large_files(
 ) -> Result<Vec<FileEntry>, AppError> {
     let connection = open(path)?;
     let mut statement = connection.prepare(
-        "SELECT path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
+        "SELECT id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
          FROM files WHERE scan_id = ?1 ORDER BY size_bytes DESC LIMIT ?2 OFFSET ?3",
     )?;
     let rows = statement.query_map(params![scan_id, limit, offset], |row| {
         Ok(FileEntry {
-            path: row.get(0)?,
-            name: row.get(1)?,
-            extension: row.get(2)?,
-            category: row.get(3)?,
-            size_bytes: from_i64(row.get(4)?),
-            modified_at: row.get(5)?,
-            is_hidden: row.get::<_, i64>(6)? != 0,
-            content_hash: row.get(7)?,
+            id: row.get(0)?,
+            path: row.get(1)?,
+            name: row.get(2)?,
+            extension: row.get(3)?,
+            category: row.get(4)?,
+            size_bytes: from_i64(row.get(5)?),
+            modified_at: row.get(6)?,
+            is_hidden: row.get::<_, i64>(7)? != 0,
+            content_hash: row.get(8)?,
         })
     })?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
@@ -275,11 +277,15 @@ pub fn list_insight_files(
             "modified_at IS NOT NULL AND modified_at < ?2",
             Some(stale_before),
         ),
-        "development" => (
-            "(path LIKE '%/node_modules/%' OR path LIKE '%/target/%' \
-             OR path LIKE '%/dist/%' OR path LIKE '%/.next/%')",
-            None,
-        ),
+        "development" => {
+            // Paths are normalized to `/` on all platforms (see scanner.rs normalize_separators),
+            // so SQL LIKE patterns always use `/` regardless of the host OS.
+            (
+                "(path LIKE '%/node_modules/%' OR path LIKE '%/target/%' \
+                 OR path LIKE '%/dist/%' OR path LIKE '%/.next/%')",
+                None,
+            )
+        }
         "archives" => ("category = 'archives'", None),
         "installers" => ("category = 'applications'", None),
         _ => {
@@ -291,21 +297,22 @@ pub fn list_insight_files(
     };
 
     let sql = format!(
-        "SELECT path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
+        "SELECT id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
          FROM files WHERE scan_id = ?1 AND {predicate}
          ORDER BY size_bytes DESC LIMIT {limit}"
     );
     let mut statement = connection.prepare(&sql)?;
     let map_row = |row: &rusqlite::Row| {
         Ok(FileEntry {
-            path: row.get(0)?,
-            name: row.get(1)?,
-            extension: row.get(2)?,
-            category: row.get(3)?,
-            size_bytes: from_i64(row.get(4)?),
-            modified_at: row.get(5)?,
-            is_hidden: row.get::<_, i64>(6)? != 0,
-            content_hash: row.get(7)?,
+            id: row.get(0)?,
+            path: row.get(1)?,
+            name: row.get(2)?,
+            extension: row.get(3)?,
+            category: row.get(4)?,
+            size_bytes: from_i64(row.get(5)?),
+            modified_at: row.get(6)?,
+            is_hidden: row.get::<_, i64>(7)? != 0,
+            content_hash: row.get(8)?,
         })
     };
     let rows = match extra_param {
@@ -320,11 +327,13 @@ pub fn list_insights(
     scan_id: &str,
     large_file_threshold: u64,
     stale_before: i64,
-    stale_days: u32,
 ) -> Result<Vec<InsightSummary>, AppError> {
     let connection = open(path)?;
     let mut insights = Vec::new();
 
+    // The human-readable rule ("basis") is no longer produced here: the frontend
+    // rebuilds it from `kind` plus the thresholds it already holds, so the text
+    // is translatable instead of a fixed backend sentence.
     push_insight(
         &mut insights,
         "largeFiles",
@@ -334,7 +343,6 @@ pub fn list_insights(
              WHERE scan_id = ?1 AND size_bytes >= ?2",
             params![scan_id, to_i64(large_file_threshold)],
         )?,
-        format!("判定依据：单个文件至少 {} 字节。", large_file_threshold),
     );
     push_insight(
         &mut insights,
@@ -345,7 +353,6 @@ pub fn list_insights(
              WHERE scan_id = ?1 AND modified_at IS NOT NULL AND modified_at < ?2",
             params![scan_id, stale_before],
         )?,
-        format!("判定依据：修改时间超过 {stale_days} 天。"),
     );
     push_insight(
         &mut insights,
@@ -359,7 +366,6 @@ pub fn list_insights(
              )",
             [scan_id],
         )?,
-        "判定依据：路径位于 node_modules、target、dist 或 .next 中。".to_owned(),
     );
     push_insight(
         &mut insights,
@@ -370,7 +376,6 @@ pub fn list_insights(
              WHERE scan_id = ?1 AND category = 'archives'",
             [scan_id],
         )?,
-        "判定依据：文件扩展名属于常见压缩格式。".to_owned(),
     );
     push_insight(
         &mut insights,
@@ -381,7 +386,6 @@ pub fn list_insights(
              WHERE scan_id = ?1 AND category = 'applications'",
             [scan_id],
         )?,
-        "判定依据：文件扩展名属于应用或安装包格式。".to_owned(),
     );
 
     Ok(insights)
@@ -401,14 +405,12 @@ fn push_insight(
     insights: &mut Vec<InsightSummary>,
     kind: &str,
     (file_count, size_bytes): (u64, u64),
-    basis: String,
 ) {
     if file_count > 0 {
         insights.push(InsightSummary {
             kind: kind.to_owned(),
             file_count,
             size_bytes,
-            basis,
         });
     }
 }
@@ -525,6 +527,123 @@ fn parse_status(value: &str) -> ScanStatus {
     }
 }
 
+/// Escape a user query for a `LIKE` pattern so `%`, `_`, and the escape
+/// character itself are matched literally rather than as wildcards. Paired with
+/// `ESCAPE '\'` in the SQL. Without this, a query like "50%" would match far
+/// more than intended.
+fn escape_like(query: &str) -> String {
+    let mut escaped = String::with_capacity(query.len());
+    for ch in query.chars() {
+        if matches!(ch, '\\' | '%' | '_') {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped
+}
+
+/// Search one scan's indexed rows. Name/path matching, optional filters, sort,
+/// and pagination all run in SQLite; the frontend never loads the full table.
+/// Returns the requested page plus the total match count for pagination.
+pub fn search_files(path: &Path, request: &SearchRequest) -> Result<SearchResponse, AppError> {
+    let connection = open(path)?;
+
+    // Build the WHERE clause incrementally. Every dynamic value is a bound
+    // parameter; only the closed-set ORDER BY and these static fragments are
+    // interpolated, so the query is not injectable.
+    let mut clauses: Vec<String> = vec!["scan_id = ?1".to_owned()];
+    let mut params: Vec<rusqlite::types::Value> = vec![request.scan_id.clone().into()];
+
+    let trimmed = request.query.trim();
+    if !trimmed.is_empty() {
+        params.push(format!("%{}%", escape_like(trimmed)).into());
+        let idx = params.len();
+        // Match either the file name or its full path, escaped LIKE.
+        clauses.push(format!(
+            "(name LIKE ?{idx} ESCAPE '\\' OR path LIKE ?{idx} ESCAPE '\\')"
+        ));
+    }
+    if let Some(category) = request.category.as_deref().filter(|c| !c.is_empty()) {
+        params.push(category.to_owned().into());
+        clauses.push(format!("category = ?{}", params.len()));
+    }
+    if let Some(extension) = request.extension.as_deref().filter(|e| !e.is_empty()) {
+        params.push(extension.to_ascii_lowercase().into());
+        clauses.push(format!("extension = ?{}", params.len()));
+    }
+    if let Some(min_size) = request.min_size {
+        params.push(to_i64(min_size).into());
+        clauses.push(format!("size_bytes >= ?{}", params.len()));
+    }
+    if let Some(max_size) = request.max_size {
+        params.push(to_i64(max_size).into());
+        clauses.push(format!("size_bytes <= ?{}", params.len()));
+    }
+    if let Some(after) = request.modified_after {
+        params.push(after.into());
+        clauses.push(format!(
+            "modified_at IS NOT NULL AND modified_at >= ?{}",
+            params.len()
+        ));
+    }
+    if let Some(before) = request.modified_before {
+        params.push(before.into());
+        clauses.push(format!(
+            "modified_at IS NOT NULL AND modified_at <= ?{}",
+            params.len()
+        ));
+    }
+    if !request.include_hidden {
+        clauses.push("is_hidden = 0".to_owned());
+    }
+    let where_clause = clauses.join(" AND ");
+
+    // Total match count first, so the UI can page without loading every row.
+    let count_sql = format!("SELECT COUNT(*) FROM files WHERE {where_clause}");
+    let total: i64 = connection.query_row(
+        &count_sql,
+        rusqlite::params_from_iter(params.iter()),
+        |row| row.get(0),
+    )?;
+
+    let limit = request.limit.unwrap_or(50).clamp(1, 200);
+    let offset = request.offset.unwrap_or(0);
+    let sql = format!(
+        "SELECT id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
+         FROM files WHERE {where_clause}
+         ORDER BY {} LIMIT ?{} OFFSET ?{}",
+        request.sort.order_by(),
+        params.len() + 1,
+        params.len() + 2,
+    );
+    let mut page_params = params.clone();
+    page_params.push(i64::from(limit).into());
+    page_params.push(i64::from(offset).into());
+
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement.query_map(rusqlite::params_from_iter(page_params.iter()), |row| {
+        Ok(FileEntry {
+            id: row.get(0)?,
+            path: row.get(1)?,
+            name: row.get(2)?,
+            extension: row.get(3)?,
+            category: row.get(4)?,
+            size_bytes: from_i64(row.get(5)?),
+            modified_at: row.get(6)?,
+            is_hidden: row.get::<_, i64>(7)? != 0,
+            content_hash: row.get(8)?,
+        })
+    })?;
+    let files = rows.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(SearchResponse {
+        files,
+        total: from_i64(total),
+        limit,
+        offset,
+    })
+}
+
 fn to_i64(value: u64) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
@@ -536,11 +655,11 @@ fn from_i64(value: i64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_scans, create_scan_run, finish_scan, initialize, insert_file_batch, latest_scan,
-        list_insight_files, list_insights, list_large_files, list_scan_history, open,
-        prune_old_scans,
+        compare_scans, create_scan_run, escape_like, finish_scan, initialize, insert_file_batch,
+        latest_scan, list_insight_files, list_insights, list_large_files, list_scan_history, open,
+        prune_old_scans, search_files,
     };
-    use crate::models::{FileEntry, ScanStats, ScanStatus};
+    use crate::models::{FileEntry, ScanStats, ScanStatus, SearchRequest, SearchSort};
     use std::fs;
     use uuid::Uuid;
 
@@ -552,6 +671,7 @@ mod tests {
         modified_at: Option<i64>,
     ) -> FileEntry {
         FileEntry {
+            id: 0, // Test helper; real id comes from database
             path: path.to_owned(),
             name: name.to_owned(),
             extension: None,
@@ -572,6 +692,7 @@ mod tests {
         let mut connection = open(&database_path).expect("open database");
         let files = vec![
             FileEntry {
+                id: 0,
                 path: "/fixture/node_modules/package/archive.zip".to_owned(),
                 name: "archive.zip".to_owned(),
                 extension: Some("zip".to_owned()),
@@ -582,6 +703,7 @@ mod tests {
                 content_hash: None,
             },
             FileEntry {
+                id: 0,
                 path: "/fixture/installer.dmg".to_owned(),
                 name: "installer.dmg".to_owned(),
                 extension: Some("dmg".to_owned()),
@@ -619,8 +741,7 @@ mod tests {
             list_large_files(&database_path, "scan-1", 20, 0).expect("query large files");
         assert_eq!(large_files[0].name, "archive.zip");
 
-        let insights =
-            list_insights(&database_path, "scan-1", 300, 50, 180).expect("query insights");
+        let insights = list_insights(&database_path, "scan-1", 300, 50).expect("query insights");
         let kinds = insights
             .iter()
             .map(|insight| insight.kind.as_str())
@@ -969,6 +1090,222 @@ mod tests {
             .expect("documents delta present");
         assert_eq!(documents.size_delta, 200);
         assert_eq!(documents.file_count_delta, 0);
+
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    #[test]
+    fn test_escape_like() {
+        assert_eq!(escape_like("normal"), "normal");
+        assert_eq!(escape_like("50%"), "50\\%");
+        assert_eq!(escape_like("file_name"), "file\\_name");
+        assert_eq!(escape_like("back\\slash"), "back\\\\slash");
+        assert_eq!(escape_like("_%\\all"), "\\_\\%\\\\all");
+    }
+
+    #[test]
+    fn test_search_files() {
+        let database_path = format!("/tmp/test_search_{}.db", Uuid::new_v4());
+        initialize(std::path::Path::new(&database_path)).expect("initialize");
+        let scan_id = "scan-search";
+        create_scan_run(std::path::Path::new(&database_path), scan_id, "/test", 1000)
+            .expect("create scan");
+
+        let files = vec![
+            file("docs/readme.md", "readme.md", "documents", 1024, Some(2000)),
+            file("photos/beach.jpg", "beach.jpg", "images", 5000, Some(3000)),
+            file(
+                "photos/mountain.jpg",
+                "mountain.jpg",
+                "images",
+                6000,
+                Some(4000),
+            ),
+            file("videos/clip.mp4", "clip.mp4", "videos", 50000, Some(5000)),
+            FileEntry {
+                id: 0,
+                path: ".hidden/secret.txt".to_owned(),
+                name: "secret.txt".to_owned(),
+                extension: Some("txt".to_owned()),
+                category: "documents".to_owned(),
+                size_bytes: 100,
+                modified_at: Some(1500),
+                is_hidden: true,
+                content_hash: None,
+            },
+        ];
+        let mut connection = open(std::path::Path::new(&database_path)).expect("open");
+        insert_file_batch(&mut connection, scan_id, &files).expect("insert batch");
+        finish_scan(
+            &connection,
+            scan_id,
+            ScanStatus::Completed,
+            &ScanStats {
+                files_scanned: 5,
+                directories_scanned: 3,
+                bytes_scanned: 62124,
+                errors: 0,
+            },
+            2000,
+        )
+        .expect("finish scan");
+
+        // Basic query: name match
+        let response = search_files(
+            std::path::Path::new(&database_path),
+            &SearchRequest {
+                scan_id: scan_id.to_owned(),
+                query: "mountain".to_owned(),
+                category: None,
+                extension: None,
+                min_size: None,
+                max_size: None,
+                modified_after: None,
+                modified_before: None,
+                include_hidden: false,
+                sort: SearchSort::default(),
+                limit: None,
+                offset: None,
+            },
+        )
+        .expect("search by name");
+        assert_eq!(response.total, 1);
+        assert_eq!(response.files.len(), 1);
+        assert_eq!(response.files[0].name, "mountain.jpg");
+
+        // Category filter
+        let response = search_files(
+            std::path::Path::new(&database_path),
+            &SearchRequest {
+                scan_id: scan_id.to_owned(),
+                query: String::new(),
+                category: Some("images".to_owned()),
+                extension: None,
+                min_size: None,
+                max_size: None,
+                modified_after: None,
+                modified_before: None,
+                include_hidden: false,
+                sort: SearchSort::NameAsc,
+                limit: None,
+                offset: None,
+            },
+        )
+        .expect("search by category");
+        assert_eq!(response.total, 2);
+        assert_eq!(response.files[0].name, "beach.jpg");
+        assert_eq!(response.files[1].name, "mountain.jpg");
+
+        // Size range
+        let response = search_files(
+            std::path::Path::new(&database_path),
+            &SearchRequest {
+                scan_id: scan_id.to_owned(),
+                query: String::new(),
+                category: None,
+                extension: None,
+                min_size: Some(5000),
+                max_size: Some(10000),
+                modified_after: None,
+                modified_before: None,
+                include_hidden: false,
+                sort: SearchSort::SizeDesc,
+                limit: None,
+                offset: None,
+            },
+        )
+        .expect("search by size");
+        assert_eq!(response.total, 2);
+        assert_eq!(response.files[0].size_bytes, 6000);
+        assert_eq!(response.files[1].size_bytes, 5000);
+
+        // Hidden exclusion (default)
+        let response = search_files(
+            std::path::Path::new(&database_path),
+            &SearchRequest {
+                scan_id: scan_id.to_owned(),
+                query: "secret".to_owned(),
+                category: None,
+                extension: None,
+                min_size: None,
+                max_size: None,
+                modified_after: None,
+                modified_before: None,
+                include_hidden: false,
+                sort: SearchSort::default(),
+                limit: None,
+                offset: None,
+            },
+        )
+        .expect("search exclude hidden");
+        assert_eq!(response.total, 0);
+
+        // Include hidden
+        let response = search_files(
+            std::path::Path::new(&database_path),
+            &SearchRequest {
+                scan_id: scan_id.to_owned(),
+                query: "secret".to_owned(),
+                category: None,
+                extension: None,
+                min_size: None,
+                max_size: None,
+                modified_after: None,
+                modified_before: None,
+                include_hidden: true,
+                sort: SearchSort::default(),
+                limit: None,
+                offset: None,
+            },
+        )
+        .expect("search include hidden");
+        assert_eq!(response.total, 1);
+        assert_eq!(response.files[0].name, "secret.txt");
+
+        // Pagination
+        let response = search_files(
+            std::path::Path::new(&database_path),
+            &SearchRequest {
+                scan_id: scan_id.to_owned(),
+                query: String::new(),
+                category: None,
+                extension: None,
+                min_size: None,
+                max_size: None,
+                modified_after: None,
+                modified_before: None,
+                include_hidden: false,
+                sort: SearchSort::NameAsc,
+                limit: Some(2),
+                offset: Some(0),
+            },
+        )
+        .expect("search page 1");
+        assert_eq!(response.total, 4);
+        assert_eq!(response.files.len(), 2);
+        assert_eq!(response.limit, 2);
+        assert_eq!(response.offset, 0);
+
+        let response = search_files(
+            std::path::Path::new(&database_path),
+            &SearchRequest {
+                scan_id: scan_id.to_owned(),
+                query: String::new(),
+                category: None,
+                extension: None,
+                min_size: None,
+                max_size: None,
+                modified_after: None,
+                modified_before: None,
+                include_hidden: false,
+                sort: SearchSort::NameAsc,
+                limit: Some(2),
+                offset: Some(2),
+            },
+        )
+        .expect("search page 2");
+        assert_eq!(response.total, 4);
+        assert_eq!(response.files.len(), 2);
 
         fs::remove_file(database_path).expect("remove fixture database");
     }
