@@ -23,35 +23,47 @@ export type CategoryId =
   | "other";
 
 type CategoryMeta = {
-  label: string;
-  /** System-color-inspired hue used for the storage bar segment and legend dot. */
+  /** Luma visualization hue used for the storage bar segment and legend dot. */
   color: string;
   icon: LucideIcon;
 };
 
-// Colors follow Apple's system palette (systemBlue, systemGreen, etc.) so the
-// storage bar reads like the one in System Settings › General › Storage.
+// The visualization palette stays varied enough to scan while drawing from
+// Han's ink, celadon, indigo, bamboo, gold, and ochre color families.
+// Labels are not stored here; they live in the i18n resources under
+// `category.<id>` and are resolved with `categoryLabelKey` + `t()`.
 const CATEGORY_META: Record<CategoryId, CategoryMeta> = {
-  videos: { label: "视频", color: "#0A84FF", icon: Film },
-  images: { label: "图片", color: "#34C759", icon: Image },
-  documents: { label: "文档", color: "#FF9F0A", icon: FileText },
-  audio: { label: "音频", color: "#FF375F", icon: Music },
-  code: { label: "代码", color: "#5E5CE6", icon: FileCode },
-  archives: { label: "压缩包", color: "#BF5AF2", icon: Archive },
-  applications: { label: "应用与安装包", color: "#64D2FF", icon: Package },
-  other: { label: "其他", color: "#98989D", icon: File },
+  videos: { color: "var(--luma-category-videos)", icon: Film },
+  images: { color: "var(--luma-category-images)", icon: Image },
+  documents: { color: "var(--luma-category-documents)", icon: FileText },
+  audio: { color: "var(--luma-category-audio)", icon: Music },
+  code: { color: "var(--luma-category-code)", icon: FileCode },
+  archives: { color: "var(--luma-category-archives)", icon: Archive },
+  applications: { color: "var(--luma-category-applications)", icon: Package },
+  other: { color: "var(--luma-category-other)", icon: File },
 };
 
-const FALLBACK: CategoryMeta = CATEGORY_META.other;
+const FALLBACK_ID: CategoryId = "other";
 
-export function categoryLabel(category: string): string {
-  return (CATEGORY_META[category as CategoryId] ?? FALLBACK).label;
+function metaFor(category: string): CategoryMeta {
+  return CATEGORY_META[category as CategoryId] ?? CATEGORY_META[FALLBACK_ID];
+}
+
+// The i18n key for a category label, e.g. "category.videos". Unknown ids fall
+// back to "category.other" so the UI never renders a raw category string.
+export function categoryLabelKey(category: string): `category.${CategoryId}` {
+  const id = (category as CategoryId) in CATEGORY_META ? (category as CategoryId) : FALLBACK_ID;
+  return `category.${id}`;
 }
 
 export function categoryColor(category: string): string {
-  return (CATEGORY_META[category as CategoryId] ?? FALLBACK).color;
+  return metaFor(category).color;
+}
+
+export function categoryTint(category: string): string {
+  return `color-mix(in srgb, ${categoryColor(category)} 12%, transparent)`;
 }
 
 export function categoryIcon(category: string): LucideIcon {
-  return (CATEGORY_META[category as CategoryId] ?? FALLBACK).icon;
+  return metaFor(category).icon;
 }

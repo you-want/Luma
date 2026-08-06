@@ -1,16 +1,20 @@
 import { useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Database, ShieldCheck, TriangleAlert } from "lucide-react";
 import { appStore, useAppStore } from "./app/store";
 import { CategoryList } from "./components/CategoryList";
 import { Duplicates } from "./components/Duplicates";
 import { InsightList } from "./components/InsightList";
+import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import { LargeFiles } from "./components/LargeFiles";
 import Projects from "./components/Projects";
 import { ScanControls } from "./components/ScanControls";
 import { ScanHistory } from "./components/ScanHistory";
 import { ScanProgress } from "./components/ScanProgress";
+import Search from "./components/Search";
 import { StorageOverview } from "./components/StorageOverview";
 import { useScanEvents } from "./hooks/useScanEvents";
+import { errorMessage } from "./lib/errors";
 import {
   cancelScan,
   chooseDirectory,
@@ -24,15 +28,8 @@ import {
 import type { ScanFinished, ScanProgress as ScanProgressType } from "./types/scan";
 import "./App.css";
 
-function errorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error) {
-    return String(error.message);
-  }
-  return "操作没有完成，请检查目录读取权限后重试。";
-}
-
 function App() {
+  const { t } = useTranslation();
   const app = useAppStore();
 
   const loadResult = useCallback(async (scanId: string) => {
@@ -61,7 +58,7 @@ function App() {
       } else if (finished.status === "cancelled") {
         appStore.cancel();
       } else {
-        appStore.fail(finished.error?.message || "扫描未完成，请重试。" );
+        appStore.fail(errorMessage(finished.error));
       }
     },
     [loadResult],
@@ -95,7 +92,7 @@ function App() {
         if (disposed || appStore.getState().activeScanId !== scanId) return;
         if (current.status === "completed") await loadResult(scanId);
         else if (current.status === "cancelled") appStore.cancel();
-        else if (current.status === "failed") appStore.fail("扫描未完成，请检查目录读取权限后重试。");
+        else if (current.status === "failed") appStore.fail(t("errors.SCAN_FAILED"));
       } catch (error) {
         if (!disposed && appStore.getState().activeScanId === scanId) {
           appStore.fail(errorMessage(error));
@@ -161,17 +158,18 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-han-scope data-theme="ink" data-luma-accent="celadon">
       <header className="app-header">
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
-        <div className="brand-copy"><strong>Luma</strong><span>本地空间观察</span></div>
-        <div className="privacy-note"><ShieldCheck size={15} />只读扫描，数据保留在本机</div>
+        <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
+        <div className="privacy-note"><ShieldCheck size={15} />{t("app.privacyNote")}</div>
+        <LanguageSwitcher />
       </header>
 
       <div className="content">
         <div className="intro">
-          <h1>本地空间观察</h1>
-          <p>选择一个目录，Luma 会在本机建立可恢复的空间索引，不修改任何原文件。</p>
+          <h1>{t("intro.title")}</h1>
+          <p>{t("intro.description")}</p>
         </div>
 
         <ScanControls
@@ -189,24 +187,24 @@ function App() {
         {app.phase === "failed" && (
           <section className="status-message status-error" role="alert">
             <TriangleAlert size={20} />
-            <div><strong>扫描遇到问题</strong><p>{app.error}</p></div>
+            <div><strong>{t("status.failedTitle")}</strong><p>{app.error}</p></div>
           </section>
         )}
 
         {app.phase === "cancelled" && (
           <section className="status-message">
             <Database size={20} />
-            <div><strong>扫描已取消</strong><p>未完成的结果不会覆盖最近一次成功扫描。</p></div>
+            <div><strong>{t("status.cancelledTitle")}</strong><p>{t("status.cancelledBody")}</p></div>
           </section>
         )}
 
-        {app.loading && <div className="loading-state">正在读取本地索引...</div>}
+        {app.loading && <div className="loading-state">{t("status.loading")}</div>}
 
         {app.phase === "idle" && !app.loading && (
           <section className="empty-state">
             <Database size={28} />
-            <h2>从一个目录开始</h2>
-            <p>完成扫描后，这里会展示空间分类、最大文件和可解释的本地发现。</p>
+            <h2>{t("empty.title")}</h2>
+            <p>{t("empty.body")}</p>
           </section>
         )}
 
@@ -224,6 +222,10 @@ function App() {
               />
             </div>
             <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
+            <Search
+              scanId={app.summary.scanId}
+              categories={app.summary.categories.map((c) => c.category)}
+            />
             <Duplicates scanId={app.summary.scanId} />
             <Projects scanId={app.summary.scanId} />
             <ScanHistory scanId={app.summary.scanId} />

@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { listProjects } from '../lib/tauri'
+import { formatBytes, formatNumber } from '../lib/format'
+import { errorMessage } from '../lib/errors'
 import type { ProjectCandidate } from '../types/scan'
 
 interface ProjectsProps {
@@ -26,76 +29,94 @@ const PROJECT_ICONS: Record<string, string> = {
   gradle: '🐘',
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`
-}
-
-function formatCount(count: number): string {
-  if (count < 1000) return count.toString()
-  if (count < 10000) return `${(count / 1000).toFixed(1)}k`
-  return `${Math.floor(count / 1000)}k`
-}
+// Project identification runs several passes over the whole file index, which
+// on a large scan (hundreds of thousands of files) is slow. It is therefore
+// triggered explicitly by the user rather than on mount, so opening a result
+// never freezes the UI. The same reasoning applies to duplicate detection.
+type State =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; projects: ProjectCandidate[] }
 
 export default function Projects({ scanId }: ProjectsProps) {
-  const [projects, setProjects] = useState<ProjectCandidate[]>([])
-  const [loading, setLoading] = useState(true)
+  const { t } = useTranslation()
+  const [state, setState] = useState<State>({ status: 'idle' })
 
+  // A new scan invalidates any previously identified projects.
   useEffect(() => {
-    listProjects(scanId)
-      .then(setProjects)
-      .finally(() => setLoading(false))
+    setState({ status: 'idle' })
   }, [scanId])
 
-  if (loading) {
-    return (
-      <div className="projects-section">
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-          正在识别开发项目...
-        </p>
-      </div>
-    )
-  }
-
-  if (projects.length === 0) {
-    return (
-      <div className="projects-section">
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-          未检测到开发项目目录
-        </p>
-      </div>
-    )
+  async function handleIdentify() {
+    setState({ status: 'loading' })
+    try {
+      const projects = await listProjects(scanId)
+      setState({ status: 'ready', projects })
+    } catch (error) {
+      setState({ status: 'error', message: errorMessage(error) })
+    }
   }
 
   return (
-    <div className="projects-section">
-      <div className="projects-summary">
-        发现 <strong>{projects.length}</strong> 个开发项目，共占用{' '}
-        <strong>
-          {formatBytes(projects.reduce((sum, p) => sum + p.sizeBytes, 0))}
-        </strong>
+    <section className="result-section projects-section" aria-labelledby="projects-title">
+      <div className="section-heading compact-heading">
+        <h2 id="projects-title">{t('projects.title')}</h2>
       </div>
 
-      <div className="project-list">
-        {projects.map((project, idx) => (
-          <div key={idx} className="project-card">
-            <div className="project-icon">
-              {PROJECT_ICONS[project.kind] || '📁'}
+      {state.status === 'idle' && (
+        <div className="projects-cta">
+          <p className="empty-inline">{t('projects.cta')}</p>
+          <button type="button" className="primary-button" onClick={handleIdentify}>
+            {t('projects.identify')}
+          </button>
+        </div>
+      )}
+
+      {state.status === 'loading' && (
+        <p className="empty-inline">{t('projects.identifying')}</p>
+      )}
+
+      {state.status === 'error' && (
+        <p className="empty-inline">{state.message}</p>
+      )}
+
+      {state.status === 'ready' &&
+        (state.projects.length === 0 ? (
+          <p className="empty-inline">{t('projects.none')}</p>
+        ) : (
+          <>
+            <div className="projects-summary">
+              {t('projects.summary', {
+                count: formatNumber(state.projects.length),
+                size: formatBytes(
+                  state.projects.reduce((sum, p) => sum + p.sizeBytes, 0),
+                ),
+              })}
             </div>
-            <div className="project-info">
-              <div className="project-name">{project.name}</div>
-              <div className="project-meta">
-                {PROJECT_LABELS[project.kind] || project.kind} ·{' '}
-                {formatCount(project.fileCount)} 文件 ·{' '}
-                {formatBytes(project.sizeBytes)}
-              </div>
-              <div className="project-path">{project.path}</div>
+
+            <div className="project-list">
+              {state.projects.map((project, idx) => (
+                <div key={idx} className="project-card">
+                  <div className="project-icon">
+                    {PROJECT_ICONS[project.kind] || '📁'}
+                  </div>
+                  <div className="project-info">
+                    <div className="project-name">{project.name}</div>
+                    <div className="project-meta">
+                      {t('projects.meta', {
+                        kind: PROJECT_LABELS[project.kind] || project.kind,
+                        files: formatNumber(project.fileCount),
+                        size: formatBytes(project.sizeBytes),
+                      })}
+                    </div>
+                    <div className="project-path">{project.path}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          </>
         ))}
-      </div>
-    </div>
+    </section>
   )
 }
