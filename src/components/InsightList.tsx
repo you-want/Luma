@@ -9,17 +9,17 @@ import {
   PackageSearch,
 } from "lucide-react";
 import { listInsightFiles, revealPath } from "../lib/tauri";
-import { categoryColor, categoryIcon } from "../lib/categories";
+import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
 import { errorMessage } from "../lib/errors";
 import type { FileEntry, InsightKind, InsightSummary } from "../types/scan";
 
 const insightMeta: Record<InsightKind, { icon: typeof PackageSearch; color: string }> = {
-  largeFiles: { icon: PackageSearch, color: "#FF9F0A" },
-  staleFiles: { icon: Clock3, color: "#8E8E93" },
-  development: { icon: Code2, color: "#5E5CE6" },
-  archives: { icon: Archive, color: "#BF5AF2" },
-  installers: { icon: Package, color: "#64D2FF" },
+  largeFiles: { icon: PackageSearch, color: "var(--han-color-warning)" },
+  staleFiles: { icon: Clock3, color: "var(--luma-category-other)" },
+  development: { icon: Code2, color: "var(--han-color-info)" },
+  archives: { icon: Archive, color: "var(--luma-category-archives)" },
+  installers: { icon: Package, color: "var(--han-color-accent-decorative)" },
 };
 
 type InsightListProps = {
@@ -140,7 +140,10 @@ export function InsightList({
                 >
                   <span
                     className="insight-icon"
-                    style={{ color, background: `${color}1f` }}
+                    style={{
+                      color,
+                      background: `color-mix(in srgb, ${color} 12%, transparent)`,
+                    }}
                   >
                     <Icon size={16} />
                   </span>
@@ -178,7 +181,10 @@ export function InsightList({
                                 <div className="file-row" key={file.path}>
                                   <span
                                     className="file-icon"
-                                    style={{ color: tint, background: `${tint}1f` }}
+                                    style={{
+                                      color: tint,
+                                      background: categoryTint(file.category),
+                                    }}
                                   >
                                     <FileIcon size={16} />
                                   </span>

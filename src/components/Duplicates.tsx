@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, ChevronRight, AlertCircle } from "lucide-react";
 import { findDuplicates, revealPath } from "../lib/tauri";
-import { categoryColor, categoryIcon } from "../lib/categories";
+import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
 import { errorMessage } from "../lib/errors";
 import type { DuplicateGroup, FileEntry } from "../types/scan";
@@ -109,7 +109,10 @@ export function Duplicates({ scanId }: DuplicatesProps) {
                       aria-expanded={expanded}
                       onClick={() => toggleGroup(group.contentHash)}
                     >
-                      <span className="duplicate-icon" style={{ color: "#FF9F0A" }}>
+                      <span
+                        className="duplicate-icon"
+                        style={{ color: "var(--han-color-warning)" }}
+                      >
                         <Copy size={16} />
                       </span>
                       <div className="duplicate-copy">
@@ -156,7 +159,10 @@ function DuplicateFileRow({ file }: { file: FileEntry }) {
 
   return (
     <div className="file-row">
-      <span className="file-icon" style={{ color: tint, background: `${tint}1f` }}>
+      <span
+        className="file-icon"
+        style={{ color: tint, background: categoryTint(file.category) }}
+      >
         <FileIcon size={16} />
       </span>
       <div className="file-copy">

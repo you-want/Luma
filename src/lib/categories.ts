@@ -23,24 +23,24 @@ export type CategoryId =
   | "other";
 
 type CategoryMeta = {
-  /** System-color-inspired hue used for the storage bar segment and legend dot. */
+  /** Luma visualization hue used for the storage bar segment and legend dot. */
   color: string;
   icon: LucideIcon;
 };
 
-// Colors follow Apple's system palette (systemBlue, systemGreen, etc.) so the
-// storage bar reads like the one in System Settings › General › Storage.
+// The visualization palette stays varied enough to scan while drawing from
+// Han's ink, celadon, indigo, bamboo, gold, and ochre color families.
 // Labels are not stored here; they live in the i18n resources under
 // `category.<id>` and are resolved with `categoryLabelKey` + `t()`.
 const CATEGORY_META: Record<CategoryId, CategoryMeta> = {
-  videos: { color: "#0A84FF", icon: Film },
-  images: { color: "#34C759", icon: Image },
-  documents: { color: "#FF9F0A", icon: FileText },
-  audio: { color: "#FF375F", icon: Music },
-  code: { color: "#5E5CE6", icon: FileCode },
-  archives: { color: "#BF5AF2", icon: Archive },
-  applications: { color: "#64D2FF", icon: Package },
-  other: { color: "#98989D", icon: File },
+  videos: { color: "var(--luma-category-videos)", icon: Film },
+  images: { color: "var(--luma-category-images)", icon: Image },
+  documents: { color: "var(--luma-category-documents)", icon: FileText },
+  audio: { color: "var(--luma-category-audio)", icon: Music },
+  code: { color: "var(--luma-category-code)", icon: FileCode },
+  archives: { color: "var(--luma-category-archives)", icon: Archive },
+  applications: { color: "var(--luma-category-applications)", icon: Package },
+  other: { color: "var(--luma-category-other)", icon: File },
 };
 
 const FALLBACK_ID: CategoryId = "other";
@@ -58,6 +58,10 @@ export function categoryLabelKey(category: string): `category.${CategoryId}` {
 
 export function categoryColor(category: string): string {
   return metaFor(category).color;
+}
+
+export function categoryTint(category: string): string {
+  return `color-mix(in srgb, ${categoryColor(category)} 12%, transparent)`;
 }
 
 export function categoryIcon(category: string): LucideIcon {

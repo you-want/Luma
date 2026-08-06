@@ -158,7 +158,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-han-scope data-theme="ink" data-luma-accent="celadon">
       <header className="app-header">
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
         <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
