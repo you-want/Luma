@@ -1105,11 +1105,11 @@ mod tests {
 
     #[test]
     fn test_search_files() {
-        let database_path = format!("/tmp/test_search_{}.db", Uuid::new_v4());
-        initialize(std::path::Path::new(&database_path)).expect("initialize");
+        let database_path =
+            std::env::temp_dir().join(format!("luma-search-{}.sqlite3", Uuid::new_v4()));
+        initialize(&database_path).expect("initialize");
         let scan_id = "scan-search";
-        create_scan_run(std::path::Path::new(&database_path), scan_id, "/test", 1000)
-            .expect("create scan");
+        create_scan_run(&database_path, scan_id, "/test", 1000).expect("create scan");
 
         let files = vec![
             file("docs/readme.md", "readme.md", "documents", 1024, Some(2000)),
@@ -1134,7 +1134,7 @@ mod tests {
                 content_hash: None,
             },
         ];
-        let mut connection = open(std::path::Path::new(&database_path)).expect("open");
+        let mut connection = open(&database_path).expect("open");
         insert_file_batch(&mut connection, scan_id, &files).expect("insert batch");
         finish_scan(
             &connection,
@@ -1152,7 +1152,7 @@ mod tests {
 
         // Basic query: name match
         let response = search_files(
-            std::path::Path::new(&database_path),
+            &database_path,
             &SearchRequest {
                 scan_id: scan_id.to_owned(),
                 query: "mountain".to_owned(),
@@ -1175,7 +1175,7 @@ mod tests {
 
         // Category filter
         let response = search_files(
-            std::path::Path::new(&database_path),
+            &database_path,
             &SearchRequest {
                 scan_id: scan_id.to_owned(),
                 query: String::new(),
@@ -1198,7 +1198,7 @@ mod tests {
 
         // Size range
         let response = search_files(
-            std::path::Path::new(&database_path),
+            &database_path,
             &SearchRequest {
                 scan_id: scan_id.to_owned(),
                 query: String::new(),
@@ -1221,7 +1221,7 @@ mod tests {
 
         // Hidden exclusion (default)
         let response = search_files(
-            std::path::Path::new(&database_path),
+            &database_path,
             &SearchRequest {
                 scan_id: scan_id.to_owned(),
                 query: "secret".to_owned(),
@@ -1242,7 +1242,7 @@ mod tests {
 
         // Include hidden
         let response = search_files(
-            std::path::Path::new(&database_path),
+            &database_path,
             &SearchRequest {
                 scan_id: scan_id.to_owned(),
                 query: "secret".to_owned(),
@@ -1264,7 +1264,7 @@ mod tests {
 
         // Pagination
         let response = search_files(
-            std::path::Path::new(&database_path),
+            &database_path,
             &SearchRequest {
                 scan_id: scan_id.to_owned(),
                 query: String::new(),
@@ -1287,7 +1287,7 @@ mod tests {
         assert_eq!(response.offset, 0);
 
         let response = search_files(
-            std::path::Path::new(&database_path),
+            &database_path,
             &SearchRequest {
                 scan_id: scan_id.to_owned(),
                 query: String::new(),
