@@ -77,7 +77,7 @@ pub fn find_duplicate_candidates(
     }
 
     // 按浪费空间降序排列
-    duplicate_groups.sort_by(|a, b| b.wasted_bytes.cmp(&a.wasted_bytes));
+    duplicate_groups.sort_by_key(|group| std::cmp::Reverse(group.wasted_bytes));
 
     Ok(duplicate_groups)
 }
