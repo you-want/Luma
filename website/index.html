@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Luma · 照见你的数字世界</title>
-  <meta name="description" content="Luma 0.2.0 是一款为 Mac 打造的本地文件空间观察工具，可查看空间分类、搜索过滤、批量选择、重复文件候选、开发项目与扫描历史，界面支持简体中文与英文。只读运行，数据不出本机。">
+  <meta name="description" content="Luma 0.2.0 是一款面向 macOS 与 Windows 11 x64 的本地文件空间观察工具，可查看空间分类、搜索过滤、批量选择、重复文件候选、开发项目与扫描历史，界面支持简体中文与英文。只读运行，数据不出本机。">
   <meta name="theme-color" content="#17211f">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -864,10 +864,10 @@
       <div class="lm-hero__seal-col" aria-hidden="true">观其形 · 知其里 · 各归其位</div>
       <div class="lm-container lm-hero__grid">
         <div class="lm-hero__copy">
-          <span class="lm-kicker">v0.2.0 内部预览 · FOR MAC</span>
+          <span class="lm-kicker">v0.2.0 双平台内部预览 · MACOS + WINDOWS</span>
           <h1 class="lm-hero__title" id="hero-title">看得见的，<em>才谈得上理解。</em></h1>
           <p class="lm-hero__en">Luma — Local insight for your digital world.</p>
-          <p class="lm-hero__lead">你的 Mac 里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化，并支持按名称、大小、时间检索与批量整理。它不修改任何原文件，所有分析都留在这台电脑。</p>
+          <p class="lm-hero__lead">你的电脑里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化，并支持按名称、大小、时间检索与批量选择、导出清单。它不修改任何原文件，所有分析都留在这台电脑。</p>
           <div class="lm-hero__actions">
             <a class="lm-btn-primary" href="#download">获取 Luma 0.2.0</a>
             <a class="lm-text-link" href="#capabilities">看看它怎么工作</a>
@@ -997,7 +997,7 @@
             <div class="lm-eye__idx" aria-hidden="true">检</div>
             <h3>检索 · 在索引里找</h3>
             <p class="lm-eye__en">Search &amp; Filter</p>
-            <p>按文件名或路径搜索已索引的文件，并叠加分类、扩展名、大小范围、修改时间等条件筛选。结果分页返回、可排序，也能直接在访达中定位。检索只针对当前扫描快照，不触碰未索引的目录，也不读取文件内容。</p>
+            <p>按文件名或路径搜索已索引的文件，并叠加分类、扩展名、大小范围、修改时间等条件筛选。结果分页返回、可排序，也能直接在文件管理器中定位。检索只针对当前扫描快照，不触碰未索引的目录，也不读取文件内容。</p>
             <span class="lm-eye__tag">名称/路径 · 多条件筛选 · 分页排序</span>
           </article>
           <article class="lm-eye lm-reveal">
@@ -1080,7 +1080,7 @@
         <div class="lm-heading lm-reveal">
           <div>
             <span class="lm-kicker">原生的分量</span>
-            <h2 id="tech-title">为 Mac 而生，<br>快而克制。</h2>
+            <h2 id="tech-title">为桌面而生，<br>快而克制。</h2>
           </div>
           <p>Luma 用原生技术栈构建：繁重的遍历交给 Rust 在后台完成，界面保持轻盈流畅，安装包也不臃肿。</p>
         </div>
@@ -1136,8 +1136,8 @@
           <li class="lm-reveal">
             <div class="lm-road__phase">检索与多语言<small>Milestone 4</small></div>
             <div class="lm-road__body">
-              <h3>索引检索、批量导出与中英文界面 <span class="lm-road__now">开发中</span></h3>
-              <p>在本地索引上按名称、分类、大小、时间检索与分页排序；跨页批量选择并复制路径或导出清单（非破坏性，不移动删除）；界面内置简体中文与英文，跟随系统语言并可手动切换。Windows 11 x64 的代码适配也已完成，正在等待真机回归验证。</p>
+              <h3>索引检索、批量导出与中英文界面 <span class="lm-road__now">v0.2.0</span></h3>
+              <p>本版已支持按名称、分类、大小、时间检索与分页排序；跨页批量选择并复制路径或导出清单（非破坏性，不移动删除）；界面内置简体中文与英文，跟随系统语言并可手动切换。Windows 11 x64 代码适配与安装包构建已完成，真机安装和扫描烟测仍待验收。</p>
             </div>
           </li>
           <li class="lm-reveal">
@@ -1154,9 +1154,9 @@
     <!-- ==================== 最终 CTA ==================== -->
     <section class="lm-final" id="download" aria-labelledby="final-title">
       <div class="lm-container lm-final__inner">
-        <span class="lm-kicker" style="justify-content:center;">给你的 Mac 一张地图</span>
+        <span class="lm-kicker" style="justify-content:center;">给你的电脑一张地图</span>
         <h2 id="final-title">让计算，<br>回归从容。</h2>
-        <p>Luma 0.2.0 是面向 macOS 的内部预览版。安装包尚未签名和公证，首次打开需在访达中右键选择“打开”。</p>
+        <p>Luma 0.2.0 提供 macOS universal 与 Windows 11 x64 安装包。当前构建尚未签名或公证，首次打开时系统可能需要手动确认运行来源；Windows 安装包仍需在 Windows 11 x64 环境完成烟测。</p>
         <div class="lm-final__actions">
           <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases" rel="noopener noreferrer">前往 GitHub Releases</a>
           <a class="lm-text-link" href="https://github.com/you-want/Luma" rel="noopener noreferrer">查看源代码</a>
@@ -1172,7 +1172,7 @@
           <img class="lm-brand__seal" src="assets/luma-logo.svg" alt="">
           <span class="lm-brand__word">Luma<small>照见数字世界</small></span>
         </div>
-        <p class="lm-footer__tag">Luma 是一款为 Mac 打造的本地文件理解工具。看见你的数字空间，理解它，并始终把决定权交还给你。</p>
+        <p class="lm-footer__tag">Luma 是一款面向 macOS 与 Windows 的本地文件理解工具。看见你的数字空间，理解它，并始终把决定权交还给你。</p>
       </div>
       <div class="lm-footer__bottom">
         <span>© 2026 Luma · v0.2.0 内部预览</span>

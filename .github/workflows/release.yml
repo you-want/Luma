@@ -1,7 +1,7 @@
 name: Release (build & publish)
 
 # 推送 v* tag 后，在 macOS 与 Windows runner 分别构建，最后汇总到一个 GitHub Release。
-# 例如：v0.4.0-rc.1 会创建预发布，v0.4.0 会创建正式发布。
+# 例如：v0.2.0-rc.1 会创建预发布，v0.2.0 会创建正式发布。
 on:
   push:
     tags:

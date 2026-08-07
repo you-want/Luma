@@ -2,7 +2,7 @@
 
 > 当前版本：v0.2.0  
 > 路线图基线：`76234e6`  
-> 最后更新：2026-08-05  
+> 最后更新：2026-08-07
 > 维护方式：实现、验收或范围发生变化时，同步更新“总览”“工作包”和“进度记录”。
 
 ## 1. 状态约定
@@ -22,11 +22,11 @@
 
 ## 2. 当前基线
 
-v0.2.0 已具备目录扫描、进度与取消、本地 SQLite 索引、空间分类、最大文件、透明发现、重复文件候选、开发项目识别、扫描历史对比和 Finder 定位。
+v0.2.0 已具备目录扫描、进度与取消、本地 SQLite 索引、空间分类、最大文件、透明发现、重复文件候选、开发项目识别、扫描历史对比、搜索、批量选择、中英文界面和文件管理器定位。Windows 11 x64 代码适配与安装包构建已加入，真机验收仍是发布后的剩余工作。
 
 | 基线能力 | 状态 | 证据 |
 |---|---|---|
-| macOS 内部预览版 | `DONE` | Tauri `.app` bundle 通过，版本 0.2.0 |
+| macOS universal 内部预览版 | `DONE` | Tauri universal `.app`/`.dmg` bundle 通过，版本 0.2.0 |
 | 旧数据库 v1 → v2 迁移 | `DONE` | Rust 迁移测试和真实旧库启动验证通过 |
 | 前端与 Rust 质量门禁 | `DONE` | 前端 6 项测试、Rust 23 项测试、Clippy、构建通过 |
 | 自动更新 | `SHELVED` | 依赖双平台签名；当前不发布到官方商店，暂缓签名与 updater |
@@ -73,10 +73,10 @@ Windows 基线 ─────────────→ Windows 安装包 ─�
 
 | 里程碑 | 目标 | 状态 | 发布门槛 |
 |---|---|---|---|
-| v0.2.x | 稳定当前 macOS 预览版、维护本路线图 | `IN PROGRESS` | 回归通过，无启动和迁移阻塞 |
-| v0.3.0 | 国际化基础 + Windows 可运行基线 | `TODO` | 中文/英文切换；Windows 11 x64 完整扫描闭环 |
-| v0.4.0 | 搜索 + 批量选择 + 双平台发布候选 | `IN PROGRESS` | 十万文件索引可分页搜索；选择语义稳定；macOS universal 与 Windows x64 安装包通过 CI 和真机验收 |
-| v0.5.0 | 安全归纳预览 + 文件操作日志与撤销 | `HOLD` | 暂缓：等 v0.4.0 非破坏性能力的市场反馈再决定是否启动 |
+| v0.2.0 | 搜索 + 批量选择 + 国际化基础 + Windows 适配 + 双平台内部预览 | `IN PROGRESS` | 十万文件索引可分页搜索；选择语义稳定；macOS universal 与 Windows x64 安装包通过 CI 和真机验收 |
+| v0.3.0 | Windows 真机完善 + 官网中英文入口 + 性能基线 | `TODO` | Windows 11 x64 完整扫描闭环；官网中英文入口；大规模索引性能数据 |
+| v0.4.0 | 安全归纳预览 + 文件操作日志与撤销 | `HOLD` | 暂缓：等 v0.2.0 非破坏性能力的市场反馈再决定是否启动 |
+| v0.5.0 | 后续本地理解能力 | `TODO` | 依赖 v0.2.0 发布反馈和产品决策 |
 | v0.6.0 | macOS/Windows 签名发布 + 自动更新 | `SHELVED` | 暂缓：当前不发布到官方商店，不投入签名与自动更新 |
 
 自动更新与签名当前暂缓（`SHELVED`），不纳入近期版本规划；若未来决定官方商店分发再单独排期，且不得以未签名更新替代验收。
@@ -211,7 +211,7 @@ Windows 基线 ─────────────→ Windows 安装包 ─�
 
 恢复条件（满足任一即可重新排期，届时按 P1 处理）：
 
-1. v0.4.0 发布后有明确、反复的用户请求"直接帮我移动/整理"；
+1. v0.2.0 发布后有明确、反复的用户请求"直接帮我移动/整理"；
 2. 存在可验证的付费意愿（可作为 Pro 功能）；
 3. 维护方主动决定把产品定位扩展到"整理工具"。
 
@@ -233,7 +233,7 @@ Windows 基线 ─────────────→ Windows 安装包 ─�
 - **定位风险**：Luma 当前卖点是"绝对只读、不碰你的文件"。开放移动后这条承诺失效，隐私/安全叙事变复杂，支持成本上升（误操作投诉、数据丢失担责）。
 - **需求存疑**：有"找到占空间的东西"痛点的用户，未必有"让工具自动移动"的痛点；真有整理需求的用户又往往不信任自动工具。竞品（DaisyDisk、SpaceSniffer、Everything）都只查看/删除、不移动，恰恰因为风险/收益不成比例。
 - **成本高**：完整闭环需要 10 个任务 + 文件系统写权限 + 同卷/跨卷/冲突/撤销/崩溃恢复的大量边界测试，且依赖 WIN-008 真机验证，预估 2-3 周开发 + 1 周回归。
-- **更划算的路径**：先用工作包 D 的非破坏性能力（批量选择 + 复制路径 + 导出清单）覆盖 80% 便利性、0% 风险，发布 v0.4.0 收集反馈。
+- **更划算的路径**：先用工作包 D 的非破坏性能力（批量选择 + 复制路径 + 导出清单）覆盖 80% 便利性、0% 风险，发布 v0.2.0 收集反馈。
 
 恢复条件（满足任一即重新评估）：
 
@@ -315,17 +315,17 @@ Windows 基线 ─────────────→ Windows 安装包 ─�
 |---|---|---|---|---|
 | 2026-08-05 | PLAN-001 | `TODO → DONE` | 基于 v0.2.0 代码建立六项需求路线图 | 从 I18N-001 和 WIN-001 开始 |
 | 2026-08-06 | 工作包 F（UPDATE-001~008） | `BLOCKED/HOLD → SHELVED` | 产品决策：暂不发布到 App Store 等官方商店，双平台签名、公证与自动更新整体暂缓 | 无官方商店分发或新分发需求前不恢复 |
-| 2026-08-06 | I18N-001~008 | `TODO → IN PROGRESS` | 目标版本 v0.3.0；选定 i18next + react-i18next，改动范围限于前端文案层与后端错误码/发现依据结构化，不改扫描与数据库 schema | 迁移前端文案、后端错误码结构化、加语言切换与完整性测试 |
+| 2026-08-06 | I18N-001~008 | `TODO → IN PROGRESS` | 目标版本 v0.2.0；选定 i18next + react-i18next，改动范围限于前端文案层与后端错误码/发现依据结构化，不改扫描与数据库 schema | 迁移前端文案、后端错误码结构化、加语言切换与完整性测试 |
 | 2026-08-06 | I18N-001~003,005,006,008 | `IN PROGRESS → DONE` | i18next+react-i18next 落地：`zh-CN`/`en-US` 类型化资源；全部 React 组件、ARIA、tooltip、空状态迁入资源；后端删除 `basis` 硬编码句、改由前端按 kind+阈值重建，错误统一按 `code` 翻译（补 `FILE_READ_ERROR`）；`Intl` 随语言切换；系统语言检测 + 持久化手动切换；新增资源完整性测试。验证：前端 6 测试 + 生产构建通过，Rust 20 测试 + fmt + clippy 通过 | 官网中英文（I18N-007）、托盘/系统对话框动态切换（I18N-004 部分）、中英文手工 UI 回归 |
 | 2026-08-06 | I18N-004 | `TODO → IN PROGRESS` | 托盘菜单与 tooltip 已按启动时系统语言本地化（新增 `src-tauri/src/i18n.rs`）；应用内切换语言不实时改托盘 | 需前端在切换语言时回传托盘标签，或重建托盘 |
-| 2026-08-06 | I18N-007 | `TODO` | 官网中英文入口尚未开始 | 单独排期，随 Windows 一并进入 v0.3.0 |
+| 2026-08-06 | I18N-007 | `TODO` | 官网中英文入口尚未开始 | v0.2.0 先更新中文发布内容，完整中英文入口排入 v0.3.0 |
 | 2026-08-06 | WIN-001~004,006 | `TODO → DONE` | 在 macOS 上完成 Windows 代码适配并加自动测试：CI 加 Windows 矩阵（`fail-fast:false`）；路径在 `scanner::normalize_separators` 存储边界统一为 `/`（`#[cfg(windows)]` 分流，Unix 原样）；所有 SQL LIKE 查询和项目识别改为使用 `/`（`projects.rs` 所有函数、`database.rs` 的 `insight_detail` development 模式）；WIN-003 随之成立；隐藏判定加 Windows `FILE_ATTRIBUTE_HIDDEN/SYSTEM`；reveal 改走 `reveal_path` 命令，用 `MAIN_SEPARATOR_STR` 转回原生分隔符。验证：Rust 23 测试 + fmt + clippy，前端 6 测试 + 构建通过（均在 macOS） | Windows 真机回归 |
 | 2026-08-06 | WIN-005,007 | `TODO → IN PROGRESS` | 盘符经规范化可用；UNC/长路径/非 UTF-8 策略与安装包/图标/AppData/卸载配置未做 | 需 Windows 环境与 bundle 配置 |
 | 2026-08-06 | WIN-009 | `TODO → BLOCKED` | 手工回归 + 安装包烟雾测试无法在 macOS 执行 | 阻塞于缺少 Windows 11 x64 真机/VM |
-| 2026-08-06 | SEARCH-001~008 | `TODO → DONE` | 目标版本 v0.4.0；在 macOS 完成全栈搜索实现：Rust `SearchRequest`/`SearchResponse`/`SearchSort` 类型，`database::search_files` 支持名称/路径 LIKE（转义 `%`/`_`）+ 分类/扩展名/大小/时间过滤 + 白名单排序 + 分页（LIMIT/OFFSET）+ 总数计数，新增 `idx_files_scan_name` 索引；`search_files` Tauri 命令；前端 `Search` 组件（搜索栏 + 下拉过滤 + 排序 + 大小范围 + 隐藏项切换 + 分页 + 结果表 + reveal）；中英文 i18n 键（`search.*`）。验证：Rust 23 测试（含新增 `test_search_files`）+ fmt + clippy，前端 6 测试 + 生产构建通过 | 桌面端交互回归（SEARCH-008 人工部分）、十万/百万文件性能基线待实测 |
-| 2026-08-06 | BULK-001~006 | `TODO → DONE` | 目标版本 v0.4.0；`FileEntry` 加稳定 `id`（DB 主键），选择键 `scanId+fileId`；`SelectionContext` 支持单项/本页/全部筛选结果三态与跨分页选择（不载入全量）；文件表加 checkbox + 全选 + indeterminate；选择工具栏显示计数 + 复制路径 + 导出 CSV + 清除。修复"全部筛选结果"模式下 `limit:999999` 被后端 `clamp(1,200)` 静默截断到 200 条的正确性 bug——改为 `fetchAllMatching` 按 200/页循环拉全，用 `total` 终止。验证：Rust 23 测试 + fmt + clippy，前端 6 测试 + 构建通过 | BULK-007 键盘/无障碍手工回归待做 |
+| 2026-08-06 | SEARCH-001~008 | `TODO → DONE` | 目标版本 v0.2.0；在 macOS 完成全栈搜索实现：Rust `SearchRequest`/`SearchResponse`/`SearchSort` 类型，`database::search_files` 支持名称/路径 LIKE（转义 `%`/`_`）+ 分类/扩展名/大小/时间过滤 + 白名单排序 + 分页（LIMIT/OFFSET）+ 总数计数，新增 `idx_files_scan_name` 索引；`search_files` Tauri 命令；前端 `Search` 组件（搜索栏 + 下拉过滤 + 排序 + 大小范围 + 隐藏项切换 + 分页 + 结果表 + reveal）；中英文 i18n 键（`search.*`）。验证：Rust 26 测试（含新增 `test_search_files`）+ fmt + clippy，前端 6 测试 + 构建通过 | 桌面端交互回归（SEARCH-008 人工部分）、十万/百万文件性能基线待实测 |
+| 2026-08-06 | BULK-001~006 | `TODO → DONE` | 目标版本 v0.2.0；`FileEntry` 加稳定 `id`（DB 主键），选择键 `scanId+fileId`；`SelectionContext` 支持单项/本页/全部筛选结果三态与跨分页选择（不载入全量）；文件表加 checkbox + 全选 + indeterminate；选择工具栏显示计数 + 复制路径 + 导出 CSV + 清除。修复"全部筛选结果"模式下 `limit:999999` 被后端 `clamp(1,200)` 静默截断到 200 条的正确性 bug——改为 `fetchAllMatching` 按 200/页循环拉全，用 `total` 终止。验证：Rust 26 测试 + fmt + clippy，前端 6 测试 + 构建通过 | BULK-007 键盘/无障碍手工回归待做 |
 | 2026-08-06 | ORG-001~010（工作包 E） | `TODO → HOLD` | 产品/市场评估后暂缓自动归纳：会突破只读边界、敢用用户少、支持成本高、竞品都不做移动。先发布非破坏性能力（工作包 D）用真实反馈决定是否启动 | 观察用户是否明确要求"直接移动"及付费意愿；恢复条件见工作包 E 说明 |
-| 2026-08-07 | Release workflow | `TODO → IN PROGRESS` | `.github/workflows/release.yml` 已拆分 macOS universal 与 Windows x64 构建，上传 `.dmg`/`.app.zip`/`.msi`/NSIS `.exe` 并由 tag 汇总创建 Release；`v0.4.0-rc.1` 作为双平台候选版本 | 合并 workflow 后运行 GitHub Actions，并完成 Windows 11 x64 安装、启动、卸载与扫描烟雾测试；通过后再打 tag |
+| 2026-08-07 | Release workflow | `TODO → IN PROGRESS` | `.github/workflows/release.yml` 已拆分 macOS universal 与 Windows x64 构建，上传 `.dmg`/`.app.zip`/`.msi`/NSIS `.exe` 并由 tag 汇总创建 Release；本次正式 tag 定为 `v0.2.0` | 推送 `v0.2.0` 后运行 GitHub Actions，并完成 Windows 11 x64 安装、启动、卸载与扫描烟雾测试 |
 
 ## 10. 决策记录
 
