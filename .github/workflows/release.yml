@@ -85,9 +85,6 @@ jobs:
           find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -exec cp {} release-artifacts/ \;
           cp src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz "release-artifacts/Luma-${VERSION}-macos-universal.app.tar.gz"
           cp src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig "release-artifacts/Luma-${VERSION}-macos-universal.app.tar.gz.sig"
-          APP_PATH="$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
-          test -n "$APP_PATH"
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release-artifacts/Luma-${VERSION}-macos-universal.app.zip"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -254,7 +251,7 @@ jobs:
             Luma ${{ github.ref_name }}
 
             本版提供 macOS universal 与 Windows x64 构建：
-            - macOS：`.dmg` 安装包、`.app.zip` 应用包与签名 updater `.app.tar.gz`
+            - macOS：`.dmg` 安装包与签名 updater `.app.tar.gz`
             - Windows：`.msi` 安装包、NSIS `.exe` 安装包与签名 updater 产物
 
             updater 使用签名清单和签名安装包；本构建尚未启用 Apple/Windows 代码签名或公证，首次安装时系统可能需要手动确认运行来源。

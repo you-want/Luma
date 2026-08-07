@@ -26,9 +26,10 @@
 3. 推送正式 tag，例如 `v0.2.0`。
 4. 等待 macOS universal 与 Windows x64 构建完成。
 5. 确认 Release 同时包含：
-   - macOS `.dmg`、`.app.zip`、`.app.tar.gz` 和 `.app.tar.gz.sig`
+   - macOS `.dmg`、`.app.tar.gz` 和 `.app.tar.gz.sig`
    - Windows `.msi`、`.msi.sig`、NSIS `.exe` 和 `.exe.sig`
    - `latest.json`
+   - GitHub 页面可能额外显示 `Source code (zip)`/`Source code (tar.gz)`；这是 GitHub 按 tag 自动生成的链接，不属于 workflow 上传资产，无法关闭。
 6. 下载并安装该版本，作为下一次真实升级测试的旧版本基线。
 
 ## 首次跨版本验收

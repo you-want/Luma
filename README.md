@@ -105,7 +105,7 @@ git push origin v0.2.0
 - 打包前自动把应用版本同步为 tag 去掉 `v` 的部分（`v0.2.0` → `0.2.0`），无需手动改 `tauri.conf.json` 再提交。
 - 两个平台分别通过前端测试、Rust 测试、fmt、Clippy 和生产构建后，才会创建 Release。
 - 带 `-rc`/`-beta` 等后缀的 tag 自动创建预发布；本次 `v0.2.0` 不带后缀，会创建正式 Release。
-- Release 上传 macOS `.dmg`/`.app.zip`/签名 `.app.tar.gz` 与 Windows `.msi`/`.exe`/签名文件，并生成 `latest.json` 供应用内 updater 使用。
+- Release 只上传 macOS `.dmg`、Windows `.msi`/`.exe`，以及 updater 必需的签名文件和 `latest.json`；GitHub 自动附带的 `Source code` 压缩包由平台生成，无法通过 workflow 关闭。
 
 ### 软件检测更新
 
