@@ -1307,6 +1307,8 @@ mod tests {
         assert_eq!(response.total, 4);
         assert_eq!(response.files.len(), 2);
 
+        // Windows keeps SQLite files locked while a connection is alive.
+        drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");
     }
 }
