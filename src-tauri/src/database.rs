@@ -500,7 +500,7 @@ pub fn compare_scans(
         })
         .collect();
     // Largest absolute size change first so the biggest movers surface on top.
-    category_deltas.sort_by(|a, b| b.size_delta.abs().cmp(&a.size_delta.abs()));
+    category_deltas.sort_by_key(|delta| std::cmp::Reverse(delta.size_delta.abs()));
 
     Ok(ScanComparison {
         total_bytes_delta: i128_delta(target.total_bytes, base.total_bytes),
