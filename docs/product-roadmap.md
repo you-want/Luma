@@ -30,7 +30,7 @@ v0.2.0 已具备目录扫描、进度与取消、本地 SQLite 索引、空间�
 | 旧数据库 v1 → v2 迁移 | `DONE` | Rust 迁移测试和真实旧库启动验证通过 |
 | 前端与 Rust 质量门禁 | `DONE` | 前端 6 项测试、Rust 23 项测试、Clippy、构建通过 |
 | 自动更新 | `SHELVED` | 依赖双平台签名；当前不发布到官方商店，暂缓签名与 updater |
-| Windows | `IN PROGRESS` | WIN-001~004/006 已完成（CI矩阵、路径规范化统一为`/`、项目识别、隐藏属性、reveal本地化）；WIN-005/007部分待办，WIN-008待真机，WIN-009阻塞于无Windows环境 |
+| Windows | `IN PROGRESS` | WIN-001~004/006 已完成（CI矩阵、路径规范化统一为`/`、项目识别、隐藏属性、reveal本地化）；Windows `.msi`/NSIS `.exe` 发布 workflow 已加入，WIN-005/007部分待办，WIN-008待真机，WIN-009阻塞于无Windows环境 |
 | 搜索 | `DONE` | 文件名/路径搜索 + 分类/扩展名/大小/时间过滤 + 分页排序；新增 `idx_files_scan_name` 索引；前端 Search 组件 + i18n；后端搜索测试通过 |
 | 批量选择 | `TODO` | 当前列表没有统一选择模型 |
 | 自动归纳到文件夹 | `HOLD` | 会突破只读边界；先发布非破坏性能力，用市场反馈决定是否启动 |
@@ -75,7 +75,7 @@ Windows 基线 ─────────────→ Windows 安装包 ─�
 |---|---|---|---|
 | v0.2.x | 稳定当前 macOS 预览版、维护本路线图 | `IN PROGRESS` | 回归通过，无启动和迁移阻塞 |
 | v0.3.0 | 国际化基础 + Windows 可运行基线 | `TODO` | 中文/英文切换；Windows 11 x64 完整扫描闭环 |
-| v0.4.0 | 搜索 + 批量选择 | `TODO` | 十万文件索引可分页搜索；选择语义稳定 |
+| v0.4.0 | 搜索 + 批量选择 + 双平台发布候选 | `IN PROGRESS` | 十万文件索引可分页搜索；选择语义稳定；macOS universal 与 Windows x64 安装包通过 CI 和真机验收 |
 | v0.5.0 | 安全归纳预览 + 文件操作日志与撤销 | `HOLD` | 暂缓：等 v0.4.0 非破坏性能力的市场反馈再决定是否启动 |
 | v0.6.0 | macOS/Windows 签名发布 + 自动更新 | `SHELVED` | 暂缓：当前不发布到官方商店，不投入签名与自动更新 |
 
@@ -137,7 +137,7 @@ Windows 基线 ─────────────→ Windows 安装包 ─�
   - WIN-006：reveal 文案改为平台中立并本地化（”在文件管理器中显示” / “Show in file manager”）；`basename` 同时支持 `/` 和 `\`。reveal 现走新的 `reveal_path` Rust 命令：把规范化的 `/` 路径用 `MAIN_SEPARATOR_STR` 转回原生分隔符再交给 opener，保证 Windows 资源管理器能”选中”文件。
 - `IN PROGRESS`：
   - WIN-005：盘符（`C:/…`）在规范化后可被现有查询正确处理；**UNC（`\\server\share`）、`\\?\` 长路径前缀、非 UTF-8/不可表示路径策略尚未在真机验证**，需 Windows 环境确认边界行为。
-  - WIN-007：安装包/图标/AppData/卸载尚未配置（`tauri.conf.json` bundle 仍为 macOS 默认）。
+  - WIN-007：Release workflow 已配置 Windows x64 NSIS `.exe` 与 `.msi` 构建及 GitHub Release 汇总；图标/AppData/卸载行为仍需 Windows 安装包烟雾测试确认。
 - `TODO`：WIN-008（junction/symlink、跨盘、权限错误）需真机。
 - `BLOCKED`：WIN-009 手工回归 + 安装包烟雾测试——**阻塞于缺少 Windows 11 x64 真机/VM**，无法在 macOS 上执行。解除条件：一台可运行 Tauri 构建的 Windows 11 x64 环境。
 
@@ -325,6 +325,7 @@ Windows 基线 ─────────────→ Windows 安装包 ─�
 | 2026-08-06 | SEARCH-001~008 | `TODO → DONE` | 目标版本 v0.4.0；在 macOS 完成全栈搜索实现：Rust `SearchRequest`/`SearchResponse`/`SearchSort` 类型，`database::search_files` 支持名称/路径 LIKE（转义 `%`/`_`）+ 分类/扩展名/大小/时间过滤 + 白名单排序 + 分页（LIMIT/OFFSET）+ 总数计数，新增 `idx_files_scan_name` 索引；`search_files` Tauri 命令；前端 `Search` 组件（搜索栏 + 下拉过滤 + 排序 + 大小范围 + 隐藏项切换 + 分页 + 结果表 + reveal）；中英文 i18n 键（`search.*`）。验证：Rust 23 测试（含新增 `test_search_files`）+ fmt + clippy，前端 6 测试 + 生产构建通过 | 桌面端交互回归（SEARCH-008 人工部分）、十万/百万文件性能基线待实测 |
 | 2026-08-06 | BULK-001~006 | `TODO → DONE` | 目标版本 v0.4.0；`FileEntry` 加稳定 `id`（DB 主键），选择键 `scanId+fileId`；`SelectionContext` 支持单项/本页/全部筛选结果三态与跨分页选择（不载入全量）；文件表加 checkbox + 全选 + indeterminate；选择工具栏显示计数 + 复制路径 + 导出 CSV + 清除。修复"全部筛选结果"模式下 `limit:999999` 被后端 `clamp(1,200)` 静默截断到 200 条的正确性 bug——改为 `fetchAllMatching` 按 200/页循环拉全，用 `total` 终止。验证：Rust 23 测试 + fmt + clippy，前端 6 测试 + 构建通过 | BULK-007 键盘/无障碍手工回归待做 |
 | 2026-08-06 | ORG-001~010（工作包 E） | `TODO → HOLD` | 产品/市场评估后暂缓自动归纳：会突破只读边界、敢用用户少、支持成本高、竞品都不做移动。先发布非破坏性能力（工作包 D）用真实反馈决定是否启动 | 观察用户是否明确要求"直接移动"及付费意愿；恢复条件见工作包 E 说明 |
+| 2026-08-07 | Release workflow | `TODO → IN PROGRESS` | `.github/workflows/release.yml` 已拆分 macOS universal 与 Windows x64 构建，上传 `.dmg`/`.app.zip`/`.msi`/NSIS `.exe` 并由 tag 汇总创建 Release；`v0.4.0-rc.1` 作为双平台候选版本 | 合并 workflow 后运行 GitHub Actions，并完成 Windows 11 x64 安装、启动、卸载与扫描烟雾测试；通过后再打 tag |
 
 ## 10. 决策记录
 

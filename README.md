@@ -4,6 +4,8 @@ Luma 是一个本地文件空间观察工具，当前已验证 macOS 平台，Wi
 
 当前版本：`0.2.0`（内部预览）
 
+下一阶段发布候选目标：`v0.4.0-rc.1`。该候选版本将同时验收 macOS universal 与 Windows 11 x64 安装包。
+
 后续功能与逐项进度见 [`docs/product-roadmap.md`](docs/product-roadmap.md)。
 
 ## 能做什么
@@ -85,23 +87,25 @@ cargo test  --manifest-path src-tauri/Cargo.toml
 pnpm tauri build
 ```
 
-产物位于 `src-tauri/target/release/bundle/`（`.app` 与 `.dmg`）。
+产物位于 `src-tauri/target/release/bundle/`：macOS 为 `.app`/`.dmg`，Windows 为 `.msi`/NSIS `.exe`。
 
 ### 打 tag 自动发版
 
-`.github/workflows/release.yml` 会在推送 `v*` 形式的 tag 时自动打包并发布到 GitHub Releases：
+`.github/workflows/release.yml` 会在推送 `v*` 形式的 tag 时，在 macOS 与 Windows runner 分别打包并发布到同一个 GitHub Release：
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.4.0-rc.1
+git push origin v0.4.0-rc.1
 ```
 
 流程说明：
 
 - 在 macOS runner 上构建 `universal-apple-darwin` 通用二进制，一份产物同时支持 Intel 与 Apple Silicon。
-- 打包前自动把应用版本同步为 tag 去掉 `v` 的部分（`v0.2.0` → `0.2.0`），无需手动改 `tauri.conf.json` 再提交。
-- 发版前先跑前端与 Rust 测试，测试失败则不发布。
-- 用该 tag 创建 Release 并上传 `.dmg` / `.app`，附带未签名应用的首次打开提示。
+- 在 Windows runner 上构建 x64 `.msi` 与 NSIS `.exe` 安装包。
+- 打包前自动把应用版本同步为 tag 去掉 `v` 的部分（`v0.4.0-rc.1` → `0.4.0-rc.1`），无需手动改 `tauri.conf.json` 再提交。
+- 两个平台分别通过前端测试、Rust 测试、fmt、Clippy 和生产构建后，才会创建 Release。
+- 带 `-rc`/`-beta` 等后缀的 tag 自动创建预发布；不带后缀的 tag 创建正式 Release。
+- Release 上传 macOS `.dmg`/`.app.zip` 与 Windows `.msi`/`.exe`，附带未签名应用的首次打开提示。
 
 ### 关于签名与自动更新（当前暂缓）
 
