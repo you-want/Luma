@@ -105,15 +105,19 @@ git push origin v0.2.0
 - 打包前自动把应用版本同步为 tag 去掉 `v` 的部分（`v0.2.0` → `0.2.0`），无需手动改 `tauri.conf.json` 再提交。
 - 两个平台分别通过前端测试、Rust 测试、fmt、Clippy 和生产构建后，才会创建 Release。
 - 带 `-rc`/`-beta` 等后缀的 tag 自动创建预发布；本次 `v0.2.0` 不带后缀，会创建正式 Release。
-- Release 上传 macOS `.dmg`/`.app.zip` 与 Windows `.msi`/`.exe`，附带未签名应用的首次打开提示。
+- Release 上传 macOS `.dmg`/`.app.zip`/签名 `.app.tar.gz` 与 Windows `.msi`/`.exe`/签名文件，并生成 `latest.json` 供应用内 updater 使用。
 
-### 关于签名与自动更新（当前暂缓）
+### 软件检测更新
 
-Luma 当前不发布到 App Store 等官方商店，因此**代码签名、公证与自动更新整体暂缓**：
+Luma 已接入 Tauri updater：启动时会静默检查 GitHub Releases，发现新版本后在标题栏显示版本号。用户点击更新按钮后，应用会下载签名产物、显示进度、安装并重启；检查失败可以手动重试，不会静默强制升级。
 
-- 发布流程不生成 updater 清单，应用也不会在后台联网检查版本。
-- 构建产物未做 Apple 代码签名/公证，也未做 Windows 代码签名；首次打开时系统可能提示来源未验证，需手动允许。
-- 这些能力保留在路线图中（见 [`docs/product-roadmap.md`](docs/product-roadmap.md) 工作包 F，标记为 `SHELVED`），待有官方商店分发或新的分发需求时再重新排期。
+- 更新源：`https://github.com/you-want/Luma/releases/latest/download/latest.json`
+- 更新清单和每个平台安装包都使用 Tauri updater 签名校验；签名不匹配或清单被篡改时更新会被拒绝。
+- 发布 workflow 需要配置 GitHub Actions secret：`TAURI_SIGNING_PRIVATE_KEY`；如果生成密钥时设置了口令，还需配置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
+- 私钥只保存于 GitHub Secret，绝不提交到仓库；仓库内只保存 updater 公钥。
+- 这不是 Apple Developer ID 或 Windows 代码签名。当前安装包仍可能出现系统来源未验证提示，代码签名、公证和商店分发仍未启用。
+
+密钥配置、发布产物检查和首次跨版本验收见 [`docs/updater-release.md`](docs/updater-release.md)。
 
 ## 反馈与支持
 
@@ -126,12 +130,12 @@ Luma 当前不发布到 App Store 等官方商店，因此**代码签名、公�
 
 ## 当前限制
 
-- **平台支持**：macOS universal 构建已验证。Windows 11 x64 代码适配与安装包 workflow 已完成，但尚未在 Windows 真机回归；安装、启动、卸载和扫描烟测待 Windows 环境。Linux 暂不在路线图。
+- **平台支持**：macOS universal 构建已验证。Windows 11 x64 代码适配、安装包和 updater 产物 workflow 已完成，但尚未在 Windows 真机回归；安装、启动、卸载、扫描和更新烟测待 Windows 环境。Linux 暂不在路线图。
 - 不提供全盘后台扫描、自动监控、删除、移动或归档能力。
 - 默认扫描不读取文件内容；用户主动执行重复检测时，会读取候选文件内容计算本地哈希。
 - “开发构建内容”使用路径名称规则（`node_modules`、`target`、`dist`、`.next`），不判断对应内容是否仍被项目需要。
 - 扫描统计代表扫描时读取到的快照；扫描期间发生的文件变化可能导致少量误差并计入错误数。
-- 代码签名、公证与自动更新当前暂缓（不发布到官方商店），只面向内部构建验证；详见上文”关于签名与自动更新”。
+- Apple/Windows 代码签名与公证当前仍未启用；应用内更新使用独立的 Tauri updater 签名校验，仍需完成跨版本真机验收。
 
 ## 手工回归清单
 

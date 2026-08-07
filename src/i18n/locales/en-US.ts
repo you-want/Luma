@@ -13,6 +13,14 @@ export const enUS: Resources = {
     "zh-CN": "简体中文",
     "en-US": "English",
   },
+  update: {
+    check: "Check for updates",
+    checking: "Checking...",
+    available: "Update to {{version}}",
+    downloading: "Downloading {{progress}}%",
+    current: "Up to date",
+    error: "Update check failed, retry",
+  },
   intro: {
     title: "Local Space Insight",
     description:

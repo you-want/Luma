@@ -12,6 +12,14 @@ export const zhCN = {
     "zh-CN": "简体中文",
     "en-US": "English",
   },
+  update: {
+    check: "检查更新",
+    checking: "检查中...",
+    available: "更新至 {{version}}",
+    downloading: "正在下载 {{progress}}%",
+    current: "已是最新版本",
+    error: "检查更新失败，点击重试",
+  },
   intro: {
     title: "本地空间观察",
     description:

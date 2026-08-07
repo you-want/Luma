@@ -13,6 +13,7 @@ import { ScanHistory } from "./components/ScanHistory";
 import { ScanProgress } from "./components/ScanProgress";
 import Search from "./components/Search";
 import { StorageOverview } from "./components/StorageOverview";
+import { UpdateButton } from "./components/UpdateButton";
 import { useScanEvents } from "./hooks/useScanEvents";
 import { errorMessage } from "./lib/errors";
 import {
@@ -163,6 +164,7 @@ function App() {
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
         <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
         <div className="privacy-note"><ShieldCheck size={15} />{t("app.privacyNote")}</div>
+        <UpdateButton />
         <LanguageSwitcher />
       </header>
 
