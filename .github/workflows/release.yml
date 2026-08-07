@@ -1,25 +1,26 @@
 name: Release (build & publish)
 
-# 触发条件：推送形如 v0.2.0 的 tag 就打包发版。
-# 平台不上架 App Store，只产出可直接下载的 .dmg / .app，发布到 GitHub Releases。
+# 推送 v* tag 后，在 macOS 与 Windows runner 分别构建，最后汇总到一个 GitHub Release。
+# 例如：v0.4.0-rc.1 会创建预发布，v0.4.0 会创建正式发布。
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
-# 需要写入权限才能创建 Release 并上传产物。
 permissions:
   contents: write
 
-# 同一个 tag 只跑一次，重复推送会取消进行中的旧任务。
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: 22
+  PNPM_VERSION: 10
+
 jobs:
-  release:
-    # macOS 14 runner 是 Apple Silicon；配合 universal target 产出同时支持
-    # Intel 和 Apple Silicon 的通用二进制。
+  build-macos:
+    name: Build macOS universal
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -28,20 +29,19 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - name: Setup Rust (含两种 macOS 架构)
+      - name: Setup Rust (Intel + Apple Silicon)
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      # 缓存 Cargo 依赖与编译产物，显著缩短后续构建时间。
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
@@ -50,50 +50,141 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 让打包出的应用版本与 tag 一致：v0.2.0 → 0.2.0，写回 tauri.conf.json。
-      # 这样 .dmg 文件名、应用「关于」里的版本号都跟随 tag，无需手动改文件再提交。
       - name: Sync app version from tag
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "Setting app version to $VERSION"
-          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.version=process.argv[1];require('fs').writeFileSync(f,JSON.stringify(c,null,2)+'\n');" "$VERSION"
+          node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
 
-      # 发版前先跑测试，避免把坏的构建打包发出去。
       - name: Run frontend tests
         run: pnpm test
+
+      - name: Check frontend build
+        run: pnpm build
 
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-      # tauri-action 会执行 beforeBuildCommand（pnpm build）再打包，
-      # 然后用当前 tag 创建 Release 并上传 .dmg / .app。
-      - name: Build and release
-        id: tauri
-        uses: tauri-apps/tauri-action@v0
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Run Rust linter
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Build macOS bundles
+        run: pnpm tauri build --target universal-apple-darwin --bundles app,dmg
+
+      - name: Collect macOS artifacts
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release-artifacts
+          find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -exec cp {} release-artifacts/ \;
+          APP_PATH="$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release-artifacts/Luma-${VERSION}-macos-universal.app.zip"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: luma-macos
+          path: release-artifacts/*
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync app version from tag
+        shell: bash
+        run: |
+          node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+
+      - name: Run frontend tests
+        run: pnpm test
+
+      - name: Check frontend build
+        run: pnpm build
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Run Rust linter
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Build Windows installers
+        run: pnpm tauri build --bundles nsis,msi
+
+      - name: Collect Windows artifacts
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
+          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi" -Filter *.msi | Select-Object -First 1
+          $exe = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter *.exe | Select-Object -First 1
+          if ($null -eq $msi -or $null -eq $exe) { throw "Windows installer artifacts were not produced" }
+          Copy-Item $msi.FullName "release-artifacts/Luma-$version-windows-x64.msi"
+          Copy-Item $exe.FullName "release-artifacts/Luma-$version-windows-x64-setup.exe"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: luma-windows
+          path: release-artifacts/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: luma-*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # 通用二进制：一份产物覆盖 Intel 与 Apple Silicon。
-          args: --target universal-apple-darwin
-          # Release 的 tag / 标题直接沿用推送的 git tag。
-          tagName: ${{ github.ref_name }}
-          releaseName: Luma ${{ github.ref_name }}
-          # 直接发布（非草稿）。想先审阅再手动发布可改成 true。
-          releaseDraft: false
-          prerelease: false
-          # 应用未签名/未公证，提示用户首次打开的绕过方式。
-          releaseBody: |
+          tag_name: ${{ github.ref_name }}
+          name: Luma ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: release-artifacts/*
+          body: |
             Luma ${{ github.ref_name }}
 
-            本版新增：
-            - 重复文件候选检测（本机 BLAKE3 内容哈希）
-            - Node.js、Rust、Python、Git、Xcode、Maven、Gradle 项目识别
-            - 同一目录最近三次扫描的历史对比
-            - 旧版数据库原位迁移与兼容修复
+            本版提供 macOS universal 与 Windows x64 构建：
+            - macOS：`.dmg` 安装包与 `.app.zip` 应用包
+            - Windows：`.msi` 安装包与 NSIS `.exe` 安装包
 
-            下载 `.dmg`，拖入「应用程序」即可。
-
-            > 该构建未经过 Apple 代码签名与公证。首次打开若提示”无法验证开发者”，
-            > 请在「访达」中右键点击应用选择「打开」，或在「系统设置 › 隐私与安全性」中允许运行。
-
-            当前内部预览版暂不启用自动更新，请从 Releases 页面获取后续版本。
+            本构建尚未启用代码签名、公证或自动更新。首次安装时，系统可能需要手动确认运行来源。
