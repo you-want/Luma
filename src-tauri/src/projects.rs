@@ -168,7 +168,7 @@ pub fn identify_projects(
     }
 
     // 大项目优先。
-    projects.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    projects.sort_by_key(|project| std::cmp::Reverse(project.size_bytes));
     Ok(projects)
 }
 
