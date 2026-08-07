@@ -22,6 +22,9 @@ jobs:
   build-macos:
     name: Build macOS universal
     runs-on: macos-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify updater signing key
+        run: test -n "$TAURI_SIGNING_PRIVATE_KEY"
+
       - name: Sync app version from tag
         run: |
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
@@ -77,6 +83,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p release-artifacts
           find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -exec cp {} release-artifacts/ \;
+          cp src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz "release-artifacts/Luma-${VERSION}-macos-universal.app.tar.gz"
+          cp src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig "release-artifacts/Luma-${VERSION}-macos-universal.app.tar.gz.sig"
           APP_PATH="$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP_PATH"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release-artifacts/Luma-${VERSION}-macos-universal.app.zip"
@@ -91,6 +99,9 @@ jobs:
   build-windows:
     name: Build Windows x64
     runs-on: windows-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -116,6 +127,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Verify updater signing key
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "TAURI_SIGNING_PRIVATE_KEY secret is required to publish signed updater artifacts"
+          }
 
       - name: Sync app version from tag
         shell: bash
@@ -146,10 +164,14 @@ jobs:
           $version = $env:GITHUB_REF_NAME.Substring(1)
           New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
           $msi = Get-ChildItem "src-tauri/target/release/bundle/msi" -Filter *.msi | Select-Object -First 1
+          $msiSig = Get-ChildItem "src-tauri/target/release/bundle/msi" -Filter *.msi.sig | Select-Object -First 1
           $exe = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter *.exe | Select-Object -First 1
-          if ($null -eq $msi -or $null -eq $exe) { throw "Windows installer artifacts were not produced" }
+          $sig = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter *.exe.sig | Select-Object -First 1
+          if ($null -eq $msi -or $null -eq $msiSig -or $null -eq $exe -or $null -eq $sig) { throw "Signed Windows installer artifacts were not produced" }
           Copy-Item $msi.FullName "release-artifacts/Luma-$version-windows-x64.msi"
+          Copy-Item $msiSig.FullName "release-artifacts/Luma-$version-windows-x64.msi.sig"
           Copy-Item $exe.FullName "release-artifacts/Luma-$version-windows-x64-setup.exe"
+          Copy-Item $sig.FullName "release-artifacts/Luma-$version-windows-x64-setup.exe.sig"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -170,6 +192,54 @@ jobs:
           path: release-artifacts
           merge-multiple: true
 
+      - name: Create updater manifest
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const tag = process.env.VERSION;
+          const version = tag.replace(/^v/, '');
+          const base = `https://github.com/${process.env.REPOSITORY}/releases/download/${tag}`;
+          const files = {
+            mac: `Luma-${version}-macos-universal.app.tar.gz`,
+            macSig: `Luma-${version}-macos-universal.app.tar.gz.sig`,
+            winMsi: `Luma-${version}-windows-x64.msi`,
+            winMsiSig: `Luma-${version}-windows-x64.msi.sig`,
+            win: `Luma-${version}-windows-x64-setup.exe`,
+            winSig: `Luma-${version}-windows-x64-setup.exe.sig`,
+          };
+
+          for (const file of Object.values(files)) {
+            if (!fs.existsSync(`release-artifacts/${file}`)) {
+              throw new Error(`Missing updater artifact: ${file}`);
+            }
+          }
+
+          const signature = (file) => fs.readFileSync(`release-artifacts/${file}`, 'utf8').trim();
+          const platform = (urlFile, sigFile) => ({
+            url: `${base}/${urlFile}`,
+            signature: signature(sigFile),
+          });
+
+          const manifest = {
+            version,
+            notes: `Luma ${tag} 更新，包含搜索、批量选择、国际化和跨平台修复。`,
+            pub_date: new Date().toISOString(),
+            platforms: {
+              'darwin-aarch64': platform(files.mac, files.macSig),
+              'darwin-x86_64': platform(files.mac, files.macSig),
+              'windows-x86_64': platform(files.win, files.winSig),
+              'windows-x86_64-nsis': platform(files.win, files.winSig),
+              'windows-x86_64-msi': platform(files.winMsi, files.winMsiSig),
+            },
+          };
+          fs.writeFileSync('release-artifacts/latest.json', `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         env:
@@ -184,7 +254,7 @@ jobs:
             Luma ${{ github.ref_name }}
 
             本版提供 macOS universal 与 Windows x64 构建：
-            - macOS：`.dmg` 安装包与 `.app.zip` 应用包
-            - Windows：`.msi` 安装包与 NSIS `.exe` 安装包
+            - macOS：`.dmg` 安装包、`.app.zip` 应用包与签名 updater `.app.tar.gz`
+            - Windows：`.msi` 安装包、NSIS `.exe` 安装包与签名 updater 产物
 
-            本构建尚未启用代码签名、公证或自动更新。首次安装时，系统可能需要手动确认运行来源。
+            updater 使用签名清单和签名安装包；本构建尚未启用 Apple/Windows 代码签名或公证，首次安装时系统可能需要手动确认运行来源。
