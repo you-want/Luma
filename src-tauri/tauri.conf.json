@@ -37,7 +37,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVEMjBDMDc2MDE3RTgxRkQKUldUOWdYNEJkc0FnN2ZGVjVsZTdjTTQ5TlI3REI1U3NXK1JlRWZmalorS3VJeHBXVnFBV0JydDQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcxMzA1OEZDMjZDQThERDIKUldUU2pjb20vRmd3Y2FXaElJMFdKeUUrQUI5UjVZZDBwVmFzSEMyKzVoMk1JamZJdWw5QnZxMTcK%",
       "endpoints": [
         "https://github.com/you-want/Luma/releases/latest/download/latest.json"
       ]
