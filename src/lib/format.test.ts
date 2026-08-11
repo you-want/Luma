@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { basename, formatBytes, formatDate, formatNumber } from "./format";
+import { beforeAll, describe, expect, it } from "vitest";
+import {
+  basename,
+  formatBytes,
+  formatDate,
+  formatNumber,
+  setFormatLocale,
+} from "./format";
 
 describe("formatBytes", () => {
   it("formats boundaries", () => {
@@ -13,6 +19,14 @@ describe("formatBytes", () => {
 });
 
 describe("localized values", () => {
+  beforeAll(() => {
+    // Use en-US in tests: assertions are locale-agnostic (digits only),
+    // and en-US ICU data is always available instantly in CI environments.
+    // zh-CN ICU loading takes 10+ seconds on Windows runners and hits the
+    // default 5 s Vitest timeout.
+    setFormatLocale("en-US");
+  });
+
   it("formats counts and missing timestamps", () => {
     expect(formatNumber(12345).replace(/\D/g, "")).toBe("12345");
     expect(formatDate()).toBe("--");
