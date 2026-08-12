@@ -122,6 +122,17 @@ export type ProjectCandidate = {
   fileCount: number;
 };
 
+export type CleanupItem = {
+  kind: string;
+  sizeBytes: number;
+  fileCount: number;
+};
+
+export type CleanupSummary = {
+  items: CleanupItem[];
+  totalBytes: number;
+};
+
 export type CategoryDelta = {
   category: string;
   baseSizeBytes: number;

@@ -1,4 +1,5 @@
 use crate::{
+    cleanup::{self, CleanupSummary},
     database,
     duplicates::{self, DuplicateGroup},
     error::AppError,
@@ -254,6 +255,36 @@ pub fn reveal_path(app: AppHandle, path: String) -> Result<(), AppError> {
     app.opener()
         .reveal_item_in_dir(&native)
         .map_err(|error| AppError::new("REVEAL_FAILED", error.to_string()))
+}
+
+#[tauri::command]
+pub fn get_cleanup_summary(
+    state: State<'_, AppState>,
+    scan_id: String,
+    old_downloads_days: Option<u32>,
+) -> Result<CleanupSummary, AppError> {
+    cleanup::build_cleanup_summary(
+        &state.database_path,
+        &scan_id,
+        old_downloads_days.unwrap_or(180),
+    )
+}
+
+#[tauri::command]
+pub fn list_cleanup_files(
+    state: State<'_, AppState>,
+    scan_id: String,
+    kind: String,
+    limit: Option<u32>,
+    old_downloads_days: Option<u32>,
+) -> Result<Vec<FileEntry>, AppError> {
+    cleanup::list_cleanup_files(
+        &state.database_path,
+        &scan_id,
+        &kind,
+        limit.unwrap_or(20).clamp(1, 100),
+        old_downloads_days.unwrap_or(180),
+    )
 }
 
 fn now_seconds() -> i64 {

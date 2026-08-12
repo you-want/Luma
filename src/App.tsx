@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Database, ShieldCheck, TriangleAlert } from "lucide-react";
 import { appStore, useAppStore } from "./app/store";
 import { CategoryList } from "./components/CategoryList";
+import { CleanupPanel } from "./components/CleanupPanel";
 import { Duplicates } from "./components/Duplicates";
 import { InsightList } from "./components/InsightList";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -224,6 +225,7 @@ function App() {
               />
             </div>
             <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
+            <CleanupPanel scanId={app.summary.scanId} />
             <Search
               scanId={app.summary.scanId}
               categories={app.summary.categories.map((c) => c.category)}
