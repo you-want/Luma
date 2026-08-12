@@ -29,4 +29,12 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // Vitest configuration
+  // Windows CI runners can take 20+ seconds to initialize ICU data on the first
+  // Intl call, even for en-US. 30 s gives enough headroom without masking real
+  // hangs in the suite.
+  test: {
+    testTimeout: 30000,
+  },
 }));
