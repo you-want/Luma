@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useTranslation } from "react-i18next";
@@ -11,8 +12,13 @@ export function UpdateButton() {
   const [state, setState] = useState<UpdateState>("checking");
   const [update, setUpdate] = useState<Update | null>(null);
   const [progress, setProgress] = useState(0);
+  const [appVersion, setAppVersion] = useState<string>("");
   const downloadStats = useRef({ downloaded: 0, total: 0 });
   const checked = useRef(false);
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   const checkForUpdate = useCallback(async (silent = false) => {
     setState("checking");
@@ -92,13 +98,16 @@ export function UpdateButton() {
       className={`update-control update-control--${state}`}
       onClick={() => void handleUpdate()}
       disabled={disabled}
-      aria-label={label}
+      aria-label={appVersion ? `v${appVersion} · ${label}` : label}
       title={title}
     >
       {state === "downloading" || state === "checking" ? (
         <RefreshCw size={15} className="update-control__spin" aria-hidden="true" />
       ) : (
         <Download size={15} aria-hidden="true" />
+      )}
+      {appVersion && (
+        <span className="update-control__version" aria-hidden="true">v{appVersion}</span>
       )}
       <span className="update-control__label">{label}</span>
     </button>

@@ -749,11 +749,18 @@ button { letter-spacing: -0.01em; }
 .update-control:hover:not(:disabled),
 .update-control--available { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--separator)); }
 .update-control:disabled { opacity: 0.7; cursor: default; }
+.update-control__version {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
 .update-control__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .update-control__spin { animation: update-spin 1s linear infinite; }
 @keyframes update-spin { to { transform: rotate(360deg); } }
 @media (max-width: 620px) {
   .update-control { width: 28px; min-width: 28px; justify-content: center; padding: 0; }
+  .update-control__version { display: none; }
   .update-control__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
@@ -1129,5 +1136,16 @@ button { letter-spacing: -0.01em; }
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+  }
+  /* Functional loading indicators must remain animated even with reduced
+     motion — they convey state, not decoration. Override the blanket rule. */
+  .app-shell .spin,
+  .app-shell .update-control__spin,
+  .app-shell .progress-track span {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .app-shell .progress-track span {
+    animation-duration: 1.4s !important;
   }
 }
