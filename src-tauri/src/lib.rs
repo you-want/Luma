@@ -1,3 +1,4 @@
+mod cleanup;
 mod commands;
 mod database;
 mod duplicates;
@@ -72,6 +73,8 @@ pub fn run() {
             commands::compare_scans,
             commands::search_files,
             commands::reveal_path,
+            commands::get_cleanup_summary,
+            commands::list_cleanup_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

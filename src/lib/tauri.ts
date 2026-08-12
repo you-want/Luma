@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type {
+  CleanupSummary,
   DuplicateGroup,
   FileEntry,
   InsightKind,
@@ -97,4 +98,20 @@ export function revealPath(path: string): Promise<void> {
   // canonical `/`-separated stored path is converted back to native separators
   // before the OS file manager selects the item. See `commands::reveal_path`.
   return invoke("reveal_path", { path });
+}
+
+export function getCleanupSummary(
+  scanId: string,
+  oldDownloadsDays = 180,
+): Promise<CleanupSummary> {
+  return invoke("get_cleanup_summary", { scanId, oldDownloadsDays });
+}
+
+export function listCleanupFiles(
+  scanId: string,
+  kind: string,
+  limit = 20,
+  oldDownloadsDays = 180,
+): Promise<FileEntry[]> {
+  return invoke("list_cleanup_files", { scanId, kind, limit, oldDownloadsDays });
 }
