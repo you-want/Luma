@@ -45,7 +45,11 @@ pub fn build_cleanup_summary(
     for (kind, sql) in DB_ITEMS {
         let (count, bytes) = aggregate(&connection, sql, scan_id)?;
         if count > 0 {
-            items.push(CleanupItem { kind: kind.to_string(), size_bytes: bytes, file_count: count });
+            items.push(CleanupItem {
+                kind: kind.to_string(),
+                size_bytes: bytes,
+                file_count: count,
+            });
         }
     }
 
@@ -137,7 +141,11 @@ pub fn list_cleanup_files(
         "trash" => Ok(filesystem_files(trash_path().as_deref(), limit, None)),
         "oldDownloads" => {
             let cutoff = now_secs().saturating_sub(u64::from(old_downloads_days) * 86_400);
-            Ok(filesystem_files(downloads_path().as_deref(), limit, Some(cutoff)))
+            Ok(filesystem_files(
+                downloads_path().as_deref(),
+                limit,
+                Some(cutoff),
+            ))
         }
         _ => Err(AppError::new(
             "INVALID_CLEANUP_KIND",
@@ -173,7 +181,10 @@ const DB_ITEMS: &[(&str, &str)] = &[
 
 fn aggregate(connection: &Connection, sql: &str, scan_id: &str) -> Result<(u64, u64), AppError> {
     Ok(connection.query_row(sql, params![scan_id], |row| {
-        Ok((from_i64(row.get::<_, i64>(0)?), from_i64(row.get::<_, i64>(1)?)))
+        Ok((
+            from_i64(row.get::<_, i64>(0)?),
+            from_i64(row.get::<_, i64>(1)?),
+        ))
     })?)
 }
 
@@ -359,7 +370,12 @@ mod tests {
             &mut conn,
             "s1",
             &[
-                make_entry("/root/proj/node_modules/x.js", "x.js", 5_000_000, Some("js")),
+                make_entry(
+                    "/root/proj/node_modules/x.js",
+                    "x.js",
+                    5_000_000,
+                    Some("js"),
+                ),
                 make_entry("/root/archive.zip", "archive.zip", 2_000_000, Some("zip")),
                 make_entry("/root/app.dmg", "app.dmg", 3_000_000, Some("dmg")),
                 // two files with the same size → duplicate estimate
@@ -375,7 +391,10 @@ mod tests {
         assert!(kinds.contains(&"development"), "expected development item");
         assert!(kinds.contains(&"archives"), "expected archives item");
         assert!(kinds.contains(&"installers"), "expected installers item");
-        assert!(kinds.contains(&"duplicatesEstimate"), "expected duplicate estimate");
+        assert!(
+            kinds.contains(&"duplicatesEstimate"),
+            "expected duplicate estimate"
+        );
         assert!(summary.total_bytes > 0);
 
         fs::remove_dir_all(tmp).ok();
