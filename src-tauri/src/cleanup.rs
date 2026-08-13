@@ -97,7 +97,7 @@ pub fn build_cleanup_summary(
         });
     }
 
-    items.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    items.sort_by_key(|b| std::cmp::Reverse(b.size_bytes));
     let total_bytes = items.iter().map(|i| i.size_bytes).sum();
     Ok(CleanupSummary { items, total_bytes })
 }
@@ -325,7 +325,7 @@ fn filesystem_files(dir: Option<&Path>, limit: u32, cutoff: Option<u64>) -> Vec<
         })
         .collect();
 
-    files.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    files.sort_by_key(|b| std::cmp::Reverse(b.size_bytes));
     files.truncate(limit as usize);
     files
 }
