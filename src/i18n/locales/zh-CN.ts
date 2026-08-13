@@ -229,6 +229,28 @@ export const zhCN = {
     REVEAL_FAILED: "无法在文件管理器中定位该文件，它可能已被移动或删除。",
     generic: "操作没有完成，请检查目录读取权限后重试。",
   },
+  palette: {
+    ariaLabel: "命令面板",
+    placeholder: "搜索文件、操作……",
+    reveal: "在文件管理器中显示",
+    noResults: "没有找到匹配结果",
+    group: {
+      actions: "操作",
+      files: "文件",
+    },
+    hint: {
+      navigate: " 导航",
+      select: " 选择",
+      close: " 关闭",
+    },
+    action: {
+      newScan: "开始新扫描",
+      goSearch: "搜索文件",
+      goDuplicates: "查看重复文件",
+      goCleanup: "清理建议",
+      goLargeFiles: "最大文件",
+    },
+  },
 } as const;
 
 // The key structure is fixed by `zhCN`, but leaf values must stay assignable

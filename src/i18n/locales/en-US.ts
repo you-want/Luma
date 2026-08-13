@@ -230,4 +230,26 @@ export const enUS: Resources = {
     REVEAL_FAILED: "Could not locate the file in the file manager; it may have been moved or deleted.",
     generic: "The operation did not complete. Check folder read permission and try again.",
   },
+  palette: {
+    ariaLabel: "Command palette",
+    placeholder: "Search files, actions…",
+    reveal: "Show in file manager",
+    noResults: "No results found",
+    group: {
+      actions: "Actions",
+      files: "Files",
+    },
+    hint: {
+      navigate: " navigate",
+      select: " select",
+      close: " close",
+    },
+    action: {
+      newScan: "Start new scan",
+      goSearch: "Search files",
+      goDuplicates: "View duplicates",
+      goCleanup: "Cleanup suggestions",
+      goLargeFiles: "Largest files",
+    },
+  },
 };
