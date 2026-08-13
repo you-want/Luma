@@ -1,6 +1,7 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Database, ShieldCheck, TriangleAlert } from "lucide-react";
+import { BarChart2, Database, FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
+import { FileManagerView } from "./components/fileManager";
 import { appStore, useAppStore } from "./app/store";
 import { CategoryList } from "./components/CategoryList";
 import { CleanupPanel } from "./components/CleanupPanel";
@@ -31,9 +32,12 @@ import {
 import type { ScanFinished, ScanProgress as ScanProgressType } from "./types/scan";
 import "./App.css";
 
+type AppTab = "analysis" | "files";
+
 function App() {
   const { t } = useTranslation();
   const app = useAppStore();
+  const [activeTab, setActiveTab] = useState<AppTab>("analysis");
 
   const loadResult = useCallback(async (scanId: string) => {
     const settings = appStore.getState();
@@ -166,78 +170,116 @@ function App() {
       <header className="app-header">
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
         <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
+        {/* Tab bar — only shown after a scan completes */}
+        {app.summary && app.phase === "completed" && (
+          <nav className="app-tab-bar" role="tablist" aria-label="视图切换">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "analysis"}
+              className={`app-tab${activeTab === "analysis" ? " app-tab--active" : ""}`}
+              onClick={() => setActiveTab("analysis")}
+            >
+              <BarChart2 size={13} />
+              分析
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "files"}
+              className={`app-tab${activeTab === "files" ? " app-tab--active" : ""}`}
+              onClick={() => setActiveTab("files")}
+            >
+              <FolderOpen size={13} />
+              文件管理
+            </button>
+          </nav>
+        )}
         <div className="privacy-note"><ShieldCheck size={15} />{t("app.privacyNote")}</div>
         <UpdateButton />
         <LanguageSwitcher />
       </header>
 
-      <div className="content">
-        <div className="intro">
-          <h1>{t("intro.title")}</h1>
-          <p>{t("intro.description")}</p>
+      {/* File manager tab — full-height, no content wrapper */}
+      {app.summary && app.phase === "completed" && activeTab === "files" && (
+        <div className="fm-tab-panel">
+          <FileManagerView
+            scanId={app.summary.scanId}
+            rootPath={app.summary.rootPath}
+          />
         </div>
+      )}
 
-        <ScanControls
-          selectedPath={app.selectedPath}
-          includeHidden={app.includeHidden}
-          isRunning={app.phase === "running"}
-          onChoose={handleChoose}
-          onStart={handleStart}
-          onCancel={handleCancel}
-          onIncludeHiddenChange={appStore.setIncludeHidden}
-        />
-
-        {app.phase === "running" && <ScanProgress progress={app.progress} />}
-
-        {app.phase === "failed" && (
-          <section className="status-message status-error" role="alert">
-            <TriangleAlert size={20} />
-            <div><strong>{t("status.failedTitle")}</strong><p>{app.error}</p></div>
-          </section>
-        )}
-
-        {app.phase === "cancelled" && (
-          <section className="status-message">
-            <Database size={20} />
-            <div><strong>{t("status.cancelledTitle")}</strong><p>{t("status.cancelledBody")}</p></div>
-          </section>
-        )}
-
-        {app.loading && <div className="loading-state">{t("status.loading")}</div>}
-
-        {app.phase === "idle" && !app.loading && (
-          <section className="empty-state">
-            <Database size={28} />
-            <h2>{t("empty.title")}</h2>
-            <p>{t("empty.body")}</p>
-          </section>
-        )}
-
-        {app.summary && app.phase === "completed" && (
-          <div className="results">
-            <StorageOverview summary={app.summary} />
-            <div className="results-grid">
-              <CategoryList categories={app.summary.categories} totalBytes={app.summary.totalBytes} />
-              <InsightList
-                scanId={app.summary.scanId}
-                insights={app.insights}
-                largeFileThreshold={app.largeFileThreshold}
-                staleDays={app.staleDays}
-                onSettingsChange={handleDiscoverySettings}
-              />
-            </div>
-            <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
-            <CleanupPanel scanId={app.summary.scanId} />
-            <Search
-              scanId={app.summary.scanId}
-              categories={app.summary.categories.map((c) => c.category)}
-            />
-            <Duplicates scanId={app.summary.scanId} />
-            <Projects scanId={app.summary.scanId} />
-            <ScanHistory scanId={app.summary.scanId} />
+      {/* Analysis tab (original scroll layout) */}
+      {activeTab === "analysis" && (
+        <div className="content">
+          <div className="intro">
+            <h1>{t("intro.title")}</h1>
+            <p>{t("intro.description")}</p>
           </div>
-        )}
-      </div>
+
+          <ScanControls
+            selectedPath={app.selectedPath}
+            includeHidden={app.includeHidden}
+            isRunning={app.phase === "running"}
+            onChoose={handleChoose}
+            onStart={handleStart}
+            onCancel={handleCancel}
+            onIncludeHiddenChange={appStore.setIncludeHidden}
+          />
+
+          {app.phase === "running" && <ScanProgress progress={app.progress} />}
+
+          {app.phase === "failed" && (
+            <section className="status-message status-error" role="alert">
+              <TriangleAlert size={20} />
+              <div><strong>{t("status.failedTitle")}</strong><p>{app.error}</p></div>
+            </section>
+          )}
+
+          {app.phase === "cancelled" && (
+            <section className="status-message">
+              <Database size={20} />
+              <div><strong>{t("status.cancelledTitle")}</strong><p>{t("status.cancelledBody")}</p></div>
+            </section>
+          )}
+
+          {app.loading && <div className="loading-state">{t("status.loading")}</div>}
+
+          {app.phase === "idle" && !app.loading && (
+            <section className="empty-state">
+              <Database size={28} />
+              <h2>{t("empty.title")}</h2>
+              <p>{t("empty.body")}</p>
+            </section>
+          )}
+
+          {app.summary && app.phase === "completed" && (
+            <div className="results">
+              <StorageOverview summary={app.summary} />
+              <div className="results-grid">
+                <CategoryList categories={app.summary.categories} totalBytes={app.summary.totalBytes} />
+                <InsightList
+                  scanId={app.summary.scanId}
+                  insights={app.insights}
+                  largeFileThreshold={app.largeFileThreshold}
+                  staleDays={app.staleDays}
+                  onSettingsChange={handleDiscoverySettings}
+                />
+              </div>
+              <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
+              <CleanupPanel scanId={app.summary.scanId} />
+              <Search
+                scanId={app.summary.scanId}
+                categories={app.summary.categories.map((c) => c.category)}
+              />
+              <Duplicates scanId={app.summary.scanId} />
+              <Projects scanId={app.summary.scanId} />
+              <ScanHistory scanId={app.summary.scanId} />
+            </div>
+          )}
+        </div>
+      )}
     </main>
   );
 }

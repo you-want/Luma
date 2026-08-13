@@ -408,7 +408,49 @@ button { letter-spacing: -0.01em; }
   .switch::after { background: #f5f5f7; }
 }
 
-/* Duplicates section */
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+.app-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 16px;
+}
+
+.app-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 510;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.app-tab:hover { background: var(--surface-hover); color: var(--text); }
+
+.app-tab--active {
+  color: var(--text);
+  background: var(--surface-active);
+  border-color: var(--separator);
+}
+
+/* File manager full-height panel (no content wrapper padding) */
+.fm-tab-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Duplicates section ───────────────────────────────────────────────────── */
 .duplicates-section { margin-top: 24px; }
 
 .duplicates-controls {

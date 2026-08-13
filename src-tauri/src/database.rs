@@ -652,6 +652,12 @@ fn from_i64(value: i64) -> u64 {
     u64::try_from(value).unwrap_or_default()
 }
 
+/// Public helper so sibling modules (organizer, file_manager) can reuse the
+/// same u64 extraction without duplicating the conversion.
+pub fn row_u64(row: &rusqlite::Row, idx: usize) -> u64 {
+    row.get::<_, i64>(idx).map(from_i64).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

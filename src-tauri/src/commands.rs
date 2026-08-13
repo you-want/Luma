@@ -3,6 +3,9 @@ use crate::{
     database,
     duplicates::{self, DuplicateGroup},
     error::AppError,
+    file_manager::{self, DirNode, DirectoryListing},
+    file_ops::{self, OpResult, UndoRecord},
+    organizer,
     models::{
         FileEntry, InsightSummary, ScanComparison, ScanFinished, ScanStatus, ScanSummary,
         SearchRequest, SearchResponse, StartScanRequest,
@@ -285,6 +288,190 @@ pub fn list_cleanup_files(
         limit.unwrap_or(20).clamp(1, 100),
         old_downloads_days.unwrap_or(180),
     )
+}
+
+/// Read the first 64 KiB of a text file and return it as a UTF-8 string.
+/// Used by the frontend preview panel to show file contents without loading
+/// the entire file into memory.
+#[tauri::command]
+pub fn read_text_preview(path: String) -> Result<String, AppError> {
+    use std::io::Read;
+    let native = PathBuf::from(path.replace('/', std::path::MAIN_SEPARATOR_STR));
+    let file = std::fs::File::open(&native)
+        .map_err(|e| AppError::new("FILE_READ_ERROR", e.to_string()))?;
+    const LIMIT: usize = 64 * 1024;
+    let mut buf = Vec::with_capacity(LIMIT);
+    file.take(LIMIT as u64)
+        .read_to_end(&mut buf)
+        .map_err(|e| AppError::new("FILE_READ_ERROR", e.to_string()))?;
+    // Replace invalid UTF-8 sequences with the replacement character so the
+    // frontend always receives a valid string, even for mixed-encoding files.
+    Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// Returns the direct subdirectories of `parent_path` for the given scan,
+/// derived from the stored path index — no filesystem access needed.
+#[tauri::command]
+pub fn get_directory_nodes(
+    state: State<'_, AppState>,
+    scan_id: String,
+    parent_path: String,
+) -> Result<Vec<DirNode>, AppError> {
+    file_manager::get_directory_nodes(&state.database_path, &scan_id, &parent_path)
+}
+
+/// Returns files sitting directly inside `dir_path` (non-recursive) with
+/// pagination. Sort is a closed enum transmitted as a camelCase string.
+#[tauri::command]
+pub fn list_directory_files(
+    state: State<'_, AppState>,
+    scan_id: String,
+    dir_path: String,
+    include_hidden: Option<bool>,
+    sort: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<DirectoryListing, AppError> {
+    // Map the frontend sort token to a safe ORDER BY fragment. Only these
+    // known strings are ever interpolated — never raw client input.
+    let order = match sort.as_deref().unwrap_or("nameAsc") {
+        "sizeDesc" => "size_bytes DESC, id ASC",
+        "sizeAsc" => "size_bytes ASC, id ASC",
+        "nameDesc" => "name COLLATE NOCASE DESC, id ASC",
+        "modifiedDesc" => "modified_at DESC, id ASC",
+        "modifiedAsc" => "modified_at ASC, id ASC",
+        _ => "name COLLATE NOCASE ASC, id ASC",
+    };
+    let lim = limit.unwrap_or(100).clamp(1, 500);
+    let off = offset.unwrap_or(0);
+    let hidden = include_hidden.unwrap_or(false);
+
+    let (files, total_files) = file_manager::list_directory_files(
+        &state.database_path,
+        &scan_id,
+        &dir_path,
+        hidden,
+        order,
+        lim,
+        off,
+    )?;
+
+    let dirs =
+        file_manager::get_directory_nodes(&state.database_path, &scan_id, &dir_path)?;
+
+    Ok(DirectoryListing { dirs, files, total_files })
+}
+
+/// Open a file or directory with the default OS application.
+/// Uses the opener plugin (already available for `reveal_path`).
+#[tauri::command]
+pub fn open_path(app: AppHandle, path: String) -> Result<(), AppError> {
+    let native = PathBuf::from(path.replace('/', std::path::MAIN_SEPARATOR_STR));
+    app.opener()
+        .open_path(native.to_string_lossy().as_ref(), None::<&str>)
+        .map_err(|e| AppError::new("OPEN_FAILED", e.to_string()))
+}
+
+// ── File operations ────────────────────────────────────────────────────────────
+
+/// Move files to the OS trash. Never permanently deletes.
+#[tauri::command]
+pub fn trash_files(
+    state: State<'_, AppState>,
+    scan_id: String,
+    paths: Vec<String>,
+) -> Result<OpResult, AppError> {
+    file_ops::trash_files(&state.database_path, &scan_id, &paths)
+}
+
+/// Rename a file or directory in-place (same parent directory).
+/// Returns `{ newPath, undoRecord }` on success.
+#[tauri::command]
+pub fn rename_file(
+    state: State<'_, AppState>,
+    scan_id: String,
+    old_path: String,
+    new_name: String,
+) -> Result<RenameResult, AppError> {
+    let new_path = file_ops::rename_file(&state.database_path, &scan_id, &old_path, &new_name)?;
+    Ok(RenameResult {
+        new_path: new_path.clone(),
+        undo: UndoRecord {
+            kind: file_ops::UndoKind::Rename,
+            from: vec![old_path],
+            to: vec![new_path],
+        },
+    })
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameResult {
+    pub new_path: String,
+    pub undo: UndoRecord,
+}
+
+/// Move files into a destination directory.
+#[tauri::command]
+pub fn move_files(
+    state: State<'_, AppState>,
+    scan_id: String,
+    paths: Vec<String>,
+    dest_dir: String,
+) -> Result<OpResult, AppError> {
+    file_ops::move_files(&state.database_path, &scan_id, &paths, &dest_dir)
+}
+
+/// Copy files into a destination directory.
+#[tauri::command]
+pub fn copy_files(
+    state: State<'_, AppState>,
+    scan_id: String,
+    paths: Vec<String>,
+    dest_dir: String,
+) -> Result<OpResult, AppError> {
+    file_ops::copy_files(&state.database_path, &scan_id, &paths, &dest_dir)
+}
+
+// ── Smart organizer ────────────────────────────────────────────────────────────
+
+/// Dry-run: compute the full move plan without touching the filesystem.
+#[tauri::command]
+pub fn plan_organize(
+    state: State<'_, AppState>,
+    scan_id: String,
+    source_dir: String,
+    dest_dir: String,
+    rule: organizer::OrganizeRule,
+) -> Result<organizer::OrganizePlan, AppError> {
+    organizer::plan_organize(&state.database_path, &scan_id, &source_dir, &dest_dir, &rule)
+}
+
+/// Execute an approved organize plan, emitting `organize-progress` events
+/// so the frontend can show a live progress bar.
+#[tauri::command]
+pub async fn execute_organize_plan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    scan_id: String,
+    moves: Vec<organizer::OrganizeMoveInput>,
+) -> Result<organizer::OrganizeResult, AppError> {
+    let database_path = state.database_path.clone();
+    let task_scan_id = scan_id.clone();
+    let task_moves = moves.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        organizer::execute_organize_plan(
+            &database_path,
+            &task_scan_id,
+            &task_moves,
+            |progress| {
+                let _ = app.emit("organize-progress", &progress);
+            },
+        )
+    })
+    .await
+    .map_err(|e| AppError::new("OP_FAILED", e.to_string()))?
 }
 
 fn now_seconds() -> i64 {
