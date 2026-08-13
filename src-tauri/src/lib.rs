@@ -3,8 +3,11 @@ mod commands;
 mod database;
 mod duplicates;
 mod error;
+mod file_manager;
+mod file_ops;
 mod i18n;
 mod models;
+mod organizer;
 mod projects;
 mod scanner;
 
@@ -75,6 +78,16 @@ pub fn run() {
             commands::reveal_path,
             commands::get_cleanup_summary,
             commands::list_cleanup_files,
+            commands::get_directory_nodes,
+            commands::list_directory_files,
+            commands::open_path,
+            commands::read_text_preview,
+            commands::trash_files,
+            commands::rename_file,
+            commands::move_files,
+            commands::copy_files,
+            commands::plan_organize,
+            commands::execute_organize_plan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

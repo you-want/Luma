@@ -100,6 +100,90 @@ export function revealPath(path: string): Promise<void> {
   return invoke("reveal_path", { path });
 }
 
+// ── File Manager ──────────────────────────────────────────────────────────────
+
+export function getDirectoryNodes(
+  scanId: string,
+  parentPath: string,
+): Promise<import("../types/fileManager").DirNode[]> {
+  return invoke("get_directory_nodes", { scanId, parentPath });
+}
+
+export function listDirectoryFiles(
+  scanId: string,
+  dirPath: string,
+  opts: {
+    includeHidden?: boolean;
+    sort?: import("../types/fileManager").DirFileSort;
+    limit?: number;
+    offset?: number;
+  } = {},
+): Promise<import("../types/fileManager").DirectoryListing> {
+  return invoke("list_directory_files", {
+    scanId,
+    dirPath,
+    includeHidden: opts.includeHidden ?? false,
+    sort: opts.sort ?? "nameAsc",
+    limit: opts.limit ?? 100,
+    offset: opts.offset ?? 0,
+  });
+}
+
+export function openPath(path: string): Promise<void> {
+  return invoke("open_path", { path });
+}
+
+export function trashFiles(
+  scanId: string,
+  paths: string[],
+): Promise<import("../types/fileManager").OpResult> {
+  return invoke("trash_files", { scanId, paths });
+}
+
+export function renameFile(
+  scanId: string,
+  oldPath: string,
+  newName: string,
+): Promise<import("../types/fileManager").RenameResult> {
+  return invoke("rename_file", { scanId, oldPath, newName });
+}
+
+export function moveFiles(
+  scanId: string,
+  paths: string[],
+  destDir: string,
+): Promise<import("../types/fileManager").OpResult> {
+  return invoke("move_files", { scanId, paths, destDir });
+}
+
+export function copyFiles(
+  scanId: string,
+  paths: string[],
+  destDir: string,
+): Promise<import("../types/fileManager").OpResult> {
+  return invoke("copy_files", { scanId, paths, destDir });
+}
+
+// ── Smart organizer ────────────────────────────────────────────────────────────
+
+export function planOrganize(
+  scanId: string,
+  sourceDir: string,
+  destDir: string,
+  rule: import("../types/fileManager").OrganizeRule,
+): Promise<import("../types/fileManager").OrganizePlan> {
+  return invoke("plan_organize", { scanId, sourceDir, destDir, rule });
+}
+
+export function executeOrganizePlan(
+  scanId: string,
+  moves: import("../types/fileManager").OrganizeMoveInput[],
+): Promise<import("../types/fileManager").OrganizeResult> {
+  return invoke("execute_organize_plan", { scanId, moves });
+}
+
+// ── Cleanup ────────────────────────────────────────────────────────────────────
+
 export function getCleanupSummary(
   scanId: string,
   oldDownloadsDays = 180,
