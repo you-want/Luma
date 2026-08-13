@@ -4,6 +4,7 @@ import { Database, ShieldCheck, TriangleAlert } from "lucide-react";
 import { appStore, useAppStore } from "./app/store";
 import { CategoryList } from "./components/CategoryList";
 import { CleanupPanel } from "./components/CleanupPanel";
+import CommandPalette from "./components/CommandPalette";
 import { Duplicates } from "./components/Duplicates";
 import { InsightList } from "./components/InsightList";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -161,6 +162,7 @@ function App() {
 
   return (
     <main className="app-shell" data-han-scope data-theme="ink" data-luma-accent="celadon">
+      <CommandPalette scanId={app.summary?.scanId ?? null} onNewScan={handleChoose} />
       <header className="app-header">
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
         <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
