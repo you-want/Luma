@@ -192,7 +192,11 @@ export function FileManagerView({ scanId, rootPath }: Props) {
         scanId={scanId}
         defaultSourceDir={fm.currentPath}
         onClose={() => setOrganizeOpen(false)}
-        onDone={() => { fm.reload(); setOrganizeOpen(false); }}
+        onDone={() => {
+          fm.reload();
+          void ops.refreshUndoable();
+          setOrganizeOpen(false);
+        }}
       />
     </div>
   );

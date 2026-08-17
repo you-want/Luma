@@ -5,7 +5,7 @@ export const zhCN = {
   app: {
     name: "Luma",
     tagline: "本地空间观察",
-    privacyNote: "只读扫描，数据保留在本机",
+    privacyNote: "扫描只读，写操作均需确认",
   },
   lang: {
     label: "语言",
@@ -23,7 +23,7 @@ export const zhCN = {
   intro: {
     title: "本地空间观察",
     description:
-      "选择一个目录，Luma 会在本机建立可恢复的空间索引，不修改任何原文件。",
+      "选择一个目录，Luma 会在本机建立可恢复的空间索引；扫描过程不会修改原文件。",
   },
   scanControls: {
     title: "选择要了解的文件夹",
@@ -210,7 +210,7 @@ export const zhCN = {
     noFiles: "没有可列出的文件。",
     showingTop: "仅显示最大的 {{shown}} 个，共 {{total}} 个。",
     empty: "在当前扫描中未发现明显可清理的内容。",
-    note: "以上均为参考建议，删除前请确认文件不再需要。Luma 不会修改或删除任何文件。",
+    note: "以上均为参考建议。只有你在文件管理视图明确确认后，Luma 才会修改文件或将其移至废纸篓。",
     revealFolder: "在文件管理器中显示文件夹",
   },
   common: {

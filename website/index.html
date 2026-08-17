@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Luma · 照见你的数字世界</title>
-  <meta name="description" content="Luma 0.2.0 是一款面向 macOS 与 Windows 11 x64 的本地文件空间观察工具，可查看空间分类、搜索过滤、批量选择、重复文件候选、开发项目与扫描历史，界面支持简体中文与英文。只读运行，数据不出本机。">
+  <meta name="description" content="Luma 是一款面向 macOS 与 Windows 11 x64 的本地文件空间观察与整理工具，可查看空间分类、搜索过滤、重复文件候选和扫描历史，并在明确确认后安全执行文件操作。扫描只读，数据不出本机。">
   <meta name="theme-color" content="#17211f">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -867,13 +867,13 @@
           <span class="lm-kicker">v0.2.0 双平台内部预览 · MACOS + WINDOWS</span>
           <h1 class="lm-hero__title" id="hero-title">看得见的，<em>才谈得上理解。</em></h1>
           <p class="lm-hero__en">Luma — Local insight for your digital world.</p>
-          <p class="lm-hero__lead">你的电脑里装着数年的文件，却没有一张地图。Luma 扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化，并支持按名称、大小、时间检索与批量选择、导出清单。它不修改任何原文件，所有分析都留在这台电脑。</p>
+          <p class="lm-hero__lead">你的电脑里装着数年的文件，却没有一张地图。Luma 以只读方式扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化；当你进入文件管理并明确确认后，也可以安全地重命名、移动、复制或整理文件。所有索引和操作日志都留在这台电脑。</p>
           <div class="lm-hero__actions">
             <a class="lm-btn-primary" href="#download">获取 Luma 0.2.0</a>
             <a class="lm-text-link" href="#capabilities">看看它怎么工作</a>
           </div>
           <div class="lm-hero__meta">
-            <div><strong>只读</strong><span>Read-only</span></div>
+            <div><strong>扫描只读</strong><span>Read-only scan</span></div>
             <div><strong>本机</strong><span>On-device</span></div>
             <div><strong>可解释</strong><span>Explainable</span></div>
           </div>
@@ -1004,7 +1004,7 @@
             <div class="lm-eye__idx" aria-hidden="true">选</div>
             <h3>批量 · 选中后导出</h3>
             <p class="lm-eye__en">Bulk Selection</p>
-            <p>跨分页勾选文件，或一键选中全部筛选结果，界面实时显示已选数量。首版只提供非破坏性操作：复制路径列表到剪贴板、导出清单为 CSV——交给你自己的脚本或表格去处理。Luma 不移动、不删除任何文件。</p>
+            <p>搜索结果支持跨分页勾选、复制路径和导出 CSV，不会直接修改文件。需要重命名、移动、复制或移至废纸篓时，必须进入文件管理视图并明确触发对应操作。</p>
             <span class="lm-eye__tag">跨页选择 · 复制路径 · 导出 CSV</span>
           </article>
         </div>
@@ -1055,7 +1055,7 @@
           <ul class="lm-pledge">
             <li>
               <span class="lm-pledge__seal" aria-hidden="true">读</span>
-              <div><strong>只读、不改文件</strong><span>普通扫描只读取路径和元数据；只有你主动查找重复时才读取候选文件内容。Luma 不修改、移动或删除任何原文件。</span></div>
+              <div><strong>扫描只读、操作可控</strong><span>普通扫描只读取路径和元数据；查找重复、内容预览和文件写入都必须由你主动触发。系统目录受保护，移动与整理会记录本地日志并支持撤销。</span></div>
             </li>
             <li>
               <span class="lm-pledge__seal" aria-hidden="true">本</span>

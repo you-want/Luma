@@ -1,18 +1,23 @@
 // useFileOps — all file operation logic (trash, rename, move, copy) plus
-// in-memory undo stack. Separated from useFileManager so state stays focused.
+// the persisted SQLite-backed undo stack.
 
-import { useCallback, useState } from "react";
-import { trashFiles, renameFile, moveFiles, copyFiles } from "../../lib/tauri";
+import { useCallback, useEffect, useState } from "react";
+import {
+  trashFiles,
+  renameFile,
+  moveFiles,
+  copyFiles,
+  listUndoableOperations,
+  undoFileOperation,
+} from "../../lib/tauri";
 import { errorMessage } from "../../lib/errors";
-import type { UndoEntry, UndoRecord } from "../../types/fileManager";
+import type { OperationRecord } from "../../types/fileManager";
 import type { FileEntry } from "../../types/scan";
-
-const MAX_UNDO = 20;
 
 export type OpsState = {
   /** Paths selected for batch operations (not the same as preview selection). */
   checkedPaths: Set<string>;
-  undoStack: UndoEntry[];
+  undoStack: OperationRecord[];
   /** Path currently being renamed (shows inline input). */
   renamingPath: string | null;
 };
@@ -32,7 +37,7 @@ export function useFileOps(
   pushToast: PushToast,
 ) {
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(new Set());
-  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [undoStack, setUndoStack] = useState<OperationRecord[]>([]);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
 
   // ── Checkbox selection ─────────────────────────────────────────────────────
@@ -54,19 +59,41 @@ export function useFileOps(
     setCheckedPaths(new Set());
   }, []);
 
-  // ── Undo stack helpers ─────────────────────────────────────────────────────
+  // ── Persistent undo helpers ────────────────────────────────────────────────
 
-  function pushUndo(label: string, record: UndoRecord) {
-    setUndoStack((prev) => {
-      const entry: UndoEntry = {
-        id: `${Date.now()}-${Math.random()}`,
-        label,
-        record,
-        timestamp: Date.now(),
-      };
-      return [entry, ...prev].slice(0, MAX_UNDO);
-    });
-  }
+  const refreshUndoable = useCallback(async () => {
+    try {
+      setUndoStack(await listUndoableOperations(scanId));
+    } catch {
+      setUndoStack([]);
+    }
+  }, [scanId]);
+
+  useEffect(() => {
+    void refreshUndoable();
+  }, [refreshUndoable]);
+
+  const undoById = useCallback(
+    async (operationId: string, label: string) => {
+      try {
+        const result = await undoFileOperation(operationId, scanId);
+        onRefresh();
+        await refreshUndoable();
+        if (result.failed.length === 0) {
+          pushToast({ kind: "info", message: `已撤销：${label}` });
+        } else {
+          pushToast({
+            kind: "error",
+            message: `部分项目撤销失败：${result.failed[0]?.reason ?? "未知错误"}`,
+          });
+        }
+      } catch (err) {
+        pushToast({ kind: "error", message: `撤销失败：${errorMessage(err)}` });
+        await refreshUndoable();
+      }
+    },
+    [onRefresh, pushToast, refreshUndoable, scanId],
+  );
 
   // ── Trash ──────────────────────────────────────────────────────────────────
 
@@ -109,18 +136,18 @@ export function useFileOps(
       try {
         const result = await renameFile(scanId, oldPath, newName);
         onRefresh();
-        pushUndo(`重命名为 ${newName}`, result.undo);
+        await refreshUndoable();
         pushToast({
           kind: "success",
           message: `已重命名为 "${newName}"`,
           undoLabel: "撤销",
-          onUndo: () => void undoLast(),
+          onUndo: () => void undoById(result.operationId, `重命名为 ${newName}`),
         });
       } catch (err) {
         pushToast({ kind: "error", message: `重命名失败：${errorMessage(err)}` });
       }
     },
-    [scanId, onRefresh, pushToast],
+    [scanId, onRefresh, pushToast, refreshUndoable, undoById],
   );
 
   // ── Move ───────────────────────────────────────────────────────────────────
@@ -133,20 +160,14 @@ export function useFileOps(
         if (n > 0) {
           clearChecked();
           onRefresh();
-          const record: UndoRecord = {
-            kind: "move",
-            from: result.succeeded,
-            to: result.succeeded.map((p) => {
-              const name = p.split("/").pop() ?? p;
-              return `${destDir}/${name}`;
-            }),
-          };
-          pushUndo(`移动 ${n} 个文件`, record);
+          await refreshUndoable();
           pushToast({
             kind: "success",
             message: `已移动 ${n} 个文件`,
-            undoLabel: "撤销",
-            onUndo: () => void undoLast(),
+            undoLabel: result.operationId ? "撤销" : undefined,
+            onUndo: result.operationId
+              ? () => void undoById(result.operationId!, `移动 ${n} 个文件`)
+              : undefined,
           });
         }
         for (const f of result.failed) {
@@ -156,7 +177,7 @@ export function useFileOps(
         pushToast({ kind: "error", message: errorMessage(err) });
       }
     },
-    [scanId, onRefresh, clearChecked, pushToast],
+    [scanId, onRefresh, clearChecked, pushToast, refreshUndoable, undoById],
   );
 
   // ── Copy ───────────────────────────────────────────────────────────────────
@@ -183,32 +204,11 @@ export function useFileOps(
 
   // ── Undo ───────────────────────────────────────────────────────────────────
 
-  const undoLast = useCallback(async () => {
-    const [entry, ...rest] = undoStack;
+  const undoLast = useCallback(() => {
+    const [entry] = undoStack;
     if (!entry) return;
-    setUndoStack(rest);
-
-    const { record } = entry;
-    try {
-      if (record.kind === "rename" && record.from[0] && record.to[0]) {
-        // Undo rename: rename back from `to` → original `from` name
-        const originalName = record.from[0].split("/").pop() ?? record.from[0];
-        await renameFile(scanId, record.to[0], originalName);
-      } else if (record.kind === "move" && record.to.length > 0) {
-        // Undo move: move files back to their original directories
-        for (let i = 0; i < record.to.length; i++) {
-          const origDir = record.from[i]
-            ? record.from[i].split("/").slice(0, -1).join("/")
-            : "";
-          if (origDir) await moveFiles(scanId, [record.to[i]], origDir);
-        }
-      }
-      onRefresh();
-      pushToast({ kind: "info", message: `已撤销：${entry.label}` });
-    } catch (err) {
-      pushToast({ kind: "error", message: `撤销失败：${errorMessage(err)}` });
-    }
-  }, [undoStack, scanId, onRefresh, pushToast]);
+    void undoById(entry.id, entry.label);
+  }, [undoStack, undoById]);
 
   return {
     checkedPaths,
@@ -224,6 +224,7 @@ export function useFileOps(
     move,
     copy,
     undoLast,
+    refreshUndoable,
     canUndo: undoStack.length > 0,
   };
 }

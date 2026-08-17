@@ -164,6 +164,20 @@ export function copyFiles(
   return invoke("copy_files", { scanId, paths, destDir });
 }
 
+export function listUndoableOperations(
+  scanId: string,
+  limit = 20,
+): Promise<import("../types/fileManager").OperationRecord[]> {
+  return invoke("list_undoable_operations", { scanId, limit });
+}
+
+export function undoFileOperation(
+  operationId: string,
+  scanId: string,
+): Promise<import("../types/fileManager").OpResult> {
+  return invoke("undo_file_operation", { operationId, scanId });
+}
+
 // ── Smart organizer ────────────────────────────────────────────────────────────
 
 export function planOrganize(

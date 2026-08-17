@@ -294,7 +294,7 @@ type Props = {
   scanId: string;
   defaultSourceDir: string;
   onClose: () => void;
-  onDone: () => void; // refresh the file list after success
+  onDone: (operationId?: string) => void; // refresh list + persisted undo state
 };
 
 type WizardStep = "rule" | "dirs" | "preview" | "executing";
@@ -380,12 +380,17 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
     // Only send non-conflict moves
     const toMove = plan.moves
       .filter((m) => !m.conflict)
-      .map((m) => ({ from: m.from, to: m.to }));
+      .map((m) => ({
+        from: m.from,
+        to: m.to,
+        expectedSizeBytes: m.expectedSizeBytes,
+        expectedModifiedAt: m.expectedModifiedAt,
+      }));
 
     try {
       const r = await executeOrganizePlan(scanId, toMove);
       setResult(r);
-      onDone(); // refresh file list
+      onDone(r.operationId); // refresh file list + undo state
     } catch (err) {
       setExecError(errorMessage(err));
     } finally {

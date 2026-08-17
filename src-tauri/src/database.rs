@@ -12,7 +12,7 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
     let connection = open(path)?;
     let schema_version =
         connection.query_row("PRAGMA user_version", [], |row| row.get::<_, u32>(0))?;
-    if schema_version > 2 {
+    if schema_version > 3 {
         return Err(AppError::new(
             "DATABASE_ERROR",
             format!("数据库版本 {schema_version} 高于当前应用支持的版本。"),
@@ -50,6 +50,22 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
         CREATE INDEX IF NOT EXISTS idx_files_scan_category ON files(scan_id, category);
         CREATE INDEX IF NOT EXISTS idx_files_scan_modified ON files(scan_id, modified_at);
         CREATE INDEX IF NOT EXISTS idx_files_scan_name ON files(scan_id, name);
+
+        CREATE TABLE IF NOT EXISTS file_operations (
+          id TEXT PRIMARY KEY,
+          scan_id TEXT NOT NULL,
+          root_path TEXT NOT NULL DEFAULT '',
+          kind TEXT NOT NULL,
+          label TEXT NOT NULL,
+          status TEXT NOT NULL,
+          undo_json TEXT,
+          created_at INTEGER NOT NULL,
+          finished_at INTEGER,
+          error_message TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_file_operations_scan_created
+          ON file_operations(scan_id, created_at DESC);
 ",
     )?;
 
@@ -70,16 +86,46 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
         [],
     )?;
 
+    let operation_columns = connection
+        .prepare("PRAGMA table_info(file_operations)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if !operation_columns.iter().any(|name| name == "root_path") {
+        connection.execute(
+            "ALTER TABLE file_operations ADD COLUMN root_path TEXT NOT NULL DEFAULT ''",
+            [],
+        )?;
+    }
+    connection.execute(
+        "UPDATE file_operations
+         SET root_path = COALESCE(
+           (SELECT root_path FROM scan_runs WHERE scan_runs.id = file_operations.scan_id),
+           root_path
+         )
+         WHERE root_path = ''",
+        [],
+    )?;
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_file_operations_root_created
+         ON file_operations(root_path, created_at DESC)",
+        [],
+    )?;
+
     connection.execute_batch(
         "
         UPDATE scan_runs
         SET status = 'failed', finished_at = unixepoch()
         WHERE status = 'running';
+
+        UPDATE file_operations
+        SET status = 'interrupted', finished_at = unixepoch(),
+            error_message = COALESCE(error_message, '应用在操作完成前退出。')
+        WHERE status = 'running';
         ",
     )?;
 
-    if schema_version < 2 {
-        connection.execute("PRAGMA user_version = 2", [])?;
+    if schema_version < 3 {
+        connection.execute("PRAGMA user_version = 3", [])?;
     }
     Ok(())
 }
@@ -875,7 +921,7 @@ mod tests {
             .expect("query schema version");
 
         assert_eq!(status, "failed");
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");
     }
@@ -943,8 +989,16 @@ mod tests {
             )
             .expect("query retained file");
 
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         assert!(columns.iter().any(|column| column == "content_hash"));
+        let operation_table: String = connection
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'file_operations'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query operation table");
+        assert_eq!(operation_table, "file_operations");
         assert_eq!(retained_path, "/fixture/keep.txt");
         drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");

@@ -6,7 +6,7 @@ export const enUS: Resources = {
   app: {
     name: "Luma",
     tagline: "Local Space Insight",
-    privacyNote: "Read-only scan, data stays on this machine",
+    privacyNote: "Read-only scans; writes require confirmation",
   },
   lang: {
     label: "Language",
@@ -24,7 +24,7 @@ export const enUS: Resources = {
   intro: {
     title: "Local Space Insight",
     description:
-      "Pick a folder and Luma builds a resumable space index on this machine, without modifying any original file.",
+      "Pick a folder and Luma builds a resumable local index; scanning never modifies your files.",
   },
   scanControls: {
     title: "Choose a folder to understand",
@@ -211,7 +211,7 @@ export const enUS: Resources = {
     noFiles: "No files to show.",
     showingTop: "Showing {{shown}} largest of {{total}} total.",
     empty: "No obvious cleanup candidates found in this scan.",
-    note: "These are suggestions only. Luma never modifies or deletes files — please verify before removing anything.",
+    note: "These are suggestions only. Luma changes files only after you explicitly confirm an action in File Manager.",
     revealFolder: "Show folder in file manager",
   },
   common: {
