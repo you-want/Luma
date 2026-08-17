@@ -19,7 +19,7 @@ export default function Search({ scanId, categories }: SearchProps) {
   const [category, setCategory] = useState<string>("");
   const [minSize, setMinSize] = useState("");
   const [maxSize, setMaxSize] = useState("");
-  const [sort, setSort] = useState<SearchSort>("sizeDesc");
+  const [sort, setSort] = useState<SearchSort>("relevance");
   const [includeHidden, setIncludeHidden] = useState(false);
   const [results, setResults] = useState<FileEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -194,6 +194,7 @@ export default function Search({ scanId, categories }: SearchProps) {
           onChange={(e) => setSort(e.target.value as SearchSort)}
           className="search-select"
         >
+          <option value="relevance">{t("search.sort.relevance")}</option>
           <option value="sizeDesc">{t("search.sort.sizeDesc")}</option>
           <option value="sizeAsc">{t("search.sort.sizeAsc")}</option>
           <option value="nameAsc">{t("search.sort.nameAsc")}</option>

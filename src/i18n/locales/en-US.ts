@@ -147,7 +147,7 @@ export const enUS: Resources = {
   },
   search: {
     title: "Search",
-    queryPlaceholder: "Enter file name keywords...",
+    queryPlaceholder: "Enter keywords, or try “PDF last-year”...",
     allCategories: "All categories",
     minSize: "Min size (bytes)",
     maxSize: "Max size (bytes)",
@@ -155,6 +155,7 @@ export const enUS: Resources = {
     search: "Search",
     searching: "Searching...",
     sort: {
+      relevance: "Relevance",
       sizeDesc: "Size: largest first",
       sizeAsc: "Size: smallest first",
       nameAsc: "Name: A-Z",

@@ -103,6 +103,7 @@ pub struct InsightSummary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum SearchSort {
+    Relevance,
     NameAsc,
     NameDesc,
     SizeAsc,
@@ -116,14 +117,18 @@ impl SearchSort {
     /// The `ORDER BY` clause for this sort. Every arm is a compile-time constant,
     /// so this is safe to embed in SQL. A stable `id` tiebreaker keeps pagination
     /// deterministic when the primary key ties.
-    pub fn order_by(self) -> &'static str {
+    pub fn order_by(self, has_query: bool) -> &'static str {
         match self {
-            Self::NameAsc => "name COLLATE NOCASE ASC, id ASC",
-            Self::NameDesc => "name COLLATE NOCASE DESC, id ASC",
-            Self::SizeAsc => "size_bytes ASC, id ASC",
-            Self::SizeDesc => "size_bytes DESC, id ASC",
-            Self::ModifiedAsc => "modified_at ASC, id ASC",
-            Self::ModifiedDesc => "modified_at DESC, id ASC",
+            Self::Relevance if has_query => {
+                "bm25(files_fts, 8.0, 2.0, 1.0, 0.5) ASC, files.modified_at DESC, files.id ASC"
+            }
+            Self::Relevance => "files.name COLLATE NOCASE ASC, files.id ASC",
+            Self::NameAsc => "files.name COLLATE NOCASE ASC, files.id ASC",
+            Self::NameDesc => "files.name COLLATE NOCASE DESC, files.id ASC",
+            Self::SizeAsc => "files.size_bytes ASC, files.id ASC",
+            Self::SizeDesc => "files.size_bytes DESC, files.id ASC",
+            Self::ModifiedAsc => "files.modified_at ASC, files.id ASC",
+            Self::ModifiedDesc => "files.modified_at DESC, files.id ASC",
         }
     }
 }

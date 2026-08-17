@@ -1,5 +1,16 @@
 # Search Feature Implementation
 
+## Search v2 Update — 2026-08-17
+
+- Database schema upgraded to v4 with an FTS5 external-content index over file name, path, extension, and category.
+- Insert/update/delete triggers keep `files_fts` synchronized; legacy databases run an FTS rebuild during migration.
+- Added BM25 relevance sorting with higher weight for file-name matches.
+- Added deterministic local parsing for size, recent-year, PDF, Downloads, and project-marker conditions.
+- Added a `SearchProvider` abstraction; the Tauri command now uses `LocalSqliteProvider` as the authoritative implementation.
+- Added migration, trigger synchronization, Chinese keyword, combined-condition, and 100k-file performance tests.
+- 100k debug baseline on macOS: 16.62s indexed insert, 4.52ms keyword search, 32,677,888-byte SQLite database.
+- Detailed execution status is maintained in `docs/search-v2-plan.md`.
+
 ## Overview
 
 Implemented comprehensive file search functionality with filtering, sorting, and pagination for the Luma file scanner application.
@@ -89,16 +100,16 @@ SEARCH-001 through SEARCH-008 (Package C from product roadmap)
 ## Not Done (Honest Gaps)
 
 - **Manual UI regression** — Search component not yet tested interactively in desktop app (SEARCH-008 manual part)
-- **Performance baseline** — 100k/1M file search latency not yet recorded (SEARCH-004 performance measurement)
-- **Integration** — Search component not yet wired into main App layout
+- **Performance baseline** — 100k baseline recorded; 1M baseline remains pending.
+- **Spotlight integration** — macOS provider, canonical-path deduplication, and failure isolation remain pending.
 
 ## Next Steps
 
-1. Add Search component to App.tsx (integrate into main UI)
-2. Manual test: run `pnpm tauri dev`, scan a directory, open Search, test all filters
-3. Record search latency with 100k+ file index for performance baseline
-4. Consider adding Search to navigation/tab system
-5. Consider search history or saved searches (future enhancement)
+1. Add multi-provider result metadata and canonical-path deduplication.
+2. Add an optional macOS Spotlight provider with local-only fallback.
+3. Run desktop UI regression for relevance and natural-language conditions.
+4. Record a 1M-file performance baseline.
+5. Consider search history or saved searches.
 
 ## Files Changed
 

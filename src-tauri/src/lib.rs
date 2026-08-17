@@ -10,6 +10,7 @@ mod models;
 mod organizer;
 mod projects;
 mod scanner;
+mod search;
 
 use commands::AppState;
 use std::{collections::HashMap, sync::Mutex};
