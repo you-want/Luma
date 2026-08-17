@@ -1,7 +1,7 @@
 [package]
 name = "luma"
 version = "0.2.0"
-description = "A private, read-only view of local file space"
+description = "A private, local-first file space viewer and organizer"
 authors = ["Luma contributors"]
 edition = "2021"
 

@@ -4,12 +4,12 @@ use crate::{
     duplicates::{self, DuplicateGroup},
     error::AppError,
     file_manager::{self, DirNode, DirectoryListing},
-    file_ops::{self, OpResult, UndoRecord},
-    organizer,
+    file_ops::{self, OpResult, OperationRecord},
     models::{
         FileEntry, InsightSummary, ScanComparison, ScanFinished, ScanStatus, ScanSummary,
         SearchRequest, SearchResponse, StartScanRequest,
     },
+    organizer,
     projects::{self, ProjectCandidate},
     scanner,
 };
@@ -356,10 +356,13 @@ pub fn list_directory_files(
         off,
     )?;
 
-    let dirs =
-        file_manager::get_directory_nodes(&state.database_path, &scan_id, &dir_path)?;
+    let dirs = file_manager::get_directory_nodes(&state.database_path, &scan_id, &dir_path)?;
 
-    Ok(DirectoryListing { dirs, files, total_files })
+    Ok(DirectoryListing {
+        dirs,
+        files,
+        total_files,
+    })
 }
 
 /// Open a file or directory with the default OS application.
@@ -385,7 +388,7 @@ pub fn trash_files(
 }
 
 /// Rename a file or directory in-place (same parent directory).
-/// Returns `{ newPath, undoRecord }` on success.
+/// Returns the new path and persistent operation id on success.
 #[tauri::command]
 pub fn rename_file(
     state: State<'_, AppState>,
@@ -393,14 +396,10 @@ pub fn rename_file(
     old_path: String,
     new_name: String,
 ) -> Result<RenameResult, AppError> {
-    let new_path = file_ops::rename_file(&state.database_path, &scan_id, &old_path, &new_name)?;
+    let outcome = file_ops::rename_file(&state.database_path, &scan_id, &old_path, &new_name)?;
     Ok(RenameResult {
-        new_path: new_path.clone(),
-        undo: UndoRecord {
-            kind: file_ops::UndoKind::Rename,
-            from: vec![old_path],
-            to: vec![new_path],
-        },
+        new_path: outcome.new_path,
+        operation_id: outcome.operation_id,
     })
 }
 
@@ -408,7 +407,7 @@ pub fn rename_file(
 #[serde(rename_all = "camelCase")]
 pub struct RenameResult {
     pub new_path: String,
-    pub undo: UndoRecord,
+    pub operation_id: String,
 }
 
 /// Move files into a destination directory.
@@ -433,6 +432,26 @@ pub fn copy_files(
     file_ops::copy_files(&state.database_path, &scan_id, &paths, &dest_dir)
 }
 
+/// Return recent write operations that still have a persisted undo plan.
+#[tauri::command]
+pub fn list_undoable_operations(
+    state: State<'_, AppState>,
+    scan_id: String,
+    limit: Option<u32>,
+) -> Result<Vec<OperationRecord>, AppError> {
+    file_ops::list_undoable_operations(&state.database_path, &scan_id, limit.unwrap_or(20))
+}
+
+/// Undo one persisted rename, move, or organize operation.
+#[tauri::command]
+pub fn undo_file_operation(
+    state: State<'_, AppState>,
+    operation_id: String,
+    scan_id: String,
+) -> Result<OpResult, AppError> {
+    file_ops::undo_operation(&state.database_path, &operation_id, &scan_id)
+}
+
 // ── Smart organizer ────────────────────────────────────────────────────────────
 
 /// Dry-run: compute the full move plan without touching the filesystem.
@@ -444,7 +463,13 @@ pub fn plan_organize(
     dest_dir: String,
     rule: organizer::OrganizeRule,
 ) -> Result<organizer::OrganizePlan, AppError> {
-    organizer::plan_organize(&state.database_path, &scan_id, &source_dir, &dest_dir, &rule)
+    organizer::plan_organize(
+        &state.database_path,
+        &scan_id,
+        &source_dir,
+        &dest_dir,
+        &rule,
+    )
 }
 
 /// Execute an approved organize plan, emitting `organize-progress` events
@@ -461,14 +486,9 @@ pub async fn execute_organize_plan(
     let task_moves = moves.clone();
 
     tauri::async_runtime::spawn_blocking(move || {
-        organizer::execute_organize_plan(
-            &database_path,
-            &task_scan_id,
-            &task_moves,
-            |progress| {
-                let _ = app.emit("organize-progress", &progress);
-            },
-        )
+        organizer::execute_organize_plan(&database_path, &task_scan_id, &task_moves, |progress| {
+            let _ = app.emit("organize-progress", &progress);
+        })
     })
     .await
     .map_err(|e| AppError::new("OP_FAILED", e.to_string()))?

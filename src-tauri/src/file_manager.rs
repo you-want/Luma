@@ -75,18 +75,15 @@ pub fn get_directory_nodes(
     ";
 
     let mut stmt = connection.prepare(sql)?;
-    let rows = stmt.query_map(
-        params![parent_path, prefix_len, scan_id, glob],
-        |row| {
-            Ok(DirNode {
-                path: row.get(0)?,
-                name: row.get(1)?,
-                file_count: from_i64(row.get(2)?),
-                size_bytes: from_i64(row.get(3)?),
-                has_children: row.get::<_, i64>(4)? != 0,
-            })
-        },
-    )?;
+    let rows = stmt.query_map(params![parent_path, prefix_len, scan_id, glob], |row| {
+        Ok(DirNode {
+            path: row.get(0)?,
+            name: row.get(1)?,
+            file_count: from_i64(row.get(2)?),
+            size_bytes: from_i64(row.get(3)?),
+            has_children: row.get::<_, i64>(4)? != 0,
+        })
+    })?;
 
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
@@ -107,7 +104,11 @@ pub fn list_directory_files(
     let glob = format!("{dir_path}/%");
     let prefix_len = i64::try_from(dir_path.len()).unwrap_or(0) + 2;
 
-    let hidden_clause = if include_hidden { "" } else { " AND is_hidden = 0" };
+    let hidden_clause = if include_hidden {
+        ""
+    } else {
+        " AND is_hidden = 0"
+    };
 
     // A direct child has no '/' in its relative path segment.
     let where_clause = format!(
@@ -127,22 +128,19 @@ pub fn list_directory_files(
          LIMIT ?4 OFFSET ?5"
     );
     let mut stmt = connection.prepare(&page_sql)?;
-    let rows = stmt.query_map(
-        params![scan_id, glob, prefix_len, limit, offset],
-        |row| {
-            Ok(FileEntry {
-                id: row.get(0)?,
-                path: row.get(1)?,
-                name: row.get(2)?,
-                extension: row.get(3)?,
-                category: row.get(4)?,
-                size_bytes: from_i64(row.get(5)?),
-                modified_at: row.get(6)?,
-                is_hidden: row.get::<_, i64>(7)? != 0,
-                content_hash: row.get(8)?,
-            })
-        },
-    )?;
+    let rows = stmt.query_map(params![scan_id, glob, prefix_len, limit, offset], |row| {
+        Ok(FileEntry {
+            id: row.get(0)?,
+            path: row.get(1)?,
+            name: row.get(2)?,
+            extension: row.get(3)?,
+            category: row.get(4)?,
+            size_bytes: from_i64(row.get(5)?),
+            modified_at: row.get(6)?,
+            is_hidden: row.get::<_, i64>(7)? != 0,
+            content_hash: row.get(8)?,
+        })
+    })?;
 
     let files = rows.collect::<Result<Vec<_>, _>>()?;
     Ok((files, from_i64(total)))

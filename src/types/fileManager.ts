@@ -44,6 +44,7 @@ export type FileListView = "list" | "grid";
 
 /** Outcome of a batch file operation. */
 export type OpResult = {
+  operationId?: string;
   succeeded: string[];
   failed: OpFailure[];
 };
@@ -53,27 +54,20 @@ export type OpFailure = {
   reason: string;
 };
 
-/** Result of a rename — carries the new path and a record for undo. */
+/** Result of a rename — carries the new path and persistent operation id. */
 export type RenameResult = {
   newPath: string;
-  undo: UndoRecord;
+  operationId: string;
 };
 
-export type UndoKind = "rename" | "move" | "copy";
-
-/** Enough info to undo a rename / move / copy. Kept in memory only. */
-export type UndoRecord = {
-  kind: UndoKind;
-  from: string[];
-  to: string[];
-};
-
-/** An entry in the in-memory undo stack. */
-export type UndoEntry = {
-  id: string;           // uuid
-  label: string;        // human-readable, e.g. "重命名 report.pdf"
-  record: UndoRecord;
-  timestamp: number;    // Date.now()
+/** A write operation whose undo plan is persisted in SQLite. */
+export type OperationRecord = {
+  id: string;
+  kind: string;
+  label: string;
+  status: string;
+  createdAt: number;
+  canUndo: boolean;
 };
 
 // ── Phase 3: Smart organizer ───────────────────────────────────────────────────
@@ -87,6 +81,8 @@ export type OrganizeRule =
 export type OrganizeMoveInput = {
   from: string;
   to: string;
+  expectedSizeBytes: number;
+  expectedModifiedAt?: number;
 };
 
 export type OrganizeMove = OrganizeMoveInput & {
@@ -111,6 +107,7 @@ export type OrganizeProgress = {
 };
 
 export type OrganizeResult = {
+  operationId?: string;
   succeeded: number;
   failed: OpFailure[];
 };
