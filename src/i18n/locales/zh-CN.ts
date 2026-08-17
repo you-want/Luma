@@ -146,7 +146,7 @@ export const zhCN = {
   },
   search: {
     title: "搜索",
-    queryPlaceholder: "输入文件名关键词...",
+    queryPlaceholder: "输入关键词，或试试“最近一年 PDF”...",
     allCategories: "所有分类",
     minSize: "最小大小（字节）",
     maxSize: "最大大小（字节）",
@@ -154,6 +154,7 @@ export const zhCN = {
     search: "搜索",
     searching: "正在搜索...",
     sort: {
+      relevance: "相关度",
       sizeDesc: "大小：从大到小",
       sizeAsc: "大小：从小到大",
       nameAsc: "名称：A-Z",

@@ -7,12 +7,13 @@ use crate::{
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn initialize(path: &Path) -> Result<(), AppError> {
     let connection = open(path)?;
     let schema_version =
         connection.query_row("PRAGMA user_version", [], |row| row.get::<_, u32>(0))?;
-    if schema_version > 3 {
+    if schema_version > 4 {
         return Err(AppError::new(
             "DATABASE_ERROR",
             format!("数据库版本 {schema_version} 高于当前应用支持的版本。"),
@@ -50,6 +51,33 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
         CREATE INDEX IF NOT EXISTS idx_files_scan_category ON files(scan_id, category);
         CREATE INDEX IF NOT EXISTS idx_files_scan_modified ON files(scan_id, modified_at);
         CREATE INDEX IF NOT EXISTS idx_files_scan_name ON files(scan_id, name);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5(
+          name,
+          path,
+          extension,
+          category,
+          content='files',
+          content_rowid='id',
+          tokenize='unicode61 remove_diacritics 2'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS files_fts_ai AFTER INSERT ON files BEGIN
+          INSERT INTO files_fts(rowid, name, path, extension, category)
+          VALUES (new.id, new.name, new.path, new.extension, new.category);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS files_fts_ad AFTER DELETE ON files BEGIN
+          INSERT INTO files_fts(files_fts, rowid, name, path, extension, category)
+          VALUES ('delete', old.id, old.name, old.path, old.extension, old.category);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS files_fts_au AFTER UPDATE ON files BEGIN
+          INSERT INTO files_fts(files_fts, rowid, name, path, extension, category)
+          VALUES ('delete', old.id, old.name, old.path, old.extension, old.category);
+          INSERT INTO files_fts(rowid, name, path, extension, category)
+          VALUES (new.id, new.name, new.path, new.extension, new.category);
+        END;
 
         CREATE TABLE IF NOT EXISTS file_operations (
           id TEXT PRIMARY KEY,
@@ -124,8 +152,9 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
         ",
     )?;
 
-    if schema_version < 3 {
-        connection.execute("PRAGMA user_version = 3", [])?;
+    if schema_version < 4 {
+        connection.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')", [])?;
+        connection.execute("PRAGMA user_version = 4", [])?;
     }
     Ok(())
 }
@@ -286,7 +315,8 @@ pub fn list_large_files(
 ) -> Result<Vec<FileEntry>, AppError> {
     let connection = open(path)?;
     let mut statement = connection.prepare(
-        "SELECT id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
+        "SELECT files.id, files.path, files.name, files.extension, files.category, files.size_bytes,
+                files.modified_at, files.is_hidden, files.content_hash
          FROM files WHERE scan_id = ?1 ORDER BY size_bytes DESC LIMIT ?2 OFFSET ?3",
     )?;
     let rows = statement.query_map(params![scan_id, limit, offset], |row| {
@@ -573,10 +603,168 @@ fn parse_status(value: &str) -> ScanStatus {
     }
 }
 
-/// Escape a user query for a `LIKE` pattern so `%`, `_`, and the escape
-/// character itself are matched literally rather than as wildcards. Paired with
-/// `ESCAPE '\'` in the SQL. Without this, a query like "50%" would match far
-/// more than intended.
+/// Convert plain user text into safe FTS5 prefix tokens. Punctuation and FTS
+/// operators are deliberately discarded so the client cannot inject MATCH
+/// syntax such as `OR`, `NEAR`, or column filters.
+fn fts_query(query: &str) -> Option<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    for ch in query.chars() {
+        if ch.is_alphanumeric() {
+            current.push(ch);
+        } else if !current.is_empty() {
+            tokens.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+
+    (!tokens.is_empty()).then(|| {
+        tokens
+            .into_iter()
+            .map(|token| format!("\"{token}\"*"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    })
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct ParsedSearchQuery {
+    text: String,
+    min_size: Option<u64>,
+    max_size: Option<u64>,
+    modified_after: Option<i64>,
+    extension: Option<String>,
+    downloads_only: bool,
+    project_markers_only: bool,
+}
+
+fn parse_search_query(query: &str, now: i64) -> ParsedSearchQuery {
+    let mut normalized = query.trim().to_owned();
+    let mut parsed = ParsedSearchQuery::default();
+
+    for phrase in ["最近一年", "近一年"] {
+        if normalized.contains(phrase) {
+            normalized = normalized.replace(phrase, " ");
+            parsed.modified_after = Some(now.saturating_sub(365 * 24 * 60 * 60));
+        }
+    }
+    for phrase in ["下载目录", "下载文件夹"] {
+        if normalized.contains(phrase) {
+            normalized = normalized.replace(phrase, " ");
+            parsed.downloads_only = true;
+        }
+    }
+    for phrase in ["代码项目", "开发项目"] {
+        if normalized.contains(phrase) {
+            normalized = normalized.replace(phrase, " ");
+            parsed.project_markers_only = true;
+        }
+    }
+
+    let tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    let mut remaining = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = tokens[index];
+        let lower = token.to_ascii_lowercase();
+
+        if matches!(lower.as_str(), "pdf" | ".pdf") {
+            parsed.extension = Some("pdf".to_owned());
+            index += 1;
+            continue;
+        }
+        if matches!(lower.as_str(), "downloads" | "download") {
+            parsed.downloads_only = true;
+            index += 1;
+            continue;
+        }
+        if lower == "last-year" {
+            parsed.modified_after = Some(now.saturating_sub(365 * 24 * 60 * 60));
+            index += 1;
+            continue;
+        }
+
+        let operator = match lower.as_str() {
+            "大于" | "超过" | ">" => Some(true),
+            "小于" | "低于" | "<" => Some(false),
+            _ => None,
+        };
+        if let Some(is_minimum) = operator {
+            if let Some(value) = tokens
+                .get(index + 1)
+                .and_then(|value| parse_size_literal(value))
+            {
+                if is_minimum {
+                    parsed.min_size = Some(value);
+                } else {
+                    parsed.max_size = Some(value);
+                }
+                index += 2;
+                continue;
+            }
+        }
+
+        if let Some((is_minimum, value)) = parse_compact_size_condition(token) {
+            if is_minimum {
+                parsed.min_size = Some(value);
+            } else {
+                parsed.max_size = Some(value);
+            }
+            index += 1;
+            continue;
+        }
+
+        remaining.push(token);
+        index += 1;
+    }
+
+    parsed.text = remaining.join(" ");
+    parsed
+}
+
+fn parse_compact_size_condition(value: &str) -> Option<(bool, u64)> {
+    for (prefix, is_minimum) in [
+        ("大于", true),
+        ("超过", true),
+        (">", true),
+        ("小于", false),
+        ("低于", false),
+        ("<", false),
+    ] {
+        if let Some(size) = value.strip_prefix(prefix).and_then(parse_size_literal) {
+            return Some((is_minimum, size));
+        }
+    }
+    None
+}
+
+fn parse_size_literal(value: &str) -> Option<u64> {
+    let normalized = value
+        .trim()
+        .trim_end_matches([',', '，'])
+        .to_ascii_lowercase();
+    let (number, multiplier) = if let Some(number) = normalized.strip_suffix("tb") {
+        (number, 1024_u64.pow(4))
+    } else if let Some(number) = normalized.strip_suffix("gb") {
+        (number, 1024_u64.pow(3))
+    } else if let Some(number) = normalized.strip_suffix("mb") {
+        (number, 1024_u64.pow(2))
+    } else if let Some(number) = normalized.strip_suffix("kb") {
+        (number, 1024_u64)
+    } else if let Some(number) = normalized.strip_suffix('b') {
+        (number, 1)
+    } else {
+        return None;
+    };
+    let amount = number.parse::<f64>().ok()?;
+    if !amount.is_finite() || amount < 0.0 {
+        return None;
+    }
+    Some((amount * multiplier as f64).min(u64::MAX as f64) as u64)
+}
+
 fn escape_like(query: &str) -> String {
     let mut escaped = String::with_capacity(query.len());
     for ch in query.chars() {
@@ -588,64 +776,101 @@ fn escape_like(query: &str) -> String {
     escaped
 }
 
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| i64::try_from(duration.as_secs()).ok())
+        .unwrap_or_default()
+}
+
 /// Search one scan's indexed rows. Name/path matching, optional filters, sort,
 /// and pagination all run in SQLite; the frontend never loads the full table.
 /// Returns the requested page plus the total match count for pagination.
 pub fn search_files(path: &Path, request: &SearchRequest) -> Result<SearchResponse, AppError> {
     let connection = open(path)?;
+    let parsed = parse_search_query(&request.query, unix_now());
 
     // Build the WHERE clause incrementally. Every dynamic value is a bound
     // parameter; only the closed-set ORDER BY and these static fragments are
     // interpolated, so the query is not injectable.
-    let mut clauses: Vec<String> = vec!["scan_id = ?1".to_owned()];
+    let mut clauses: Vec<String> = vec!["files.scan_id = ?1".to_owned()];
     let mut params: Vec<rusqlite::types::Value> = vec![request.scan_id.clone().into()];
 
-    let trimmed = request.query.trim();
-    if !trimmed.is_empty() {
-        params.push(format!("%{}%", escape_like(trimmed)).into());
-        let idx = params.len();
-        // Match either the file name or its full path, escaped LIKE.
+    let keyword = parsed.text.trim();
+    let use_like_search = !keyword.is_ascii();
+    let fts_match = (!use_like_search).then(|| fts_query(keyword)).flatten();
+    if let Some(query) = &fts_match {
+        params.push(query.clone().into());
+        clauses.push(format!("files_fts MATCH ?{}", params.len()));
+    } else if !keyword.is_empty() {
+        params.push(format!("%{}%", escape_like(keyword)).into());
+        let index = params.len();
         clauses.push(format!(
-            "(name LIKE ?{idx} ESCAPE '\\' OR path LIKE ?{idx} ESCAPE '\\')"
+            "(files.name LIKE ?{index} ESCAPE '\\' OR files.path LIKE ?{index} ESCAPE '\\')"
         ));
     }
     if let Some(category) = request.category.as_deref().filter(|c| !c.is_empty()) {
         params.push(category.to_owned().into());
-        clauses.push(format!("category = ?{}", params.len()));
+        clauses.push(format!("files.category = ?{}", params.len()));
     }
-    if let Some(extension) = request.extension.as_deref().filter(|e| !e.is_empty()) {
+    if let Some(extension) = request
+        .extension
+        .as_deref()
+        .filter(|extension| !extension.is_empty())
+        .or(parsed.extension.as_deref())
+    {
         params.push(extension.to_ascii_lowercase().into());
-        clauses.push(format!("extension = ?{}", params.len()));
+        clauses.push(format!("files.extension = ?{}", params.len()));
     }
-    if let Some(min_size) = request.min_size {
+    if let Some(min_size) = request.min_size.or(parsed.min_size) {
         params.push(to_i64(min_size).into());
-        clauses.push(format!("size_bytes >= ?{}", params.len()));
+        clauses.push(format!("files.size_bytes >= ?{}", params.len()));
     }
-    if let Some(max_size) = request.max_size {
+    if let Some(max_size) = request.max_size.or(parsed.max_size) {
         params.push(to_i64(max_size).into());
-        clauses.push(format!("size_bytes <= ?{}", params.len()));
+        clauses.push(format!("files.size_bytes <= ?{}", params.len()));
     }
-    if let Some(after) = request.modified_after {
+    if let Some(after) = request.modified_after.or(parsed.modified_after) {
         params.push(after.into());
         clauses.push(format!(
-            "modified_at IS NOT NULL AND modified_at >= ?{}",
+            "files.modified_at IS NOT NULL AND files.modified_at >= ?{}",
             params.len()
         ));
     }
     if let Some(before) = request.modified_before {
         params.push(before.into());
         clauses.push(format!(
-            "modified_at IS NOT NULL AND modified_at <= ?{}",
+            "files.modified_at IS NOT NULL AND files.modified_at <= ?{}",
             params.len()
         ));
     }
     if !request.include_hidden {
-        clauses.push("is_hidden = 0".to_owned());
+        clauses.push("files.is_hidden = 0".to_owned());
+    }
+    if parsed.downloads_only {
+        params.push("%/Downloads/%".to_owned().into());
+        clauses.push(format!("files.path LIKE ?{} ESCAPE '\\'", params.len()));
+    }
+    if parsed.project_markers_only {
+        clauses.push(
+            "files.name COLLATE NOCASE IN (
+              'package.json', 'Cargo.toml', 'pyproject.toml', 'setup.py', 'requirements.txt',
+              'pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle',
+              'settings.gradle.kts', '.git', 'project.pbxproj'
+            )"
+            .to_owned(),
+        );
     }
     let where_clause = clauses.join(" AND ");
+    let from_clause = if fts_match.is_some() {
+        "files JOIN files_fts ON files_fts.rowid = files.id"
+    } else {
+        "files"
+    };
 
     // Total match count first, so the UI can page without loading every row.
-    let count_sql = format!("SELECT COUNT(*) FROM files WHERE {where_clause}");
+    let count_sql = format!("SELECT COUNT(*) FROM {from_clause} WHERE {where_clause}");
     let total: i64 = connection.query_row(
         &count_sql,
         rusqlite::params_from_iter(params.iter()),
@@ -655,10 +880,11 @@ pub fn search_files(path: &Path, request: &SearchRequest) -> Result<SearchRespon
     let limit = request.limit.unwrap_or(50).clamp(1, 200);
     let offset = request.offset.unwrap_or(0);
     let sql = format!(
-        "SELECT id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
-         FROM files WHERE {where_clause}
+        "SELECT files.id, files.path, files.name, files.extension, files.category, files.size_bytes,
+                files.modified_at, files.is_hidden, files.content_hash
+         FROM {from_clause} WHERE {where_clause}
          ORDER BY {} LIMIT ?{} OFFSET ?{}",
-        request.sort.order_by(),
+        request.sort.order_by(fts_match.is_some()),
         params.len() + 1,
         params.len() + 2,
     );
@@ -707,13 +933,62 @@ pub fn row_u64(row: &rusqlite::Row, idx: usize) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_scans, create_scan_run, escape_like, finish_scan, initialize, insert_file_batch,
+        compare_scans, create_scan_run, finish_scan, fts_query, initialize, insert_file_batch,
         latest_scan, list_insight_files, list_insights, list_large_files, list_scan_history, open,
-        prune_old_scans, search_files,
+        parse_search_query, prune_old_scans, search_files, unix_now,
     };
     use crate::models::{FileEntry, ScanStats, ScanStatus, SearchRequest, SearchSort};
     use std::fs;
+    use std::time::Instant;
     use uuid::Uuid;
+
+    fn search_request(scan_id: &str, query: &str) -> SearchRequest {
+        SearchRequest {
+            scan_id: scan_id.to_owned(),
+            query: query.to_owned(),
+            category: None,
+            extension: None,
+            min_size: None,
+            max_size: None,
+            modified_after: None,
+            modified_before: None,
+            include_hidden: false,
+            sort: SearchSort::Relevance,
+            limit: None,
+            offset: None,
+        }
+    }
+
+    #[test]
+    fn builds_safe_fts_prefix_query() {
+        assert_eq!(
+            fts_query("report 2026"),
+            Some("\"report\"* \"2026\"*".to_owned())
+        );
+        assert_eq!(
+            fts_query("OR NEAR title:"),
+            Some("\"OR\"* \"NEAR\"* \"title\"*".to_owned())
+        );
+        assert_eq!(fts_query("---"), None);
+    }
+
+    #[test]
+    fn parses_deterministic_search_conditions() {
+        let parsed = parse_search_query(
+            "季度报告 大于 1.5GB 最近一年 PDF 下载目录 代码项目",
+            2_000_000_000,
+        );
+        assert_eq!(parsed.text, "季度报告");
+        assert_eq!(parsed.min_size, Some(1_610_612_736));
+        assert_eq!(parsed.modified_after, Some(1_968_464_000));
+        assert_eq!(parsed.extension.as_deref(), Some("pdf"));
+        assert!(parsed.downloads_only);
+        assert!(parsed.project_markers_only);
+
+        let compact = parse_search_query("<512MB", 0);
+        assert_eq!(compact.max_size, Some(536_870_912));
+        assert!(compact.text.is_empty());
+    }
 
     fn file(
         path: &str,
@@ -921,7 +1196,7 @@ mod tests {
             .expect("query schema version");
 
         assert_eq!(status, "failed");
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");
     }
@@ -989,7 +1264,7 @@ mod tests {
             )
             .expect("query retained file");
 
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         assert!(columns.iter().any(|column| column == "content_hash"));
         let operation_table: String = connection
             .query_row(
@@ -1001,6 +1276,11 @@ mod tests {
         assert_eq!(operation_table, "file_operations");
         assert_eq!(retained_path, "/fixture/keep.txt");
         drop(connection);
+
+        let migrated_search = search_files(&database_path, &search_request("legacy", "keep"))
+            .expect("search rebuilt legacy FTS index");
+        assert_eq!(migrated_search.total, 1);
+        assert_eq!(migrated_search.files[0].name, "keep.txt");
         fs::remove_file(database_path).expect("remove fixture database");
     }
 
@@ -1152,15 +1432,6 @@ mod tests {
         assert_eq!(documents.file_count_delta, 0);
 
         fs::remove_file(database_path).expect("remove fixture database");
-    }
-
-    #[test]
-    fn test_escape_like() {
-        assert_eq!(escape_like("normal"), "normal");
-        assert_eq!(escape_like("50%"), "50\\%");
-        assert_eq!(escape_like("file_name"), "file\\_name");
-        assert_eq!(escape_like("back\\slash"), "back\\\\slash");
-        assert_eq!(escape_like("_%\\all"), "\\_\\%\\\\all");
     }
 
     #[test]
@@ -1369,6 +1640,182 @@ mod tests {
 
         // Windows keeps SQLite files locked while a connection is alive.
         drop(connection);
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    #[test]
+    fn search_fts_tracks_updates_and_deletes() {
+        let database_path =
+            std::env::temp_dir().join(format!("luma-fts-sync-{}.sqlite3", Uuid::new_v4()));
+        initialize(&database_path).expect("initialize");
+        create_scan_run(&database_path, "scan-sync", "/test", 1000).expect("create scan");
+        let mut connection = open(&database_path).expect("open");
+        insert_file_batch(
+            &mut connection,
+            "scan-sync",
+            &[file(
+                "/test/original.txt",
+                "original.txt",
+                "documents",
+                10,
+                Some(1000),
+            )],
+        )
+        .expect("insert file");
+
+        assert_eq!(
+            search_files(&database_path, &search_request("scan-sync", "original"))
+                .expect("search inserted row")
+                .total,
+            1
+        );
+
+        connection
+            .execute(
+                "UPDATE files SET name = 'renamed.txt', path = '/test/renamed.txt' WHERE scan_id = 'scan-sync'",
+                [],
+            )
+            .expect("update indexed row");
+        assert_eq!(
+            search_files(&database_path, &search_request("scan-sync", "original"))
+                .expect("search old token")
+                .total,
+            0
+        );
+        assert_eq!(
+            search_files(&database_path, &search_request("scan-sync", "renamed"))
+                .expect("search new token")
+                .total,
+            1
+        );
+
+        connection
+            .execute("DELETE FROM files WHERE scan_id = 'scan-sync'", [])
+            .expect("delete indexed row");
+        assert_eq!(
+            search_files(&database_path, &search_request("scan-sync", "renamed"))
+                .expect("search deleted token")
+                .total,
+            0
+        );
+
+        drop(connection);
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    #[test]
+    fn applies_natural_language_search_conditions() {
+        let database_path =
+            std::env::temp_dir().join(format!("luma-search-intent-{}.sqlite3", Uuid::new_v4()));
+        initialize(&database_path).expect("initialize");
+        create_scan_run(&database_path, "scan-intent", "/Users/demo", 1000).expect("create scan");
+        let now = unix_now();
+        let mut connection = open(&database_path).expect("open");
+        let files = vec![
+            FileEntry {
+                id: 0,
+                path: "/Users/demo/Downloads/季度报告.pdf".to_owned(),
+                name: "季度报告.pdf".to_owned(),
+                extension: Some("pdf".to_owned()),
+                category: "documents".to_owned(),
+                size_bytes: 2 * 1024_u64.pow(3),
+                modified_at: Some(now - 60),
+                is_hidden: false,
+                content_hash: None,
+            },
+            FileEntry {
+                id: 0,
+                path: "/Users/demo/Documents/旧报告.pdf".to_owned(),
+                name: "旧报告.pdf".to_owned(),
+                extension: Some("pdf".to_owned()),
+                category: "documents".to_owned(),
+                size_bytes: 2 * 1024_u64.pow(3),
+                modified_at: Some(now - 400 * 24 * 60 * 60),
+                is_hidden: false,
+                content_hash: None,
+            },
+            FileEntry {
+                id: 0,
+                path: "/Users/demo/code/app/package.json".to_owned(),
+                name: "package.json".to_owned(),
+                extension: Some("json".to_owned()),
+                category: "code".to_owned(),
+                size_bytes: 500,
+                modified_at: Some(now - 60),
+                is_hidden: false,
+                content_hash: None,
+            },
+        ];
+        insert_file_batch(&mut connection, "scan-intent", &files).expect("insert files");
+        drop(connection);
+
+        let response = search_files(
+            &database_path,
+            &search_request("scan-intent", "报告 大于 1GB 最近一年 PDF 下载目录"),
+        )
+        .expect("search combined intent");
+        assert_eq!(response.total, 1);
+        assert_eq!(response.files[0].name, "季度报告.pdf");
+
+        let response = search_files(&database_path, &search_request("scan-intent", "代码项目"))
+            .expect("search project markers");
+        assert_eq!(response.total, 1);
+        assert_eq!(response.files[0].name, "package.json");
+
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    #[test]
+    #[ignore = "manual 100k-file Search v2 performance baseline"]
+    fn measures_search_v2_with_100k_files() {
+        let database_path =
+            std::env::temp_dir().join(format!("luma-search-100k-{}.sqlite3", Uuid::new_v4()));
+        initialize(&database_path).expect("initialize");
+        create_scan_run(&database_path, "scan-100k", "/fixture", 1000).expect("create scan");
+        let mut connection = open(&database_path).expect("open");
+        let started = Instant::now();
+        for batch_start in (0..100_000).step_by(1000) {
+            let files = (batch_start..batch_start + 1000)
+                .map(|index| FileEntry {
+                    id: 0,
+                    path: format!("/fixture/group-{}/report-{index:06}.pdf", index / 1000),
+                    name: if index % 1000 == 0 {
+                        format!("needle-report-{index:06}.pdf")
+                    } else {
+                        format!("report-{index:06}.pdf")
+                    },
+                    extension: Some("pdf".to_owned()),
+                    category: "documents".to_owned(),
+                    size_bytes: index as u64,
+                    modified_at: Some(1_700_000_000 + index as i64),
+                    is_hidden: false,
+                    content_hash: None,
+                })
+                .collect::<Vec<_>>();
+            insert_file_batch(&mut connection, "scan-100k", &files).expect("insert batch");
+        }
+        let index_duration = started.elapsed();
+        drop(connection);
+
+        let search_started = Instant::now();
+        let response = search_files(
+            &database_path,
+            &SearchRequest {
+                limit: Some(50),
+                ..search_request("scan-100k", "needle")
+            },
+        )
+        .expect("search 100k index");
+        let search_duration = search_started.elapsed();
+        let database_size = fs::metadata(&database_path)
+            .expect("database metadata")
+            .len();
+        eprintln!(
+            "Search v2 100k baseline: index={index_duration:?}, search={search_duration:?}, database_bytes={database_size}"
+        );
+        assert_eq!(response.total, 100);
+        assert_eq!(response.files.len(), 50);
+
         fs::remove_file(database_path).expect("remove fixture database");
     }
 }

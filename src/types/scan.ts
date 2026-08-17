@@ -1,6 +1,7 @@
 export type ScanStatus = "running" | "completed" | "cancelled" | "failed";
 
 export type SearchSort =
+  | "relevance"
   | "nameAsc"
   | "nameDesc"
   | "sizeAsc"

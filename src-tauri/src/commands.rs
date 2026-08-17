@@ -11,7 +11,7 @@ use crate::{
     },
     organizer,
     projects::{self, ProjectCandidate},
-    scanner,
+    scanner, search,
 };
 use std::{
     collections::HashMap,
@@ -243,7 +243,7 @@ pub fn search_files(
     state: State<'_, AppState>,
     request: SearchRequest,
 ) -> Result<SearchResponse, AppError> {
-    database::search_files(&state.database_path, &request)
+    search::search_files(&state.database_path, &request)
 }
 
 /// Reveal a file in the OS file manager (Finder / Explorer). Paths are stored

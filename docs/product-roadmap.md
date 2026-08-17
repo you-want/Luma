@@ -27,11 +27,11 @@
 | 基线能力 | 状态 | 证据 |
 |---|---|---|
 | macOS universal 内部预览版 | `DONE` | Tauri universal `.app`/`.dmg` bundle 通过，版本 0.2.0 |
-| 旧数据库 v1 → v3 迁移 | `DONE` | 保留 v1 文件数据并新增操作日志表；Rust 迁移测试通过 |
-| 前端与 Rust 质量门禁 | `DONE` | 前端 6 项测试、Rust 32 项测试、rustfmt、Clippy、生产构建通过 |
+| 旧数据库 v1 → v4 迁移 | `DONE` | 保留 v1 文件数据，新增操作日志表与 FTS5 索引并执行 rebuild；Rust 迁移测试通过 |
+| 前端与 Rust 质量门禁 | `DONE` | 前端 6 项测试、Rust 35 项自动测试（另有 1 项手工性能基线）、rustfmt、Clippy、生产构建通过 |
 | 自动更新 | `IN PROGRESS` | Tauri updater 插件、签名公钥、启动检查、下载进度、安装重启和 `latest.json` workflow 已接入；待配置 GitHub Secret 并完成跨版本验收 |
 | Windows | `IN PROGRESS` | WIN-001~004/006 已完成（CI矩阵、路径规范化统一为`/`、项目识别、隐藏属性、reveal本地化）；Windows `.msi`/NSIS `.exe` 发布 workflow 已加入，WIN-005/007部分待办，WIN-008待真机，WIN-009阻塞于无Windows环境 |
-| 搜索 | `DONE` | 文件名/路径搜索 + 分类/扩展名/大小/时间过滤 + 分页排序；新增 `idx_files_scan_name` 索引；前端 Search 组件 + i18n；后端搜索测试通过 |
+| 搜索 | `IN PROGRESS` | Search v1 已完成；Search v2 已完成 SQLite FTS5、BM25 相关度、确定性条件解析和本地 provider，Spotlight 与多 provider 去重待办 |
 | 批量选择 | `DONE` | 搜索页支持本页/全部筛选结果选择、复制路径和 CSV 导出 |
 | 文件管理与规则整理 | `IN PROGRESS` | 已实现浏览、预览、重命名、移动、复制、废纸篓和四类规则整理；待 Windows 真机与完整跨平台回归 |
 | 国际化 | `IN PROGRESS` | i18n 基础完成：中英文资源、类型化键、系统语言检测+持久化切换、Intl 格式化、后端错误码结构化、托盘按系统语言本地化；官网 i18n 与 UI 手工回归待办 |
@@ -153,16 +153,29 @@ updater 产物签名已纳入近期发布链路；Apple Developer ID、Windows �
 
 首期做索引搜索，不扫描未索引目录，也不读取文件内容。
 
+Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`](search-v2-plan.md) 为准。
+
 | ID | 任务 | 状态 | 前置依赖 |
 |---|---|---|---|
 | SEARCH-001 | 定义搜索请求/响应、分页、排序和过滤契约 | `DONE` | WIN-002 |
 | SEARCH-002 | 实现 SQLite 名称/路径搜索，正确转义 `%`、`_` | `DONE` | SEARCH-001 |
 | SEARCH-003 | 增加分类、扩展名、大小、修改时间过滤 | `DONE` | SEARCH-002 |
-| SEARCH-004 | 根据查询计划补充索引并记录十万/百万文件性能 | `DONE` | SEARCH-002~003 |
+| SEARCH-004 | 根据查询计划补充索引并记录十万/百万文件性能 | `IN PROGRESS` | SEARCH-002~003 |
 | SEARCH-005 | 实现搜索栏、筛选菜单、清空、加载与空状态 | `DONE` | I18N-002, SEARCH-001 |
 | SEARCH-006 | 处理输入防抖、旧请求覆盖和分页并发 | `DONE` | SEARCH-005 |
 | SEARCH-007 | 支持结果排序及在访达/资源管理器中定位 | `DONE` | WIN-006, SEARCH-005 |
-| SEARCH-008 | 增加后端查询测试和桌面端交互回归 | `DONE` | SEARCH-002~007 |
+| SEARCH-008 | 增加后端查询测试和桌面端交互回归 | `IN PROGRESS` | SEARCH-002~007 |
+
+| ID | Search v2 任务 | 状态 | 前置依赖 |
+|---|---|---|---|
+| SEARCH2-001 | SQLite schema v4 + FTS5 external-content 索引、触发器和旧库 rebuild | `DONE` | SEARCH-001~003 |
+| SEARCH2-002 | BM25 相关度排序，文件名匹配权重高于路径/扩展名/分类 | `DONE` | SEARCH2-001 |
+| SEARCH2-003 | 确定性解析容量、最近一年、PDF、下载目录和代码项目条件 | `DONE` | SEARCH2-001 |
+| SEARCH2-004 | 建立 `SearchProvider` 抽象并以本地 SQLite 为默认权威实现 | `DONE` | SEARCH2-001 |
+| SEARCH2-005 | 接入 macOS `NSMetadataQuery` 补充源，失败时无感回退 | `TODO` | SEARCH2-004 |
+| SEARCH2-006 | canonical path 合并去重、来源标记、超时与失败隔离 | `TODO` | SEARCH2-004~005 |
+| SEARCH2-007 | 用 Core Spotlight 暴露 Luma 自有扫描/项目/洞察记录 | `TODO` | SEARCH2-004 |
+| SEARCH2-008 | 评估本地文本提取、embedding 与混合召回 | `TODO` | SEARCH2-004~006 |
 
 验收标准：
 
@@ -296,6 +309,7 @@ updater 产物签名已纳入近期发布链路；Apple Developer ID、Windows �
 | 2026-08-06 | WIN-005,007 | `TODO → IN PROGRESS` | 盘符经规范化可用；UNC/长路径/非 UTF-8 策略与安装包/图标/AppData/卸载配置未做 | 需 Windows 环境与 bundle 配置 |
 | 2026-08-06 | WIN-009 | `TODO → BLOCKED` | 手工回归 + 安装包烟雾测试无法在 macOS 执行 | 阻塞于缺少 Windows 11 x64 真机/VM |
 | 2026-08-06 | SEARCH-001~008 | `TODO → DONE` | 目标版本 v0.2.0；在 macOS 完成全栈搜索实现：Rust `SearchRequest`/`SearchResponse`/`SearchSort` 类型，`database::search_files` 支持名称/路径 LIKE（转义 `%`/`_`）+ 分类/扩展名/大小/时间过滤 + 白名单排序 + 分页（LIMIT/OFFSET）+ 总数计数，新增 `idx_files_scan_name` 索引；`search_files` Tauri 命令；前端 `Search` 组件（搜索栏 + 下拉过滤 + 排序 + 大小范围 + 隐藏项切换 + 分页 + 结果表 + reveal）；中英文 i18n 键（`search.*`）。验证：Rust 26 测试（含新增 `test_search_files`）+ fmt + clippy，前端 6 测试 + 构建通过 | 桌面端交互回归（SEARCH-008 人工部分）、十万/百万文件性能基线待实测 |
+| 2026-08-17 | SEARCH2-001~004 | `TODO → IN PROGRESS` | SQLite schema 升级到 v4；新增 FTS5 external-content 索引、三类同步触发器和旧库 rebuild；关键词支持 BM25 相关度排序，中文/特殊字符保留安全字面量路径；支持容量、最近一年、PDF、下载目录和代码项目标记等确定性条件；Tauri 命令改由 `LocalSqliteProvider` 执行。10 万文件本机 debug 基线：索引写入 16.62s、搜索 4.52ms、数据库约 31.2 MiB | 完成多 provider 结果模型与去重，再接入 macOS Spotlight；补百万文件和桌面 UI 回归 |
 | 2026-08-06 | BULK-001~006 | `TODO → DONE` | 目标版本 v0.2.0；`FileEntry` 加稳定 `id`（DB 主键），选择键 `scanId+fileId`；`SelectionContext` 支持单项/本页/全部筛选结果三态与跨分页选择（不载入全量）；文件表加 checkbox + 全选 + indeterminate；选择工具栏显示计数 + 复制路径 + 导出 CSV + 清除。修复"全部筛选结果"模式下 `limit:999999` 被后端 `clamp(1,200)` 静默截断到 200 条的正确性 bug——改为 `fetchAllMatching` 按 200/页循环拉全，用 `total` 终止。验证：Rust 26 测试 + fmt + clippy，前端 6 测试 + 构建通过 | BULK-007 键盘/无障碍手工回归待做 |
 | 2026-08-06 | ORG-001~010（工作包 E） | `TODO → HOLD` | 产品/市场评估后暂缓自动归纳：会突破只读边界、敢用用户少、支持成本高、竞品都不做移动。先发布非破坏性能力（工作包 D）用真实反馈决定是否启动 | 观察用户是否明确要求"直接移动"及付费意愿；恢复条件见工作包 E 说明 |
 | 2026-08-07 | Release workflow | `TODO → IN PROGRESS` | `.github/workflows/release.yml` 已拆分 macOS universal 与 Windows x64 构建，仅上传 `.dmg`/`.msi`/NSIS `.exe` 及 updater 必需的签名文件和 `latest.json`；本次正式 tag 定为 `v0.2.0` | 推送 `v0.2.0` 后运行 GitHub Actions，并完成 Windows 11 x64 安装、启动、卸载与扫描烟雾测试 |
