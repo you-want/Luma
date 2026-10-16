@@ -148,7 +148,7 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
         UPDATE file_operations
         SET status = 'interrupted', finished_at = unixepoch(),
             error_message = COALESCE(error_message, '应用在操作完成前退出。')
-        WHERE status = 'running';
+        WHERE status IN ('running', 'undoing');
         ",
     )?;
 
@@ -267,29 +267,75 @@ pub fn scan_summary(path: &Path, scan_id: &str) -> Result<Option<ScanSummary>, A
     }
 }
 
+/// Compute the summary for one scan. `total_files`/`total_directories`/
+/// `total_bytes` are read from the *live* `files` table so that file
+/// operations that mutate the index after the scan (trash, rename, move,
+/// copy, …) keep the head-of-table numbers and the category breakdown
+/// consistent with each other — they previously disagreed because the
+/// totals were a frozen snapshot written once at scan time.
 fn scan_summary_with_connection(
     connection: &Connection,
     scan_id: &str,
 ) -> Result<ScanSummary, AppError> {
-    let mut summary = connection.query_row(
-        "SELECT id, root_path, status, started_at, finished_at, total_files,
-         total_directories, total_bytes, error_count FROM scan_runs WHERE id = ?1",
+    let (root_path, status, started_at, finished_at, error_count): (
+        String,
+        String,
+        i64,
+        Option<i64>,
+        i64,
+    ) = connection.query_row(
+        "SELECT root_path, status, started_at, finished_at, error_count
+         FROM scan_runs WHERE id = ?1",
         [scan_id],
         |row| {
-            Ok(ScanSummary {
-                scan_id: row.get(0)?,
-                root_path: row.get(1)?,
-                status: parse_status(&row.get::<_, String>(2)?),
-                started_at: row.get(3)?,
-                finished_at: row.get(4)?,
-                total_files: from_i64(row.get(5)?),
-                total_directories: from_i64(row.get(6)?),
-                total_bytes: from_i64(row.get(7)?),
-                error_count: from_i64(row.get(8)?),
-                categories: Vec::new(),
-            })
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
         },
     )?;
+
+    let (total_files, total_bytes): (i64, i64) = connection.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0) FROM files WHERE scan_id = ?1",
+        [scan_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    // The directory total is the count of directories the *walker* recorded
+    // at scan time (`scan_runs.total_directories`). That frozen snapshot is
+    // the correct number to display: it includes empty directories the
+    // walker visited but that no file ever indexed, and — crucially — it is
+    // scoped to the scanned root, so it never leaks ancestor directories
+    // above the root (e.g. a scan of /Users/alice/work must not count
+    // /Users, /Users/alice, or the root itself).
+    //
+    // This is intentionally NOT re-derived from the live `files` table:
+    // path segments stored in `files` may reach back to the filesystem root,
+    // so a live count would include out-of-scope ancestors. The frozen
+    // snapshot keeps the number correct even after in-place mutations that
+    // delete files. A read failure here propagates — a broken summary must
+    // surface, not silently render as 0.
+    let total_directories: i64 = connection.query_row(
+        "SELECT total_directories FROM scan_runs WHERE id = ?1",
+        [scan_id],
+        |row| row.get::<_, i64>(0),
+    )?;
+
+    let mut summary = ScanSummary {
+        scan_id: scan_id.to_string(),
+        root_path,
+        status: parse_status(&status),
+        started_at,
+        finished_at,
+        total_files: from_i64(total_files),
+        total_directories: from_i64(total_directories),
+        total_bytes: from_i64(total_bytes),
+        error_count: from_i64(error_count),
+        categories: Vec::new(),
+    };
 
     let mut statement = connection.prepare(
         "SELECT category, COUNT(*), COALESCE(SUM(size_bytes), 0)
@@ -935,7 +981,7 @@ mod tests {
     use super::{
         compare_scans, create_scan_run, finish_scan, fts_query, initialize, insert_file_batch,
         latest_scan, list_insight_files, list_insights, list_large_files, list_scan_history, open,
-        parse_search_query, prune_old_scans, search_files, unix_now,
+        parse_search_query, prune_old_scans, scan_summary, search_files, unix_now,
     };
     use crate::models::{FileEntry, ScanStats, ScanStatus, SearchRequest, SearchSort};
     use std::fs;
@@ -1078,6 +1124,65 @@ mod tests {
         assert!(kinds.contains(&"development"));
         assert!(kinds.contains(&"archives"));
         assert!(kinds.contains(&"installers"));
+
+        fs::remove_file(database_path).expect("remove fixture database");
+    }
+
+    /// Regression test: `total_directories` must not leak ancestor
+    /// directories above the scanned root. The fixture indexes a file three
+    /// levels deep under a realistic macOS root; the walker only counts
+    /// directories *inside* the root, so the summary must report 1 (the
+    /// `sub` directory), not the 4 path segments above it.
+    #[test]
+    fn directory_total_does_not_count_ancestors_of_root() {
+        let database_path =
+            std::env::temp_dir().join(format!("luma-dir-scope-{}.sqlite3", Uuid::new_v4()));
+        initialize(&database_path).expect("initialize database");
+        create_scan_run(&database_path, "scan-1", "/Users/alice/work", 100)
+            .expect("create scan run");
+
+        let mut connection = open(&database_path).expect("open database");
+        // One file nested one level under the root — the walker recorded
+        // `directories_scanned = 1` (the `sub` dir; the root itself is not
+        // counted by the scanner).
+        insert_file_batch(
+            &mut connection,
+            "scan-1",
+            &[FileEntry {
+                id: 0,
+                path: "/Users/alice/work/sub/a.txt".to_owned(),
+                name: "a.txt".to_owned(),
+                extension: Some("txt".to_owned()),
+                category: "documents".to_owned(),
+                size_bytes: 10,
+                modified_at: Some(1),
+                is_hidden: false,
+                content_hash: None,
+            }],
+        )
+        .expect("insert file");
+        finish_scan(
+            &connection,
+            "scan-1",
+            ScanStatus::Completed,
+            &ScanStats {
+                files_scanned: 1,
+                directories_scanned: 1,
+                bytes_scanned: 10,
+                errors: 0,
+            },
+            200,
+        )
+        .expect("finish scan");
+        drop(connection);
+
+        let summary = scan_summary(&database_path, "scan-1")
+            .expect("query summary")
+            .expect("scan exists");
+        assert_eq!(
+            summary.total_directories, 1,
+            "must report only the in-root dir, not /Users, /Users/alice, /Users/alice/work"
+        );
 
         fs::remove_file(database_path).expect("remove fixture database");
     }

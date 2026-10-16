@@ -8,7 +8,7 @@
 //      overwritten.
 //   4. All path inputs are validated to be absolute before any I/O.
 
-use crate::{database, error::AppError};
+use crate::{database, error::AppError, scanner};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -545,23 +545,84 @@ pub fn list_undoable_operations(
         .collect())
 }
 
+/// Repair in-flight operations left behind by a crashed or killed app session.
+///
+/// While an operation is executing its status is `running`, and while it is
+/// being undone it is `undoing`. If the process dies in that window the row
+/// stays stuck on one of those statuses forever, so every later
+/// `undo_operation` call rejects the target row with `OP_BUSY` and the user's
+/// files can never be restored from that undo record.
+///
+/// The primary caller is `database::initialize` (app start-up): any row still
+/// in a transient state when the DB is opened fresh must belong to a previous,
+/// dead session — a live process owns its own transient rows and no other
+/// code path is allowed to touch them. `undo_operation` additionally calls this
+/// so that the *target row itself* is repaired when a new app session is
+/// opened right after a crash, before the busy check below runs.
+///
+/// A `undoing` row is safe to resume: `undo_operation` persists every
+/// successfully reversed move back into `undo_json` as it goes (see the
+/// incremental `retain` inside the undo loop), so the persisted partial plan
+/// is exactly what remains to be undone.
+///
+/// Returns the number of rows repaired.
+pub fn reconcile_interrupted_operations(db_path: &Path) -> Result<usize, AppError> {
+    Ok(database::open(db_path)?.execute(
+        "UPDATE file_operations
+         SET status = 'interrupted',
+             finished_at = unixepoch(),
+             error_message = COALESCE(error_message, '应用在操作完成前退出。')
+         WHERE status IN ('running', 'undoing')",
+        [],
+    )?)
+}
+
 pub fn undo_operation(
     db_path: &Path,
     operation_id: &str,
     active_scan_id: &str,
 ) -> Result<OpResult, AppError> {
+    undo_operation_impl(db_path, operation_id, active_scan_id, &mut None)
+}
+
+/// Like `undo_operation`, but with a crash hook that fires *after* each
+/// successfully reversed move (and its incremental `undo_json` persistence)
+/// and *before* the next move is processed. The hook receives the count of
+/// moves completed so far and may return an `AppError` to abort the loop —
+/// exactly as a real process death would.
+///
+/// When the hook aborts, the operation row is left in `undoing` status with
+/// progress persisted up to the last completed move — the same state a real
+/// crash leaves behind. The test then inspects disk/index/plan state and
+/// calls `undo_operation` again to verify the resume completes the remaining
+/// moves. Test-only: production callers use `undo_operation`.
+#[cfg(test)]
+pub fn undo_operation_with_crash_hook(
+    db_path: &Path,
+    operation_id: &str,
+    active_scan_id: &str,
+    crash_hook: &mut dyn FnMut(usize) -> Option<AppError>,
+) -> Result<Result<OpResult, AppError>, AppError> {
+    Ok(undo_operation_impl(
+        db_path,
+        operation_id,
+        active_scan_id,
+        &mut Some(crash_hook),
+    ))
+}
+
+fn undo_operation_impl(
+    db_path: &Path,
+    operation_id: &str,
+    active_scan_id: &str,
+    crash_hook: &mut Option<&mut dyn FnMut(usize) -> Option<AppError>>,
+) -> Result<OpResult, AppError> {
     let connection = database::open(db_path)?;
     let operation = connection
         .query_row(
-            "SELECT root_path, status, undo_json FROM file_operations WHERE id = ?1",
+            "SELECT root_path FROM file_operations WHERE id = ?1",
             [operation_id],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                ))
-            },
+            |row| row.get::<_, String>(0),
         )
         .optional()?
         .ok_or_else(|| AppError::new("OP_NOT_FOUND", "找不到可撤销的操作记录。"))?;
@@ -574,23 +635,51 @@ pub fn undo_operation(
         .optional()?
         .ok_or_else(|| AppError::new("SCAN_NOT_FOUND", "找不到当前扫描记录。"))?;
     drop(connection);
-    if active_root != operation.0 {
+    if active_root != operation {
         return Err(AppError::new(
             "SCAN_MISMATCH",
             "该撤销记录不属于当前扫描目录。",
         ));
     }
 
-    if operation.1 == "running" || operation.1 == "undoing" {
+    // If the app was killed mid-operation the target row stays stuck on
+    // `running`/`undoing` forever (and blocks undo of that record with OP_BUSY).
+    // `reconcile_interrupted_operations` repairs those rows — a new process
+    // only ever sees its own in-flight rows, which cannot appear here because
+    // `undo_operation` is the sole writer of transient statuses. A `undoing`
+    // row is safe to resume: `undo_operation` persists every successfully
+    // reversed move back into `undo_json` as it goes, so the partial plan that
+    // remains after a crash is exactly what a fresh undo pass should finish.
+    //
+    // Note this also resumes an operation whose *undo* was interrupted: its
+    // `undo_json` still holds only the moves not yet reversed.
+    reconcile_interrupted_operations(db_path)?;
+    let connection = database::open(db_path)?;
+    let current_status = connection
+        .query_row(
+            "SELECT status FROM file_operations WHERE id = ?1",
+            [operation_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+        .ok_or_else(|| AppError::new("OP_NOT_FOUND", "找不到可撤销的操作记录。"))?;
+    if current_status == "running" || current_status == "undoing" {
         return Err(AppError::new("OP_BUSY", "该操作仍在执行，暂时无法撤销。"));
     }
-    if operation.1 == "undone" {
+    if current_status == "undone" {
         return Err(AppError::new("OP_ALREADY_UNDONE", "该操作已经撤销。"));
     }
 
+    // Re-fetch `undo_json` after the repair above: an interrupted undo may
+    // have already trimmed `undo_json` down to the remaining partial plan,
+    // and the first read of `operation` happens before that repair runs.
+    let undo_json: Option<String> = connection.query_row(
+        "SELECT undo_json FROM file_operations WHERE id = ?1",
+        [operation_id],
+        |row| row.get(0),
+    )?;
     let mut payload = serde_json::from_str::<UndoPayload>(
-        operation
-            .2
+        undo_json
             .as_deref()
             .ok_or_else(|| AppError::new("OP_NOT_UNDOABLE", "该操作不支持撤销。"))?,
     )
@@ -609,8 +698,12 @@ pub fn undo_operation(
 
     let mut succeeded = Vec::new();
     let mut failed = Vec::new();
-    let mut remaining = Vec::new();
+    let mut remaining: Vec<LoggedMove> = payload.moves.clone();
 
+    // Persist the shrinking `undo_json` after every successfully reversed move
+    // so that a crash mid-undo resumes from exactly where it left off instead
+    // of re-running already-completed moves (which would fail with
+    // STALE_INDEX / OP_BUSY because the file has already been moved back).
     for movement in payload.moves.iter().rev() {
         let current = movement.to.as_str();
         let original = movement.from.as_str();
@@ -621,7 +714,6 @@ pub fn undo_operation(
                     path: current.to_owned(),
                     reason: error.message,
                 });
-                remaining.push(movement.clone());
                 continue;
             }
         };
@@ -632,7 +724,6 @@ pub fn undo_operation(
                     path: current.to_owned(),
                     reason: error.message,
                 });
-                remaining.push(movement.clone());
                 continue;
             }
         };
@@ -641,7 +732,6 @@ pub fn undo_operation(
                 path: current.to_owned(),
                 reason: format!("原路径已被占用：{original}"),
             });
-            remaining.push(movement.clone());
             continue;
         }
         if let Some(parent) = native_original.parent() {
@@ -650,7 +740,6 @@ pub fn undo_operation(
                     path: current.to_owned(),
                     reason: error.to_string(),
                 });
-                remaining.push(movement.clone());
                 continue;
             }
         }
@@ -660,7 +749,6 @@ pub fn undo_operation(
                 path: current.to_owned(),
                 reason: error,
             });
-            remaining.push(movement.clone());
             continue;
         }
         if let Err(error) = rename_db_path(db_path, active_scan_id, current, original) {
@@ -669,13 +757,35 @@ pub fn undo_operation(
                 path: current.to_owned(),
                 reason: error.message,
             });
-            remaining.push(movement.clone());
             continue;
         }
+
+        // Successfully reversed this move: drop it from the pending set and
+        // persist the shrunken plan *before* touching the next item, so a
+        // crash between items can never lose progress.
         succeeded.push(current.to_owned());
+        remaining.retain(|m| m.to != current);
+        let persisted = serde_json::to_string(&UndoPayload {
+            kind: payload.kind.clone(),
+            moves: remaining.clone(),
+        })
+        .map_err(|error| AppError::new("DATABASE_ERROR", error.to_string()))?;
+        database::open(db_path)?.execute(
+            "UPDATE file_operations SET undo_json = ?2 WHERE id = ?1",
+            params![operation_id, persisted],
+        )?;
+
+        // Crash hook: fires after progress is persisted, before the next move
+        // is touched. Production builds never install a hook; tests use it
+        // to simulate a kill between iterations.
+        if let Some(hook) = crash_hook {
+            let completed = payload.moves.len() - remaining.len();
+            if let Some(crash) = hook(completed) {
+                return Err(crash);
+            }
+        }
     }
 
-    remaining.reverse();
     payload.moves = remaining;
     let status = if failed.is_empty() {
         "undone"
@@ -886,8 +996,9 @@ fn remove_db_entry(db_path: &Path, scan_id: &str, path: &str) -> Result<(), AppE
 }
 
 /// Update the path of every DB row whose stored path starts with `old_path`.
-/// Handles single files (exact match) and directory moves (prefix match).
-fn rename_db_path(
+/// Handles single files (exact match, re-deriving extension/category so a
+/// `.txt`→`.pdf` rename is re-categorised) and directory moves (prefix match).
+pub(crate) fn rename_db_path(
     db_path: &Path,
     scan_id: &str,
     old_path: &str,
@@ -895,18 +1006,29 @@ fn rename_db_path(
 ) -> Result<(), AppError> {
     let conn = database::open(db_path)?;
 
-    // Exact match: single file
+    // Exact match: single file. Re-derive the extension and its category from
+    // the *new* name, since renaming the extension should re-categorise the
+    // row (e.g. `.txt`→`.pdf` stays a document, but `.mp4`→`.zip` becomes an
+    // archive).
+    let new_name = basename(new_path);
+    let new_ext: Option<String> = new_name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .filter(|ext| !ext.is_empty());
+    let new_category = scanner::classify_extension(new_ext.as_deref()).to_owned();
     conn.execute(
-        "UPDATE files SET path = ?3, name = ?4
+        "UPDATE files SET path = ?3, name = ?4, extension = ?5, category = ?6
          WHERE scan_id = ?1 AND path = ?2",
-        params![scan_id, old_path, new_path, basename(new_path),],
+        params![scan_id, old_path, new_path, new_name, new_ext, new_category],
     )?;
 
-    // Prefix match: directory rename — rewrite all descendant paths
+    // Prefix match: directory rename — rewrite all descendant paths. The
+    // `SUBSTR(path, ?)` start position is a *character* index; `prefix_old`
+    // ends in '/' and may contain multi-byte characters, so use its char
+    // count (not byte length) plus one to skip past the trailing slash.
     let prefix_old = format!("{old_path}/");
     let prefix_new = format!("{new_path}/");
-    // SQLite doesn't have string replace on UPDATE directly, but we can build it:
-    let prefix_len = i64::try_from(prefix_old.len()).unwrap_or(0) + 1; // 1-based
+    let prefix_chars = i64::try_from(prefix_old.chars().count()).unwrap_or(0) + 1; // 1-based
     conn.execute(
         "UPDATE files
          SET path = ?3 || SUBSTR(path, ?4)
@@ -915,7 +1037,7 @@ fn rename_db_path(
             scan_id,
             format!("{}%", escape_like(&prefix_old)),
             prefix_new,
-            prefix_len,
+            prefix_chars,
         ],
     )?;
 
@@ -923,20 +1045,29 @@ fn rename_db_path(
 }
 
 /// Insert a new DB row for the copied file, derived from the original's row.
+/// `modified_at` is read from the *destination* file's real on-disk metadata
+/// rather than inherited from the source, since `std::fs::copy` stamps the
+/// new file with the current time.
 fn clone_db_entry(
     db_path: &Path,
     scan_id: &str,
     src_path: &str,
     dst_path: &str,
 ) -> Result<(), AppError> {
+    let dst_meta_modified = std::fs::metadata(to_native(dst_path))
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(system_time_seconds);
+
     let conn = database::open(db_path)?;
-    // Copy metadata from the source row; update path and name.
+    // Copy the source row's extension/category/size/hash; use the destination
+    // path, its bare name, and the destination's actual modified time.
     conn.execute(
         "INSERT INTO files (scan_id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash)
-         SELECT scan_id, ?3, ?4, extension, category, size_bytes, modified_at, is_hidden, content_hash
+         SELECT scan_id, ?3, ?4, extension, category, size_bytes, COALESCE(?5, modified_at), is_hidden, content_hash
          FROM files WHERE scan_id = ?1 AND path = ?2
          LIMIT 1",
-        params![scan_id, src_path, dst_path, basename(dst_path)],
+        params![scan_id, src_path, dst_path, basename(dst_path), dst_meta_modified],
     )?;
     Ok(())
 }
@@ -1087,10 +1218,12 @@ fn copy_then_remove(src: &Path, dst: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        list_undoable_operations, move_files, system_time_seconds, to_canonical, undo_operation,
+        list_undoable_operations, move_files, reconcile_interrupted_operations, rename_file,
+        system_time_seconds, to_canonical, undo_operation, undo_operation_with_crash_hook,
         validate_write_path,
     };
-    use crate::{database, models::FileEntry};
+    use crate::{database, error::AppError, models::FileEntry};
+    use rusqlite::params;
     use std::{fs, path::PathBuf};
     use uuid::Uuid;
 
@@ -1220,6 +1353,362 @@ mod tests {
             )
             .expect("query active path");
         assert_eq!(active_path, source);
+    }
+
+    #[test]
+    fn stuck_undoing_row_can_be_resumed_after_crash() {
+        let fixture = fixture();
+        let source = to_canonical(&fixture.source_path);
+        let destination = to_canonical(&fixture.destination_dir);
+
+        let result = move_files(
+            &fixture.database_path,
+            "scan-1",
+            std::slice::from_ref(&source),
+            &destination,
+        )
+        .expect("move file");
+        let operation_id = result.operation_id.expect("operation id");
+
+        // Simulate a crash mid-undo: the row is left on the transient
+        // `undoing` status, exactly as it would be if the app were killed
+        // between `UPDATE ... SET status='undoing'` and the final
+        // `UPDATE ... SET status='undone'` at the end of `undo_operation`.
+        database::open(&fixture.database_path)
+            .expect("open database")
+            .execute(
+                "UPDATE file_operations SET status = 'undoing' WHERE id = ?1",
+                [operation_id.as_str()],
+            )
+            .expect("simulate crashed undo");
+
+        // Without the crash-recovery path this call would return OP_BUSY and
+        // the undo record would be stuck there permanently.
+        let undo =
+            undo_operation(&fixture.database_path, &operation_id, "scan-1").expect("resume undo");
+        assert!(undo.failed.is_empty());
+        assert!(fixture.source_path.exists());
+        assert!(!fixture.destination_dir.join("report.txt").exists());
+
+        // The repair step itself must also be observable in isolation.
+        database::open(&fixture.database_path)
+            .expect("open database")
+            .execute(
+                "UPDATE file_operations SET status = 'running' WHERE id = ?1",
+                [operation_id.as_str()],
+            )
+            .expect("simulate crashed forward operation");
+        let repaired = reconcile_interrupted_operations(&fixture.database_path).expect("repair");
+        assert_eq!(repaired, 1);
+    }
+
+    /// Regression test: a crash *between* two undo moves must not cause the
+    /// already-completed move to be re-run on resume.
+    ///
+    /// This drives the *real* undo loop (via `undo_operation_with_crash_hook`)
+    /// and injects the crash after the first move has been reversed and its
+    /// progress persisted. It then verifies the on-disk/index/plan state is
+    /// exactly what the loop's incremental persistence produced — not a
+    /// hand-built state — before resuming with the plain `undo_operation`.
+    #[test]
+    fn crashed_partial_undo_resumes_only_the_remaining_moves() {
+        let fixture = fixture();
+        let destination = to_canonical(&fixture.destination_dir);
+
+        // Move two distinct files into the destination in one operation so
+        // the undo plan has two entries to walk.
+        let second_source = fixture.root.join("source").join("second.txt");
+        fs::write(&second_source, b"two").expect("write second file");
+        let second_canonical = to_canonical(&second_source);
+
+        // Add the second file to the scan index.
+        let second_meta = fs::metadata(&second_source).expect("second metadata");
+        let mut connection = database::open(&fixture.database_path).expect("open db");
+        database::insert_file_batch(
+            &mut connection,
+            "scan-1",
+            &[FileEntry {
+                id: 0,
+                path: second_canonical.clone(),
+                name: "second.txt".to_owned(),
+                extension: Some("txt".to_owned()),
+                category: "documents".to_owned(),
+                size_bytes: second_meta.len(),
+                modified_at: second_meta.modified().ok().and_then(system_time_seconds),
+                is_hidden: false,
+                content_hash: None,
+            }],
+        )
+        .expect("insert second file");
+        drop(connection);
+
+        let result = move_files(
+            &fixture.database_path,
+            "scan-1",
+            &[to_canonical(&fixture.source_path), second_canonical.clone()],
+            &destination,
+        )
+        .expect("move two files");
+        let operation_id = result.operation_id.expect("operation id");
+
+        // Run the *real* undo loop, but kill it right after the first move is
+        // reversed and persisted. The hook receives the count of completed
+        // moves; we abort after the first one so the second is still pending.
+        let mut crash_after_first = |completed: usize| {
+            if completed == 1 {
+                Some(AppError::new("SIMULATED_CRASH", "测试注入的中断。"))
+            } else {
+                None
+            }
+        };
+        let outcome = undo_operation_with_crash_hook(
+            &fixture.database_path,
+            &operation_id,
+            "scan-1",
+            &mut crash_after_first,
+        );
+        // The injected crash must have aborted the loop: the outer call
+        // succeeds (no DB/setup error) and the *inner* result carries the
+        // simulated crash, leaving progress persisted on disk.
+        let inner = outcome.expect("outer call must not fail for setup reasons");
+        let crash = inner.expect_err("crash hook must abort the undo loop");
+        assert_eq!(crash.code, "SIMULATED_CRASH");
+
+        // Verify the state the *production loop itself* persisted — this is
+        // what the test now actually covers, instead of a hand-built state.
+        // The undo loop iterates the moves in reverse, so after `completed == 1`
+        // the LAST-moved file (`second.txt`) is the one that has been reverted;
+        // `report.txt` is still pending.
+        //   * the second file is back on disk at its original path,
+        //   * the scan index points at the original path for it,
+        //   * the pending plan was trimmed to only the first move,
+        //   * the row is still marked `undoing` (crashed mid-operation).
+        assert!(
+            second_source.exists(),
+            "second file (last moved) reverted to original path"
+        );
+        assert!(
+            !fixture.destination_dir.join("second.txt").exists(),
+            "second file no longer in destination"
+        );
+        assert!(
+            fixture.destination_dir.join("report.txt").exists(),
+            "report file still pending in destination"
+        );
+        let index_paths: Vec<String> = {
+            let conn = database::open(&fixture.database_path).expect("open db");
+            let mut stmt = conn
+                .prepare(
+                    "SELECT path FROM files WHERE scan_id = 'scan-1' AND path LIKE ?1 ORDER BY path",
+                )
+                .unwrap();
+            let paths = stmt
+                .query_map(params![format!("{}/%", destination)], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            paths
+        };
+        assert_eq!(
+            index_paths,
+            vec![format!("{destination}/report.txt")],
+            "only the still-pending report file remains under the destination in the index"
+        );
+        let pending: super::UndoPayload = {
+            let conn = database::open(&fixture.database_path).expect("open db");
+            let json: String = conn
+                .query_row(
+                    "SELECT undo_json FROM file_operations WHERE id = ?1",
+                    [operation_id.as_str()],
+                    |row| row.get(0),
+                )
+                .expect("read plan");
+            serde_json::from_str(&json).expect("parse plan")
+        };
+        assert_eq!(
+            pending.moves.len(),
+            1,
+            "loop must have trimmed the completed second move out of the plan"
+        );
+        assert_eq!(pending.moves[0].from, to_canonical(&fixture.source_path));
+        assert_eq!(pending.moves[0].to, format!("{destination}/report.txt"));
+        let status: String = database::open(&fixture.database_path)
+            .expect("open db")
+            .query_row(
+                "SELECT status FROM file_operations WHERE id = ?1",
+                [operation_id.as_str()],
+                |row| row.get(0),
+            )
+            .expect("read status");
+        assert_eq!(
+            status, "undoing",
+            "row must remain in the transient undoing state"
+        );
+
+        // Resume with the plain production entry point: it must move only the
+        // still-pending report file back, not re-attempt the already-reverted
+        // second file.
+        let undo =
+            undo_operation(&fixture.database_path, &operation_id, "scan-1").expect("resume undo");
+        assert!(
+            undo.failed.is_empty(),
+            "resume should not report failures: {:?}",
+            undo.failed
+        );
+        assert!(fixture.source_path.exists());
+        assert!(second_source.exists());
+        assert!(!fixture.destination_dir.join("report.txt").exists());
+        assert!(!fixture.destination_dir.join("second.txt").exists());
+
+        // The operation is now fully undone and no longer undoable.
+        assert!(
+            list_undoable_operations(&fixture.database_path, "scan-1", 20)
+                .expect("list undoable")
+                .is_empty()
+        );
+    }
+
+    /// Regression test: renaming a file's extension must re-derive its
+    /// `extension` and `category` columns in the DB, not leave the old
+    /// values in place.
+    #[test]
+    fn rename_recomputes_extension_and_category() {
+        let fixture = fixture();
+        // Create a `.txt` file in the source dir.
+        let txt_file = fixture.root.join("source").join("doc.txt");
+        fs::write(&txt_file, b"hello").expect("write txt file");
+        let txt_meta = fs::metadata(&txt_file).expect("txt metadata");
+        let mut conn = database::open(&fixture.database_path).expect("open db");
+        database::insert_file_batch(
+            &mut conn,
+            "scan-1",
+            &[FileEntry {
+                id: 0,
+                path: to_canonical(&txt_file),
+                name: "doc.txt".to_owned(),
+                extension: Some("txt".to_owned()),
+                category: "documents".to_owned(),
+                size_bytes: txt_meta.len(),
+                modified_at: txt_meta.modified().ok().and_then(system_time_seconds),
+                is_hidden: false,
+                content_hash: None,
+            }],
+        )
+        .expect("insert txt file");
+        drop(conn);
+
+        // Rename doc.txt → doc.pdf: extension and category must update.
+        let outcome = rename_file(
+            &fixture.database_path,
+            "scan-1",
+            &to_canonical(&txt_file),
+            "doc.pdf",
+        )
+        .expect("rename file");
+        assert!(outcome.new_path.ends_with("doc.pdf"));
+
+        let (ext, cat): (Option<String>, String) = {
+            let conn = database::open(&fixture.database_path).expect("reopen");
+            conn.query_row(
+                "SELECT extension, category FROM files WHERE scan_id = 'scan-1' AND name = 'doc.pdf'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("query renamed row")
+        };
+        assert_eq!(ext.as_deref(), Some("pdf"), "extension must be re-derived");
+        assert_eq!(cat, "documents", "pdf stays in documents");
+
+        // Now rename back to .mp4: category should flip to videos.
+        rename_file(
+            &fixture.database_path,
+            "scan-1",
+            &outcome.new_path,
+            "doc.mp4",
+        )
+        .expect("rename to mp4");
+        let cat2: String = database::open(&fixture.database_path)
+            .expect("reopen2")
+            .query_row(
+                "SELECT category FROM files WHERE scan_id = 'scan-1' AND name = 'doc.mp4'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query mp4 row");
+        assert_eq!(cat2, "videos", "mp4 must be categorised as videos");
+    }
+
+    /// Regression test: a directory rename whose prefix contains multi-byte
+    /// characters must use the character (not byte) offset when rewriting
+    /// descendant paths in the DB. We test the DB rewrite directly via
+    /// `rename_db_path` (the same helper `rename_file` / `move_files` use)
+    /// with a multi-byte old prefix.
+    #[test]
+    fn directory_rename_with_multibyte_prefix_rewrites_descendants() {
+        let fixture = fixture();
+        // Simulate a scan containing a file under a Chinese-named directory.
+        let mut conn = database::open(&fixture.database_path).expect("open db");
+        database::insert_file_batch(
+            &mut conn,
+            "scan-1",
+            &[
+                FileEntry {
+                    id: 0,
+                    path: "/data/文档/notes.txt".into(),
+                    name: "notes.txt".into(),
+                    extension: Some("txt".into()),
+                    category: "documents".into(),
+                    size_bytes: 4,
+                    modified_at: None,
+                    is_hidden: false,
+                    content_hash: None,
+                },
+                FileEntry {
+                    id: 0,
+                    path: "/data/文档/sub/deep.log".into(),
+                    name: "deep.log".into(),
+                    extension: Some("log".into()),
+                    category: "other".into(),
+                    size_bytes: 8,
+                    modified_at: None,
+                    is_hidden: false,
+                    content_hash: None,
+                },
+            ],
+        )
+        .expect("insert cn files");
+        drop(conn);
+
+        // Rewrite the directory prefix 文档 (3 bytes each, 6 bytes total) to
+        // 资料 (3 bytes each, 6 bytes total) — same byte length but different
+        // content; a byte-offset bug would corrupt the descendant paths.
+        use super::rename_db_path;
+        rename_db_path(&fixture.database_path, "scan-1", "/data/文档", "/data/资料")
+            .expect("rename cn dir in db");
+
+        let paths: Vec<String> = {
+            let conn = database::open(&fixture.database_path).expect("reopen");
+            let mut stmt = conn
+                .prepare(
+                    "SELECT path FROM files WHERE scan_id = 'scan-1' AND path LIKE '/data/%' ORDER BY path",
+                )
+                .unwrap();
+            let rows = stmt
+                .query_map([], |r| r.get::<_, String>(0))
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            rows
+        };
+        assert_eq!(
+            paths,
+            vec![
+                "/data/资料/notes.txt".to_string(),
+                "/data/资料/sub/deep.log".to_string()
+            ]
+        );
     }
 
     #[test]

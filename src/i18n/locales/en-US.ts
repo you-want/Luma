@@ -188,7 +188,7 @@ export const enUS: Resources = {
   },
   cleanup: {
     title: "Cleanup Suggestions",
-    subtitle: "Up to {{size}} recoverable",
+    subtitle: "≈ {{size}} worth reviewing",
     loadError: "Failed to load cleanup suggestions.",
     kinds: {
       trash: "Trash",

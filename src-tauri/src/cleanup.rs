@@ -33,6 +33,13 @@ pub struct CleanupSummary {
 /// Build the full cleanup summary: DB items from the current scan + filesystem
 /// items (Trash, old Downloads) that are always relevant regardless of which
 /// directory was scanned.
+///
+/// `total_bytes` is the deduplicated **union** of every in-scan candidate
+/// file (each counted once) plus the Trash/Downloads items — a "worth
+/// reviewing" total, *not* verified free space. The duplicates estimate is
+/// deliberately excluded from this figure: same size ≠ same content, so it is
+/// only surfaced as its own "likely" row that the user should confirm via the
+/// Duplicates tab before acting.
 pub fn build_cleanup_summary(
     db_path: &Path,
     scan_id: &str,
@@ -42,7 +49,8 @@ pub fn build_cleanup_summary(
     let mut items: Vec<CleanupItem> = Vec::new();
 
     // ── Items backed by the scan index ────────────────────────────────────────
-    for (kind, sql) in DB_ITEMS {
+    let mut has_db_item: bool = false;
+    for (kind, sql, _) in DB_ITEMS {
         let (count, bytes) = aggregate(&connection, sql, scan_id)?;
         if count > 0 {
             items.push(CleanupItem {
@@ -50,6 +58,7 @@ pub fn build_cleanup_summary(
                 size_bytes: bytes,
                 file_count: count,
             });
+            has_db_item = true;
         }
     }
 
@@ -75,7 +84,41 @@ pub fn build_cleanup_summary(
             file_count: dup_count,
         });
     }
-    drop(connection);
+
+    // The per-item sizes above overlap (one file can match several kinds at
+    // once), so summing `items` would overstate the total. `total_bytes` is
+    // the deduplicated union of every *in-scan* file covered by any DB-backed
+    // predicate, each counted exactly once.
+    //
+    // The filesystem candidates (Trash, old Downloads) live outside the
+    // scanned root and are therefore not added to `total_bytes` — doing so
+    // would mix a user-explicit directory scan with arbitrary home-directory
+    // walks, which both breaks the "only the scanned scope" promise and
+    // double-counts any candidate that appears in both places. They are
+    // still listed as their own rows so the user can review and act on them.
+    //
+    // The duplicate estimate is also intentionally excluded from the total:
+    // same size ≠ same content, so it is only surfaced as a separate "likely"
+    // row that the user confirms via the Duplicates tab before acting.
+    let total_scan_bytes: u64 = if has_db_item {
+        let union_where = DB_ITEMS
+            .iter()
+            .map(|(_, _, predicate)| *predicate)
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let sql = format!(
+            "SELECT COALESCE(SUM(size_bytes), 0) FROM files
+             WHERE scan_id = ?1 AND ({union_where})"
+        );
+        connection
+            .query_row(&sql, params![scan_id], |row| {
+                Ok(from_i64(row.get::<_, i64>(0)?))
+            })
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let total_bytes = total_scan_bytes;
 
     // ── Filesystem items ──────────────────────────────────────────────────────
     let (trash_count, trash_bytes) = trash_stats();
@@ -97,8 +140,13 @@ pub fn build_cleanup_summary(
         });
     }
 
+    // Filesystem candidates (Trash, old Downloads) are *listed* as items but
+    // are deliberately NOT folded into `total_bytes`: they live outside the
+    // directory the user explicitly scanned, and folding them in would (a)
+    // break the "only the scanned scope" promise and (b) double-count any
+    // candidate that also appears in the scan index. They remain visible as
+    // their own rows so the user can review and act on them.
     items.sort_by_key(|b| std::cmp::Reverse(b.size_bytes));
-    let total_bytes = items.iter().map(|i| i.size_bytes).sum();
     Ok(CleanupSummary { items, total_bytes })
 }
 
@@ -156,13 +204,21 @@ pub fn list_cleanup_files(
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
-/// (kind, SQL) pairs for scan-index cleanup items. SQL must take `scan_id` as
-/// `?1` and return (COUNT, SUM(size_bytes)).
-const DB_ITEMS: &[(&str, &str)] = &[
+/// (kind, aggregate-sql, predicate) triples for scan-index cleanup items.
+/// `aggregate-sql` takes `scan_id` as `?1` and returns (COUNT, SUM(size_bytes)).
+/// `predicate` is the bare WHERE-condition for the same set of rows, used to
+/// compute the deduplicated "releasable union" total in
+/// `build_cleanup_summary` (a single file can match several kinds at once,
+/// so summing per-item sizes would overstate the headline figure).
+const DB_ITEMS: &[(&str, &str, &str)] = &[
     (
         "development",
         "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0) FROM files
          WHERE scan_id = ?1 AND (
+           path LIKE '%/node_modules/%' OR path LIKE '%/target/%'
+           OR path LIKE '%/dist/%' OR path LIKE '%/.next/%'
+         )",
+        "(
            path LIKE '%/node_modules/%' OR path LIKE '%/target/%'
            OR path LIKE '%/dist/%' OR path LIKE '%/.next/%'
          )",
@@ -171,21 +227,21 @@ const DB_ITEMS: &[(&str, &str)] = &[
         "archives",
         "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0) FROM files
          WHERE scan_id = ?1 AND category = 'archives'",
+        "category = 'archives'",
     ),
     (
         "installers",
         "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0) FROM files
          WHERE scan_id = ?1 AND category = 'applications'",
+        "category = 'applications'",
     ),
 ];
 
 fn aggregate(connection: &Connection, sql: &str, scan_id: &str) -> Result<(u64, u64), AppError> {
-    Ok(connection.query_row(sql, params![scan_id], |row| {
-        Ok((
-            from_i64(row.get::<_, i64>(0)?),
-            from_i64(row.get::<_, i64>(1)?),
-        ))
-    })?)
+    Ok((
+        from_i64(connection.query_row(sql, params![scan_id], |row| row.get::<_, i64>(0))?),
+        from_i64(connection.query_row(sql, params![scan_id], |row| row.get::<_, i64>(1))?),
+    ))
 }
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<FileEntry> {
@@ -396,6 +452,71 @@ mod tests {
             "expected duplicate estimate"
         );
         assert!(summary.total_bytes > 0);
+
+        // Regression test for issue 4: the headline `total_bytes` must be the
+        // *union* of all in-scan candidates (each file counted once), not the
+        // sum of per-item sizes (which double-counts overlaps like "an archive
+        // inside node_modules/"). The per-item sizes still sum to more than
+        // the total when overlaps exist.
+        let item_sum: u64 = summary.items.iter().map(|i| i.size_bytes).sum();
+        assert!(
+            item_sum >= summary.total_bytes,
+            "overlapping items ({item_sum}) must not be summed into the total ({})",
+            summary.total_bytes
+        );
+        // The union of the three DB-backed predicates covers disjoint files
+        // in this fixture (dev=5 MB, archives=2 MB, installers=3 MB). The
+        // total is scoped to the in-scan union only; the filesystem items
+        // (Trash / old Downloads, which walk the real home dir on any
+        // machine) are *listed* but not added to it.
+        assert_eq!(summary.total_bytes, 10_000_000);
+
+        fs::remove_dir_all(tmp).ok();
+    }
+
+    #[test]
+    fn overlapping_categories_are_not_double_counted_in_total() {
+        let tmp = std::env::temp_dir().join(format!("luma-cleanup-overlap-{}", Uuid::new_v4()));
+        fs::create_dir_all(&tmp).unwrap();
+        let db = tmp.join("test.db");
+        initialize(&db).unwrap();
+        create_scan_run(&db, "s1", "/root", 0).unwrap();
+
+        let mut conn = open(&db).unwrap();
+        // A single .zip file living inside node_modules/ matches both the
+        // "development" (path LIKE '%/node_modules/%') and "archives"
+        // (category = 'archives') predicates, so its size must be counted
+        // once in the total, not twice.
+        insert_file_batch(
+            &mut conn,
+            "s1",
+            &[make_entry(
+                "/root/proj/node_modules/pkg.zip",
+                "pkg.zip",
+                1_000_000,
+                Some("zip"),
+            )],
+        )
+        .unwrap();
+        drop(conn);
+
+        let summary = build_cleanup_summary(&db, "s1", 180).unwrap();
+        // Both per-item rows report the file's full size…
+        let dev = summary
+            .items
+            .iter()
+            .find(|i| i.kind == "development")
+            .expect("development item");
+        let archives = summary
+            .items
+            .iter()
+            .find(|i| i.kind == "archives")
+            .expect("archives item");
+        assert_eq!(dev.size_bytes, 1_000_000);
+        assert_eq!(archives.size_bytes, 1_000_000);
+        // but the in-scan union counts it exactly once; filesystem items are
+        // listed separately, not folded into the total.
+        assert_eq!(summary.total_bytes, 1_000_000);
 
         fs::remove_dir_all(tmp).ok();
     }

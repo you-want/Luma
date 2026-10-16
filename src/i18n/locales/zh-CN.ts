@@ -187,7 +187,7 @@ export const zhCN = {
   },
   cleanup: {
     title: "清理建议",
-    subtitle: "可释放约 {{size}}",
+    subtitle: "待复查文件约 {{size}}",
     loadError: "读取清理建议失败。",
     kinds: {
       trash: "废纸篓",
