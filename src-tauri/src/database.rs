@@ -791,19 +791,20 @@ fn parse_size_literal(value: &str) -> Option<u64> {
         .trim()
         .trim_end_matches([',', '，'])
         .to_ascii_lowercase();
-    let (number, multiplier) = if let Some(number) = normalized.strip_suffix("tb") {
-        (number, 1024_u64.pow(4))
-    } else if let Some(number) = normalized.strip_suffix("gb") {
-        (number, 1024_u64.pow(3))
-    } else if let Some(number) = normalized.strip_suffix("mb") {
-        (number, 1024_u64.pow(2))
-    } else if let Some(number) = normalized.strip_suffix("kb") {
-        (number, 1024_u64)
-    } else if let Some(number) = normalized.strip_suffix('b') {
-        (number, 1)
-    } else {
-        return None;
-    };
+    // Longest suffixes first so "tb"/"gb"/"mb"/"kb" win over the plain "b".
+    let (number, multiplier): (&str, u64) = [
+        ("tb", 1024_u64.pow(4)),
+        ("gb", 1024_u64.pow(3)),
+        ("mb", 1024_u64.pow(2)),
+        ("kb", 1024_u64),
+        ("b", 1),
+    ]
+    .iter()
+    .find_map(|(suffix, factor)| {
+        normalized
+            .strip_suffix(*suffix)
+            .map(|number| (number, *factor))
+    })?;
     let amount = number.parse::<f64>().ok()?;
     if !amount.is_finite() || amount < 0.0 {
         return None;
