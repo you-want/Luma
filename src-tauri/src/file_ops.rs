@@ -1162,6 +1162,7 @@ fn is_protected_path(path: &Path) -> bool {
     }
 }
 
+#[allow(unused)]
 fn escape_applescript_string(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
