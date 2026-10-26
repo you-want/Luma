@@ -1,8 +1,8 @@
 # Luma 产品与工程路线图
 
-> 当前版本：v0.2.0  
+> 当前版本：v0.3.1（公开 Release，v0.3.2 待发布）  
 > 路线图基线：工作区当前实现（2026-08-17）
-> 最后更新：2026-08-17
+> 最后更新：2026-10-26
 > 维护方式：实现、验收或范围发生变化时，同步更新“总览”“工作包”和“进度记录”。
 
 ## 1. 状态约定
@@ -23,12 +23,12 @@
 ## 2. 当前基线
 
 当前工作区已具备目录扫描、进度与取消、本地 SQLite 索引、空间分类、最大文件、透明发现、重复文件候选、开发项目识别、扫描历史对比、搜索、批量选择、文件浏览/预览/操作、规则整理和中英文界面。文件写入已收敛为显式确认、受保护路径、执行前复核、操作日志与持久化撤销；Windows 真机验收仍是发布前置条件。
-
 | 基线能力 | 状态 | 证据 |
 |---|---|---|
-| macOS universal 内部预览版 | `DONE` | Tauri universal `.app`/`.dmg` bundle 通过，版本 0.2.0 |
+| macOS universal 内部预览版 | `DONE` | Tauri universal `.app`/`.dmg` bundle 通过；公开 Release 已到 v0.3.1 |
 | 旧数据库 v1 → v4 迁移 | `DONE` | 保留 v1 文件数据，新增操作日志表与 FTS5 索引并执行 rebuild；Rust 迁移测试通过 |
-| 前端与 Rust 质量门禁 | `DONE` | 前端 6 项测试、Rust 35 项自动测试（另有 1 项手工性能基线）、rustfmt、Clippy、生产构建通过 |
+| 前端与 Rust 质量门禁 | `DONE` | 前端 6 项测试、Rust 43 项自动测试（另有 1 项手工性能基线）、rustfmt、Clippy、生产构建通过 |
+| 文件管理界面文案国际化 | `DONE` | 2026-10-26 将文件管理全部组件（工具栏、列表、预览、整理向导、确认框、toast、目录树、面包屑、重命名输入）迁入 i18n 资源，中英双语键集合一致测试通过；中英文 UI 人工回归仍待执行 |
 | 自动更新 | `IN PROGRESS` | Tauri updater 插件、签名公钥、启动检查、下载进度、安装重启和 `latest.json` workflow 已接入；待配置 GitHub Secret 并完成跨版本验收 |
 | Windows | `IN PROGRESS` | WIN-001~004/006 已完成（CI矩阵、路径规范化统一为`/`、项目识别、隐藏属性、reveal本地化）；Windows `.msi`/NSIS `.exe` 发布 workflow 已加入，WIN-005/007部分待办，WIN-008待真机，WIN-009阻塞于无Windows环境 |
 | 搜索 | `IN PROGRESS` | Search v1 已完成；Search v2 已完成 SQLite FTS5、BM25 相关度、确定性条件解析和本地 provider，Spotlight 与多 provider 去重待办 |
@@ -315,6 +315,9 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 | 2026-08-07 | Release workflow | `TODO → IN PROGRESS` | `.github/workflows/release.yml` 已拆分 macOS universal 与 Windows x64 构建，仅上传 `.dmg`/`.msi`/NSIS `.exe` 及 updater 必需的签名文件和 `latest.json`；本次正式 tag 定为 `v0.2.0` | 推送 `v0.2.0` 后运行 GitHub Actions，并完成 Windows 11 x64 安装、启动、卸载与扫描烟雾测试 |
 | 2026-08-07 | UPDATE-001~008 | `SHELVED → IN PROGRESS` | stable 通道、官方 updater/process 插件、公钥、最小权限、启动检查、版本提示、下载进度、安装重启、失败重试和签名产物 workflow 已实现；本机用临时私钥验证 macOS `.app.tar.gz` 与 `.sig` 可生成 | 配置 GitHub Secrets，发布下一个版本并完成 macOS/Windows 跨版本、坏签名、断网和中断回归 |
 | 2026-08-13 | FILE-001~ORG-010 | `TODO/HOLD → IN PROGRESS` | 文件管理器、预览、重命名/移动/复制/废纸篓、规则整理向导已实现；本次 P0 补充系统目录保护、扫描快照复核、SQLite 操作日志和重启后撤销 | 完成 Windows 真机、权限、长路径、跨盘和异常退出回归 |
+| 2026-10-16 | 工作包 E（file_ops / cleanup / database） | `IN PROGRESS → 加固` | 提交 `0e4973f`（+1056 行）落实 2026-10-15 横纵分析报告点名的 P0 可靠性缺陷：① 中文路径字符计数改用 `chars().count()`，与 SQLite `SUBSTR` 字符语义一致；② LIKE 查询新增 `escape_like` + `ESCAPE '\'`，不再被 `%`/`_` 误匹配；③ 新增 `reconcile_interrupted_operations`，撤销中断或应用崩溃后 `undoing` 状态不再永久卡死（含崩溃恢复测试）；④ 清理建议分类求和收敛到扫描范围内并集，不再越界读取废纸篓/下载目录；⑤ 文案由“可释放约”改为“待复查文件约”；⑥ 重命名重算扩展名与分类（`rename_db_path`），复制重读目标元数据（`clone_db_entry`）。Rust 测试 35→43 项，全部通过 | 发布 v0.3.2 并借机完成 UPDATE-007/008 跨版本验收 |
+| 2026-10-26 | I18N-008（文件管理界面部分） | `IN PROGRESS → 文案迁移完成` | 将 `src/components/fileManager/` 全部 11 个组件（FileManagerToolbar、FileList、FilePreviewPanel、OrganizeWizard、ConfirmDialog、ToastStack、DirectoryTree、Breadcrumb、RenameInput、FileManagerView、useFileOps）的硬编码中文迁入 `src/i18n/locales/{zh-CN,en-US}.ts` 新增 `fileManager` 命名空间；i18n 完整性测试（键集合一致、无空值、插值占位符一致）通过，tsc 与前端 6 项测试通过 | 中英文桌面端 UI 人工回归；官网中英文入口（I18N-007） |
+| 2026-10-26 | 文档 | `—` | 补记 2026-10-16 可靠性修复进度；统一 README / `package.json` / `tauri.conf.json` / 公开 Release 的版本口径（0.2.0 → 0.3.1）；`output/` 目录（分析报告产物）加入 `.gitignore`，不纳入版本库 | 发布 v0.3.2 前完成发布门槛核对 |
 
 ## 10. 决策记录
 

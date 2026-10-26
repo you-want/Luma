@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import type { FileEntry } from "../../types/scan";
 import { formatBytes, formatDate } from "../../lib/format";
 
@@ -64,6 +65,7 @@ function ImagePreview({ path }: { path: string }) {
 type TextState = { status: "loading" } | { status: "ok"; text: string } | { status: "error" };
 
 function TextPreview({ file }: { file: FileEntry }) {
+  const { t } = useTranslation();
   const [state, setState] = useState<TextState>({ status: "loading" });
 
   useEffect(() => {
@@ -75,10 +77,10 @@ function TextPreview({ file }: { file: FileEntry }) {
   }, [file.path]);
 
   if (state.status === "loading") {
-    return <div className="fm-preview-loading">读取中…</div>;
+    return <div className="fm-preview-loading">{t("fileManager.preview.loading")}</div>;
   }
   if (state.status === "error") {
-    return <div className="fm-preview-error">无法读取文件内容。</div>;
+    return <div className="fm-preview-error">{t("fileManager.preview.readError")}</div>;
   }
   return (
     <pre className="fm-preview-text">
@@ -90,12 +92,13 @@ function TextPreview({ file }: { file: FileEntry }) {
 // ── PDF preview ────────────────────────────────────────────────────────────────
 
 function PdfPreview({ path }: { path: string }) {
+  const { t } = useTranslation();
   // macOS WebKit renders PDFs natively inside an iframe with a file:// URL.
   return (
     <iframe
       className="fm-preview-pdf"
       src={`file://${path}`}
-      title="PDF 预览"
+      title={t("fileManager.preview.pdfTitle")}
       sandbox=""
     />
   );
@@ -135,12 +138,13 @@ type Props = {
 };
 
 export function FilePreviewPanel({ file, onClose, onReveal, onOpen }: Props) {
+  const { t } = useTranslation();
   if (!file) {
     return (
       <aside className="fm-preview fm-preview--empty">
         <div className="fm-preview-placeholder">
           <File size={28} />
-          <p>选中文件查看预览</p>
+          <p>{t("fileManager.preview.emptyHint")}</p>
         </div>
       </aside>
     );
@@ -162,7 +166,7 @@ export function FilePreviewPanel({ file, onClose, onReveal, onOpen }: Props) {
           type="button"
           className="icon-button fm-preview-close"
           onClick={onClose}
-          aria-label="关闭预览"
+          aria-label={t("fileManager.preview.close")}
         >
           <X size={14} />
         </button>
@@ -175,13 +179,13 @@ export function FilePreviewPanel({ file, onClose, onReveal, onOpen }: Props) {
 
       {/* Metadata */}
       <dl className="fm-preview-meta">
-        <MetaRow label="路径" value={file.path} />
-        <MetaRow label="分类" value={file.category} />
-        <MetaRow label="大小" value={formatBytes(file.sizeBytes)} />
-        <MetaRow label="修改时间" value={formatDate(file.modifiedAt)} />
-        {file.extension && <MetaRow label="扩展名" value={`.${file.extension}`} />}
+        <MetaRow label={t("fileManager.preview.meta.path")} value={file.path} />
+        <MetaRow label={t("fileManager.preview.meta.category")} value={file.category} />
+        <MetaRow label={t("fileManager.preview.meta.size")} value={formatBytes(file.sizeBytes)} />
+        <MetaRow label={t("fileManager.preview.meta.modified")} value={formatDate(file.modifiedAt)} />
+        {file.extension && <MetaRow label={t("fileManager.preview.meta.extension")} value={`.${file.extension}`} />}
         {file.contentHash && (
-          <MetaRow label="内容哈希" value={file.contentHash.slice(0, 16) + "…"} />
+          <MetaRow label={t("fileManager.preview.meta.hash")} value={file.contentHash.slice(0, 16) + "…"} />
         )}
       </dl>
 
@@ -192,14 +196,14 @@ export function FilePreviewPanel({ file, onClose, onReveal, onOpen }: Props) {
           className="button button-primary"
           onClick={() => onOpen(file.path)}
         >
-          打开
+          {t("fileManager.preview.open")}
         </button>
         <button
           type="button"
           className="button"
           onClick={() => onReveal(file.path)}
         >
-          在 Finder 中显示
+          {t("fileManager.preview.reveal")}
         </button>
       </div>
     </aside>

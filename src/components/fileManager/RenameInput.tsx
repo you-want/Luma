@@ -1,6 +1,7 @@
 // Inline rename input — replaces the file name cell when editing is active.
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   initialName: string;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function RenameInput({ initialName, onConfirm, onCancel }: Props) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(initialName);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,7 +50,7 @@ export function RenameInput({ initialName, onConfirm, onCancel }: Props) {
       }}
       // Prevent clicks inside the input from propagating to the row
       onClick={(e) => e.stopPropagation()}
-      aria-label="重命名文件"
+      aria-label={t("fileManager.renameAria")}
     />
   );
 }

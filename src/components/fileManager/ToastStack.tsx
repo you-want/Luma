@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle, AlertTriangle, X, RotateCcw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export type ToastKind = "success" | "error" | "info";
 
@@ -27,6 +28,7 @@ function ToastItem({
   toast: ToastData;
   onDismiss: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const duration = toast.duration ?? 4000;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,14 +65,14 @@ function ToastItem({
           onMouseEnter={resetTimer}
         >
           <RotateCcw size={12} />
-          {toast.undoLabel ?? "撤销"}
+          {toast.undoLabel ?? t("fileManager.toast.undo")}
         </button>
       )}
       <button
         type="button"
         className="fm-toast-close icon-button"
         onClick={() => onDismiss(toast.id)}
-        aria-label="关闭"
+        aria-label={t("fileManager.toast.close")}
       >
         <X size={12} />
       </button>
@@ -79,9 +81,10 @@ function ToastItem({
 }
 
 export function ToastStack({ toasts, onDismiss }: Props) {
+  const { t } = useTranslation();
   if (toasts.length === 0) return null;
   return (
-    <div className="fm-toast-stack" aria-label="操作通知">
+    <div className="fm-toast-stack" aria-label={t("fileManager.aria.operationNotifications")}>
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
       ))}

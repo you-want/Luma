@@ -11,6 +11,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { DirNode } from "../../types/fileManager";
 import type { FileEntry } from "../../types/scan";
 import { formatBytes, formatDate } from "../../lib/format";
@@ -38,6 +39,7 @@ type DirRowProps = {
 };
 
 function DirRow({ dir, onNavigate }: DirRowProps) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -50,7 +52,7 @@ function DirRow({ dir, onNavigate }: DirRowProps) {
         <Folder size={16} />
       </span>
       <span className="fm-file-name">{dir.name}</span>
-      <span className="fm-file-date fm-file-meta">{dir.fileCount} 项</span>
+      <span className="fm-file-date fm-file-meta">{t("fileManager.list.itemsCount", { count: dir.fileCount })}</span>
       <span className="fm-file-size">{formatBytes(dir.sizeBytes)}</span>
       <ChevronRight size={12} className="fm-file-chevron" aria-hidden />
     </button>
@@ -88,6 +90,7 @@ function FileRow({
   onCancelRename,
   onTrashOne,
 }: FileRowProps) {
+  const { t } = useTranslation();
   const rowClass = [
     "fm-file-row",
     isSelected ? "fm-file-row--selected" : "",
@@ -119,7 +122,7 @@ function FileRow({
           className="fm-file-checkbox"
           checked={isChecked}
           onChange={() => onToggleCheck(file.path)}
-          aria-label={`选择 ${file.name}`}
+          aria-label={t("fileManager.list.selectName", { name: file.name })}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
         />
@@ -149,9 +152,9 @@ function FileRow({
           type="button"
           className="icon-button fm-file-action-btn"
           onClick={(e) => { e.stopPropagation(); onStartRename(file.path); }}
-          title="重命名"
+          title={t("fileManager.list.renameTitle")}
           tabIndex={-1}
-          aria-label={`重命名 ${file.name}`}
+          aria-label={t("fileManager.list.renameAria", { name: file.name })}
         >
           <Pencil size={12} />
         </button>
@@ -159,9 +162,9 @@ function FileRow({
           type="button"
           className="icon-button fm-file-action-btn fm-file-action-btn--danger"
           onClick={(e) => { e.stopPropagation(); onTrashOne(file.path); }}
-          title="移至废纸篓"
+          title={t("fileManager.list.trashTitle")}
           tabIndex={-1}
-          aria-label={`将 ${file.name} 移至废纸篓`}
+          aria-label={t("fileManager.list.trashAria", { name: file.name })}
         >
           <Trash2 size={12} />
         </button>
@@ -169,9 +172,9 @@ function FileRow({
           type="button"
           className="fm-file-reveal icon-button"
           onClick={(e) => { e.stopPropagation(); onReveal(file.path); }}
-          title="在 Finder 中显示"
+          title={t("fileManager.list.revealTitle")}
           tabIndex={-1}
-          aria-label={`在 Finder 中显示 ${file.name}`}
+          aria-label={t("fileManager.list.revealAria", { name: file.name })}
         >
           <ChevronRight size={13} />
         </button>
@@ -192,6 +195,7 @@ type GridCellProps = {
 };
 
 function GridCell({ file, isSelected, isChecked, onSelect, onToggleCheck, onOpen }: GridCellProps) {
+  const { t } = useTranslation();
   return (
     <div
       className={`fm-grid-cell${isSelected ? " fm-grid-cell--selected" : ""}${isChecked ? " fm-grid-cell--checked" : ""}`}
@@ -213,7 +217,7 @@ function GridCell({ file, isSelected, isChecked, onSelect, onToggleCheck, onOpen
           type="checkbox"
           checked={isChecked}
           onChange={() => onToggleCheck(file.path)}
-          aria-label={`选择 ${file.name}`}
+          aria-label={t("fileManager.list.selectName", { name: file.name })}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
         />
@@ -236,6 +240,7 @@ type HeaderProps = {
 };
 
 function ListHeader({ allChecked, someChecked, onToggleAll }: HeaderProps) {
+  const { t } = useTranslation();
   return (
     <div className="fm-file-row fm-file-row--header" role="row">
       <span className="fm-file-checkbox-col">
@@ -245,13 +250,13 @@ function ListHeader({ allChecked, someChecked, onToggleAll }: HeaderProps) {
           checked={allChecked}
           ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }}
           onChange={onToggleAll}
-          aria-label="全选当前页"
+          aria-label={t("fileManager.list.header.selectAll")}
         />
       </span>
       <span />
-      <span>名称</span>
-      <span>修改时间</span>
-      <span>大小</span>
+      <span>{t("fileManager.list.header.name")}</span>
+      <span>{t("fileManager.list.header.modified")}</span>
+      <span>{t("fileManager.list.header.size")}</span>
       <span />
     </div>
   );
@@ -266,15 +271,16 @@ type PaginationProps = {
 };
 
 function Pagination({ page, totalPages, onPageChange }: PaginationProps) {
+  const { t } = useTranslation();
   if (totalPages <= 1) return null;
   return (
     <div className="fm-pagination">
       <button type="button" className="button" disabled={page === 0} onClick={() => onPageChange(page - 1)}>
-        上一页
+        {t("fileManager.pagination.previous")}
       </button>
-      <span className="fm-pagination-info">第 {page + 1} / {totalPages} 页</span>
+      <span className="fm-pagination-info">{t("fileManager.pagination.info", { current: page + 1, total: totalPages })}</span>
       <button type="button" className="button" disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)}>
-        下一页
+        {t("fileManager.pagination.next")}
       </button>
     </div>
   );
@@ -323,6 +329,7 @@ export function FileList({
   onCancelRename,
   onTrashOne,
 }: Props) {
+  const { t } = useTranslation();
   const isEmpty = dirs.length === 0 && files.length === 0;
   const allChecked = files.length > 0 && files.every((f) => checkedPaths.has(f.path));
   const someChecked = files.some((f) => checkedPaths.has(f.path));
@@ -339,7 +346,7 @@ export function FileList({
     return (
       <div className="fm-list-empty">
         <Folder size={28} />
-        <p>此目录为空</p>
+        <p>{t("fileManager.emptyDirectory")}</p>
       </div>
     );
   }
@@ -358,7 +365,7 @@ export function FileList({
       {/* Files */}
       {files.length > 0 && (
         view === "grid" ? (
-          <div className="fm-grid" role="grid" aria-label="文件网格">
+          <div className="fm-grid" role="grid" aria-label={t("fileManager.aria.fileGrid")}>
             {files.map((f) => (
               <GridCell
                 key={f.id}

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { chooseDirectory, planOrganize, executeOrganizePlan } from "../../lib/tauri";
 import { errorMessage } from "../../lib/errors";
+import { useTranslation } from "react-i18next";
 import type {
   OrganizeMove,
   OrganizePlan,
@@ -30,43 +31,11 @@ import type {
 
 // ── Rule definitions ──────────────────────────────────────────────────────────
 
-type RuleMeta = {
-  rule: OrganizeRule;
-  label: string;
-  description: string;
-  example: string;
-  Icon: React.FC<{ size?: number }>;
-};
-
-const RULES: RuleMeta[] = [
-  {
-    rule: { kind: "byCategory" },
-    label: "按文件类型",
-    description: "将文件按 Luma 识别的类型分组",
-    example: "图片/ · 视频/ · 文档/ · 代码/",
-    Icon: Layers,
-  },
-  {
-    rule: { kind: "byYear" },
-    label: "按年份",
-    description: "将文件按修改时间的年份归档",
-    example: "2023/ · 2024/ · 2025/",
-    Icon: Calendar,
-  },
-  {
-    rule: { kind: "byYearMonth" },
-    label: "按年月",
-    description: "将文件按修改时间的年份和月份归档",
-    example: "2024-01/ · 2024-12/ · 2025-03/",
-    Icon: Calendar,
-  },
-  {
-    rule: { kind: "byExtension" },
-    label: "按扩展名",
-    description: "将文件按小写扩展名分组",
-    example: "pdf/ · jpg/ · mp4/ · no-extension/",
-    Icon: Tag,
-  },
+const RULE_DEFS: { rule: OrganizeRule; key: "byCategory" | "byYear" | "byYearMonth" | "byExtension"; Icon: React.FC<{ size?: number }> }[] = [
+  { rule: { kind: "byCategory" }, key: "byCategory", Icon: Layers },
+  { rule: { kind: "byYear" }, key: "byYear", Icon: Calendar },
+  { rule: { kind: "byYearMonth" }, key: "byYearMonth", Icon: Calendar },
+  { rule: { kind: "byExtension" }, key: "byExtension", Icon: Tag },
 ];
 
 // ── Step components ───────────────────────────────────────────────────────────
@@ -79,12 +48,18 @@ function StepRule({
   selected: OrganizeRule | null;
   onSelect: (r: OrganizeRule) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="org-step">
-      <p className="org-step-hint">选择整理规则，Luma 将按该规则把文件分配到子目录。</p>
+      <p className="org-step-hint">{t("fileManager.organize.ruleHint")}</p>
       <div className="org-rule-grid">
-        {RULES.map((meta) => {
+        {RULE_DEFS.map((meta) => {
           const active = selected?.kind === meta.rule.kind;
+          const rule = {
+            label: t(`fileManager.organize.rules.${meta.key}.label`),
+            description: t(`fileManager.organize.rules.${meta.key}.description`),
+            example: t(`fileManager.organize.rules.${meta.key}.example`),
+          };
           return (
             <button
               key={meta.rule.kind}
@@ -93,9 +68,9 @@ function StepRule({
               onClick={() => onSelect(meta.rule)}
             >
               <meta.Icon size={20} />
-              <strong>{meta.label}</strong>
-              <span>{meta.description}</span>
-              <code>{meta.example}</code>
+              <strong>{rule.label}</strong>
+              <span>{rule.description}</span>
+              <code>{rule.example}</code>
             </button>
           );
         })}
@@ -116,6 +91,7 @@ function StepDirs({
   onSourceChange: (p: string) => void;
   onDestChange: (p: string) => void;
 }) {
+  const { t } = useTranslation();
   async function pickSource() {
     const p = await chooseDirectory();
     if (p) onSourceChange(p);
@@ -127,27 +103,27 @@ function StepDirs({
 
   return (
     <div className="org-step">
-      <p className="org-step-hint">选择要整理的目录（源），以及整理后存放的目标目录。目标可与源相同（在原地创建子目录）。</p>
+      <p className="org-step-hint">{t("fileManager.organize.dirsHint")}</p>
 
       <label className="org-dir-label">
-        <span>源目录</span>
+        <span>{t("fileManager.organize.sourceDir")}</span>
         <div className="org-dir-row">
-          <span className="org-dir-path" title={sourceDir}>{sourceDir || "未选择"}</span>
+          <span className="org-dir-path" title={sourceDir}>{sourceDir || t("fileManager.organize.notSelected")}</span>
           <button type="button" className="button button-primary org-dir-btn" onClick={pickSource}>
-            <FolderOpen size={13} /> 选择…
+            <FolderOpen size={13} /> {t("fileManager.organize.choose")}
           </button>
         </div>
       </label>
 
       <label className="org-dir-label">
-        <span>目标目录</span>
+        <span>{t("fileManager.organize.destDir")}</span>
         <div className="org-dir-row">
-          <span className="org-dir-path" title={destDir}>{destDir || "未选择"}</span>
+          <span className="org-dir-path" title={destDir}>{destDir || t("fileManager.organize.notSelected")}</span>
           <button type="button" className="button org-dir-btn" onClick={pickDest}>
-            <FolderOpen size={13} /> 选择…
+            <FolderOpen size={13} /> {t("fileManager.organize.choose")}
           </button>
         </div>
-        <span className="org-dir-hint">留空时与源目录相同（原地整理）</span>
+        <span className="org-dir-hint">{t("fileManager.organize.destSameHint")}</span>
       </label>
     </div>
   );
@@ -157,6 +133,7 @@ function StepDirs({
 const PREVIEW_PAGE = 200;
 
 function StepPreview({ plan }: { plan: OrganizePlan }) {
+  const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const totalPages = Math.ceil(plan.moves.length / PREVIEW_PAGE);
   const slice = plan.moves.slice(page * PREVIEW_PAGE, (page + 1) * PREVIEW_PAGE);
@@ -164,13 +141,13 @@ function StepPreview({ plan }: { plan: OrganizePlan }) {
   return (
     <div className="org-step org-step--preview">
       <div className="org-preview-summary">
-        <span><strong>{plan.moves.length}</strong> 个文件将被移动</span>
+        <span><strong>{t("fileManager.organize.previewSummary.moves", { count: plan.moves.length })}</strong></span>
         {plan.alreadyPlaced > 0 && (
-          <span className="org-preview-placed">已在正确位置：{plan.alreadyPlaced} 个（跳过）</span>
+          <span className="org-preview-placed">{t("fileManager.organize.previewSummary.alreadyPlaced", { count: plan.alreadyPlaced })}</span>
         )}
         {plan.conflictCount > 0 && (
           <span className="org-preview-conflict">
-            <AlertTriangle size={13} /> {plan.conflictCount} 个冲突（目标已存在，将跳过）
+            <AlertTriangle size={13} /> {t("fileManager.organize.previewSummary.conflicts", { count: plan.conflictCount })}
           </span>
         )}
       </div>
@@ -178,14 +155,14 @@ function StepPreview({ plan }: { plan: OrganizePlan }) {
       {plan.moves.length === 0 ? (
         <div className="org-preview-empty">
           <CheckCircle size={24} />
-          <p>所有文件已在正确位置，无需移动。</p>
+          <p>{t("fileManager.organize.empty")}</p>
         </div>
       ) : (
         <>
           <div className="org-preview-table" role="table">
             <div className="org-preview-head" role="row">
-              <span>文件名</span>
-              <span>目标子目录</span>
+              <span>{t("fileManager.organize.table.name")}</span>
+              <span>{t("fileManager.organize.table.target")}</span>
               <span />
             </div>
             {slice.map((m) => (
@@ -194,9 +171,9 @@ function StepPreview({ plan }: { plan: OrganizePlan }) {
           </div>
           {totalPages > 1 && (
             <div className="fm-pagination">
-              <button type="button" className="button" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button>
-              <span className="fm-pagination-info">第 {page + 1} / {totalPages} 页</span>
-              <button type="button" className="button" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>下一页</button>
+              <button type="button" className="button" disabled={page === 0} onClick={() => setPage(page - 1)}>{t("fileManager.pagination.previous")}</button>
+              <span className="fm-pagination-info">{t("fileManager.pagination.info", { current: page + 1, total: totalPages })}</span>
+              <button type="button" className="button" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>{t("fileManager.pagination.next")}</button>
             </div>
           )}
         </>
@@ -206,11 +183,12 @@ function StepPreview({ plan }: { plan: OrganizePlan }) {
 }
 
 function MoveRow({ move }: { move: OrganizeMove }) {
+  const { t } = useTranslation();
   return (
     <div
       className={`org-preview-row${move.conflict ? " org-preview-row--conflict" : ""}`}
       role="row"
-      title={move.conflict ? "目标路径已存在，将跳过此文件" : undefined}
+      title={move.conflict ? t("fileManager.organize.conflictHint") : undefined}
     >
       <span className="org-preview-name" title={move.from}>{move.fromName}</span>
       <span className="org-preview-arrow">
@@ -218,7 +196,7 @@ function MoveRow({ move }: { move: OrganizeMove }) {
         <code>{move.subfolder}/</code>
       </span>
       {move.conflict && (
-        <span className="org-preview-conflict-badge" aria-label="冲突">
+        <span className="org-preview-conflict-badge" aria-label={t("fileManager.organize.conflictAria")}>
           <TriangleAlert size={12} />
         </span>
       )}
@@ -236,6 +214,7 @@ function StepExecuting({
   result: { succeeded: number; failed: { path: string; reason: string }[] } | null;
   error: string | null;
 }) {
+  const { t } = useTranslation();
   if (error) {
     return (
       <div className="org-step org-exec-error">
@@ -249,11 +228,11 @@ function StepExecuting({
     return (
       <div className="org-step org-exec-done">
         <CheckCircle size={32} className="org-exec-check" />
-        <strong>整理完成</strong>
-        <p>成功移动 {result.succeeded} 个文件</p>
+        <strong>{t("fileManager.organize.done.title")}</strong>
+        <p>{t("fileManager.organize.done.moved", { count: result.succeeded })}</p>
         {result.failed.length > 0 && (
           <div className="org-exec-failures">
-            <p className="org-exec-fail-title">{result.failed.length} 个文件未能移动：</p>
+            <p className="org-exec-fail-title">{t("fileManager.organize.done.failedTitle", { count: result.failed.length })}</p>
             {result.failed.map((f) => (
               <div key={f.path} className="org-exec-fail-row">
                 <span title={f.path}>{f.path.split("/").pop()}</span>
@@ -300,6 +279,7 @@ type Props = {
 type WizardStep = "rule" | "dirs" | "preview" | "executing";
 
 export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone }: Props) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<WizardStep>("rule");
   const [selectedRule, setSelectedRule] = useState<OrganizeRule | null>(null);
   const [sourceDir, setSourceDir] = useState(defaultSourceDir);
@@ -402,10 +382,10 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
   // ── Step titles & actions ───────────────────────────────────────────────────
 
   const stepTitles: Record<WizardStep, string> = {
-    rule: "选择整理规则",
-    dirs: "选择目录",
-    preview: "预览变更",
-    executing: "正在整理…",
+    rule: t("fileManager.steps.rule"),
+    dirs: t("fileManager.steps.dirs"),
+    preview: t("fileManager.steps.preview"),
+    executing: t("fileManager.steps.executing"),
   };
 
   const isDone = result !== null || execError !== null;
@@ -414,7 +394,7 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
     if (step === "executing") {
       return isDone ? (
         <button type="button" className="button button-primary" onClick={onClose}>
-          完成
+          {t("fileManager.footer.done")}
         </button>
       ) : null;
     }
@@ -430,7 +410,7 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
               else if (step === "preview") setStep("dirs");
             }}
           >
-            <ChevronLeft size={14} /> 上一步
+            <ChevronLeft size={14} /> {t("fileManager.footer.back")}
           </button>
         )}
         <div style={{ flex: 1 }} />
@@ -441,7 +421,7 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
             disabled={!selectedRule}
             onClick={() => setStep("dirs")}
           >
-            下一步
+            {t("fileManager.footer.next")}
           </button>
         )}
         {step === "dirs" && (
@@ -451,7 +431,7 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
             disabled={!sourceDir || planning}
             onClick={goToPreview}
           >
-            {planning ? "生成预览中…" : "生成预览"}
+            {planning ? t("fileManager.footer.generating") : t("fileManager.footer.generate")}
           </button>
         )}
         {step === "preview" && (
@@ -461,7 +441,7 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
             disabled={plan?.moves.length === 0}
             onClick={execute}
           >
-            执行整理
+            {t("fileManager.footer.execute")}
           </button>
         )}
       </>
@@ -487,7 +467,7 @@ export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone
               type="button"
               className="icon-button org-wizard-close"
               onClick={onClose}
-              aria-label="关闭"
+              aria-label={t("fileManager.dialog.close")}
             >
               <X size={15} />
             </button>

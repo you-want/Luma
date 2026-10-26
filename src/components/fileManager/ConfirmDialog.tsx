@@ -3,6 +3,7 @@
 
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 type Variant = "danger" | "warning";
 
@@ -21,12 +22,13 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = "确认",
-  cancelLabel = "取消",
+  confirmLabel,
+  cancelLabel,
   variant = "danger",
   onConfirm,
   onCancel,
 }: Props) {
+  const { t } = useTranslation();
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   // Auto-focus confirm button; trap Escape to cancel
@@ -62,7 +64,7 @@ export function ConfirmDialog({
         <p id="fm-dialog-msg" className="fm-dialog-msg">{message}</p>
         <div className="fm-dialog-actions">
           <button type="button" className="button" onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t("fileManager.dialog.cancel")}
           </button>
           <button
             ref={confirmRef}
@@ -70,7 +72,7 @@ export function ConfirmDialog({
             className={`button ${variant === "danger" ? "button-danger" : "button-primary"}`}
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {confirmLabel ?? t("fileManager.dialog.confirm")}
           </button>
         </div>
       </dialog>

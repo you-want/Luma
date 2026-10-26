@@ -2,9 +2,9 @@
 
 Luma 是一个本地优先的文件空间观察与整理工具，当前已验证 macOS 平台，Windows 11 x64 代码适配已完成。它扫描用户明确选择的目录，在本机建立 SQLite 索引，并展示空间分类、最大文件、重复文件候选、开发项目与可解释的复查线索。普通扫描只读取路径和元数据；只有用户主动查找重复、预览内容或明确确认文件操作时，Luma 才会读取内容或修改文件。文件内容、索引和操作日志均不上传。
 
-当前版本：`v0.2.0`（双平台内部预览）
+当前版本：`v0.3.1`（公开 Release）
 
-本次发布 tag：`v0.2.0`。Release 同时提供 macOS universal 与 Windows 11 x64 安装包；Windows 真机安装、启动、卸载和扫描烟测仍需在 Windows 11 x64 环境完成。
+最新 tag：`v0.3.1`。Release 提供 macOS universal 安装包；Windows 11 x64 安装包构建已配置，真机安装、启动、卸载和扫描烟测仍需在 Windows 11 x64 环境完成。
 
 后续功能与逐项进度见 [`docs/product-roadmap.md`](docs/product-roadmap.md)；Search v2 的拆解、验收和持续执行记录见 [`docs/search-v2-plan.md`](docs/search-v2-plan.md)。
 
@@ -104,17 +104,17 @@ pnpm tauri build
 `.github/workflows/release.yml` 会在推送 `v*` 形式的 tag 时，在 macOS 与 Windows runner 分别打包并发布到同一个 GitHub Release：
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 流程说明：
 
 - 在 macOS runner 上构建 `universal-apple-darwin` 通用二进制，一份产物同时支持 Intel 与 Apple Silicon。
 - 在 Windows runner 上构建 x64 `.msi` 与 NSIS `.exe` 安装包。
-- 打包前自动把应用版本同步为 tag 去掉 `v` 的部分（`v0.2.0` → `0.2.0`），无需手动改 `tauri.conf.json` 再提交。
+- 打包前自动把应用版本同步为 tag 去掉 `v` 的部分（`v0.3.2` → `0.3.2`），无需手动改 `tauri.conf.json` 再提交。
 - 两个平台分别通过前端测试、Rust 测试、fmt、Clippy 和生产构建后，才会创建 Release。
-- 带 `-rc`/`-beta` 等后缀的 tag 自动创建预发布；本次 `v0.2.0` 不带后缀，会创建正式 Release。
+- 带 `-rc`/`-beta` 等后缀的 tag 自动创建预发布；不带后缀的 tag 创建正式 Release。
 - Release 只上传 macOS `.dmg`、Windows `.msi`/`.exe`，以及 updater 必需的签名文件和 `latest.json`；GitHub 自动附带的 `Source code` 压缩包由平台生成，无法通过 workflow 关闭。
 
 ### 软件检测更新

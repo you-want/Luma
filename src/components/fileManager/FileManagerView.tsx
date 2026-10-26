@@ -3,6 +3,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Breadcrumb } from "./Breadcrumb";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { DirectoryTree } from "./DirectoryTree";
@@ -23,6 +24,7 @@ type Props = {
 };
 
 export function FileManagerView({ scanId, rootPath }: Props) {
+  const { t } = useTranslation();
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
 
   const fm = useFileManager(scanId, rootPath);
@@ -82,7 +84,7 @@ export function FileManagerView({ scanId, rootPath }: Props) {
     return (
       <div className="fm-loading-state">
         <span className="fm-spinner" aria-hidden />
-        <span>正在读取目录…</span>
+        <span>{t("fileManager.state.loading")}</span>
       </div>
     );
   }
@@ -91,7 +93,7 @@ export function FileManagerView({ scanId, rootPath }: Props) {
     return (
       <div className="fm-error-state">
         <AlertTriangle size={20} />
-        <p>{fm.error ?? "读取目录失败"}</p>
+        <p>{fm.error ?? t("fileManager.state.loadError")}</p>
       </div>
     );
   }
@@ -171,13 +173,13 @@ export function FileManagerView({ scanId, rootPath }: Props) {
       {/* Confirmation dialog */}
       <ConfirmDialog
         open={trashPending !== null}
-        title="移至废纸篓"
+        title={t("fileManager.confirmTrash.title")}
         message={
           trashPending && trashPending.length === 1
-            ? `确认将"${trashPending[0].split("/").pop()}"移至废纸篓？`
-            : `确认将 ${trashPending?.length ?? 0} 个文件移至废纸篓？`
+            ? t("fileManager.confirmTrash.messageOne", { name: trashPending[0].split("/").pop() })
+            : t("fileManager.confirmTrash.messageMany", { count: trashPending?.length ?? 0 })
         }
-        confirmLabel="移至废纸篓"
+        confirmLabel={t("fileManager.confirmTrash.title")}
         variant="danger"
         onConfirm={confirmTrash}
         onCancel={() => setTrashPending(null)}

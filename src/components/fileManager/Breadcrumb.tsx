@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { BreadcrumbSegment } from "../../types/fileManager";
 
 type Props = {
@@ -7,8 +8,9 @@ type Props = {
 };
 
 export function Breadcrumb({ segments, onNavigate }: Props) {
+  const { t } = useTranslation();
   return (
-    <nav className="fm-breadcrumb" aria-label="目录路径">
+    <nav className="fm-breadcrumb" aria-label={t("fileManager.aria.directoryPath")}>
       <ol>
         {segments.map((seg, i) => {
           const isLast = i === segments.length - 1;

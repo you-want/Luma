@@ -2,6 +2,7 @@
 // the persisted SQLite-backed undo stack.
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   trashFiles,
   renameFile,
@@ -36,6 +37,7 @@ export function useFileOps(
   onRefresh: () => void,
   pushToast: PushToast,
 ) {
+  const { t } = useTranslation();
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(new Set());
   const [undoStack, setUndoStack] = useState<OperationRecord[]>([]);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -80,19 +82,19 @@ export function useFileOps(
         onRefresh();
         await refreshUndoable();
         if (result.failed.length === 0) {
-          pushToast({ kind: "info", message: `已撤销：${label}` });
+          pushToast({ kind: "info", message: t("fileManager.ops.undoDone", { label }) });
         } else {
           pushToast({
             kind: "error",
-            message: `部分项目撤销失败：${result.failed[0]?.reason ?? "未知错误"}`,
+            message: t("fileManager.ops.undoPartialFailed", { reason: result.failed[0]?.reason ?? t("fileManager.ops.unknownError") }),
           });
         }
       } catch (err) {
-        pushToast({ kind: "error", message: `撤销失败：${errorMessage(err)}` });
+        pushToast({ kind: "error", message: t("fileManager.ops.undoFailed", { reason: errorMessage(err) }) });
         await refreshUndoable();
       }
     },
-    [onRefresh, pushToast, refreshUndoable, scanId],
+    [onRefresh, pushToast, refreshUndoable, scanId, t],
   );
 
   // ── Trash ──────────────────────────────────────────────────────────────────
@@ -107,17 +109,17 @@ export function useFileOps(
           onRefresh();
           pushToast({
             kind: "success",
-            message: `已将 ${n} 个文件移至废纸篓`,
+            message: t("fileManager.ops.trashDone", { count: n }),
           });
         }
         for (const f of result.failed) {
-          pushToast({ kind: "error", message: `移至废纸篓失败：${f.reason}` });
+          pushToast({ kind: "error", message: t("fileManager.ops.trashItemFailed", { reason: f.reason }) });
         }
       } catch (err) {
         pushToast({ kind: "error", message: errorMessage(err) });
       }
     },
-    [scanId, onRefresh, clearChecked, pushToast],
+    [scanId, onRefresh, clearChecked, pushToast, t],
   );
 
   // ── Rename ─────────────────────────────────────────────────────────────────
@@ -139,15 +141,15 @@ export function useFileOps(
         await refreshUndoable();
         pushToast({
           kind: "success",
-          message: `已重命名为 "${newName}"`,
-          undoLabel: "撤销",
-          onUndo: () => void undoById(result.operationId, `重命名为 ${newName}`),
+          message: t("fileManager.ops.renameDone", { name: newName }),
+          undoLabel: t("fileManager.toast.undo"),
+          onUndo: () => void undoById(result.operationId, t("fileManager.ops.renameDone", { name: newName })),
         });
       } catch (err) {
-        pushToast({ kind: "error", message: `重命名失败：${errorMessage(err)}` });
+        pushToast({ kind: "error", message: t("fileManager.ops.renameFailed", { reason: errorMessage(err) }) });
       }
     },
-    [scanId, onRefresh, pushToast, refreshUndoable, undoById],
+    [scanId, onRefresh, pushToast, refreshUndoable, undoById, t],
   );
 
   // ── Move ───────────────────────────────────────────────────────────────────
@@ -163,21 +165,21 @@ export function useFileOps(
           await refreshUndoable();
           pushToast({
             kind: "success",
-            message: `已移动 ${n} 个文件`,
-            undoLabel: result.operationId ? "撤销" : undefined,
+            message: t("fileManager.ops.moveDone", { count: n }),
+            undoLabel: result.operationId ? t("fileManager.toast.undo") : undefined,
             onUndo: result.operationId
-              ? () => void undoById(result.operationId!, `移动 ${n} 个文件`)
+              ? () => void undoById(result.operationId!, t("fileManager.ops.moveUndoLabel", { count: n }))
               : undefined,
           });
         }
         for (const f of result.failed) {
-          pushToast({ kind: "error", message: `移动失败：${f.reason}` });
+          pushToast({ kind: "error", message: t("fileManager.ops.moveItemFailed", { reason: f.reason }) });
         }
       } catch (err) {
         pushToast({ kind: "error", message: errorMessage(err) });
       }
     },
-    [scanId, onRefresh, clearChecked, pushToast, refreshUndoable, undoById],
+    [scanId, onRefresh, clearChecked, pushToast, refreshUndoable, undoById, t],
   );
 
   // ── Copy ───────────────────────────────────────────────────────────────────
@@ -190,16 +192,16 @@ export function useFileOps(
         if (n > 0) {
           clearChecked();
           onRefresh();
-          pushToast({ kind: "success", message: `已复制 ${n} 个文件` });
+          pushToast({ kind: "success", message: t("fileManager.ops.copyDone", { count: n }) });
         }
         for (const f of result.failed) {
-          pushToast({ kind: "error", message: `复制失败：${f.reason}` });
+          pushToast({ kind: "error", message: t("fileManager.ops.copyItemFailed", { reason: f.reason }) });
         }
       } catch (err) {
         pushToast({ kind: "error", message: errorMessage(err) });
       }
     },
-    [scanId, onRefresh, clearChecked, pushToast],
+    [scanId, onRefresh, clearChecked, pushToast, t],
   );
 
   // ── Undo ───────────────────────────────────────────────────────────────────

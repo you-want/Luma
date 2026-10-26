@@ -1,5 +1,6 @@
 import { ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { DirNode } from "../../types/fileManager";
 import { formatBytes } from "../../lib/format";
 
@@ -19,6 +20,7 @@ function TreeNode({
   onNavigate,
   onLoadChildren,
 }: TreeNodeProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DirNode[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ function TreeNode({
           type="button"
           className="fm-tree-toggle"
           onClick={handleExpand}
-          aria-label={expanded ? "收起" : "展开"}
+          aria-label={expanded ? t("fileManager.treeToggle.expanded") : t("fileManager.treeToggle.collapsed")}
           disabled={!node.hasChildren}
           tabIndex={-1}
         >
@@ -133,17 +135,18 @@ export function DirectoryTree({
   onNavigate,
   onLoadChildren,
 }: Props) {
+  const { t } = useTranslation();
   if (rootDirs.length === 0) {
     return (
       <div className="fm-tree-empty">
         <Folder size={20} />
-        <span>无子目录</span>
+        <span>{t("fileManager.noSubdirectories")}</span>
       </div>
     );
   }
 
   return (
-    <nav className="fm-tree" aria-label="目录树">
+    <nav className="fm-tree" aria-label={t("fileManager.aria.directoryTree")}>
       <ul className="fm-tree-list">
         {rootDirs.map((node) => (
           <TreeNode

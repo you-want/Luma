@@ -34,13 +34,13 @@ type Props = {
   onOrganize: () => void;
 };
 
-const SORT_OPTIONS: { value: DirFileSort; labelZh: string }[] = [
-  { value: "nameAsc", labelZh: "名称 A–Z" },
-  { value: "nameDesc", labelZh: "名称 Z–A" },
-  { value: "sizeDesc", labelZh: "大小：从大到小" },
-  { value: "sizeAsc", labelZh: "大小：从小到大" },
-  { value: "modifiedDesc", labelZh: "修改时间：最近优先" },
-  { value: "modifiedAsc", labelZh: "修改时间：最早优先" },
+const SORT_OPTIONS: { value: DirFileSort; key: "fileManager.toolbar.sortOptions.nameAsc" | "fileManager.toolbar.sortOptions.nameDesc" | "fileManager.toolbar.sortOptions.sizeDesc" | "fileManager.toolbar.sortOptions.sizeAsc" | "fileManager.toolbar.sortOptions.modifiedDesc" | "fileManager.toolbar.sortOptions.modifiedAsc" }[] = [
+  { value: "nameAsc", key: "fileManager.toolbar.sortOptions.nameAsc" },
+  { value: "nameDesc", key: "fileManager.toolbar.sortOptions.nameDesc" },
+  { value: "sizeDesc", key: "fileManager.toolbar.sortOptions.sizeDesc" },
+  { value: "sizeAsc", key: "fileManager.toolbar.sortOptions.sizeAsc" },
+  { value: "modifiedDesc", key: "fileManager.toolbar.sortOptions.modifiedDesc" },
+  { value: "modifiedAsc", key: "fileManager.toolbar.sortOptions.modifiedAsc" },
 ];
 
 export function FileManagerToolbar({
@@ -71,13 +71,13 @@ export function FileManagerToolbar({
       {/* Left: file count or selection count */}
       {hasBatchSelection ? (
         <span className="fm-toolbar-selection-count">
-          已选 {checkedCount} 项
+          {t("fileManager.toolbar.selectedCount", { count: checkedCount })}
           <button type="button" className="fm-toolbar-clear-btn" onClick={onClearChecked}>
-            清除
+            {t("fileManager.toolbar.clear")}
           </button>
         </span>
       ) : (
-        <span className="fm-toolbar-count">{totalFiles} 个文件</span>
+        <span className="fm-toolbar-count">{t("fileManager.toolbar.filesCount", { count: totalFiles })}</span>
       )}
 
       <div className="fm-toolbar-right">
@@ -88,28 +88,28 @@ export function FileManagerToolbar({
               type="button"
               className="fm-toolbar-btn fm-toolbar-btn--danger"
               onClick={onTrashChecked}
-              title="移至废纸篓"
+              title={t("fileManager.toolbar.trashTitle")}
             >
               <Trash2 size={13} />
-              废纸篓
+              {t("fileManager.toolbar.trashLabel")}
             </button>
             <button
               type="button"
               className="fm-toolbar-btn"
               onClick={onMoveChecked}
-              title="移动到…"
+              title={t("fileManager.toolbar.moveTitle")}
             >
               <FolderInput size={13} />
-              移动
+              {t("fileManager.toolbar.moveLabel")}
             </button>
             <button
               type="button"
               className="fm-toolbar-btn"
               onClick={onCopyChecked}
-              title="复制到…"
+              title={t("fileManager.toolbar.copyTitle")}
             >
               <Copy size={13} />
-              复制
+              {t("fileManager.toolbar.copyLabel")}
             </button>
           </div>
         )}
@@ -121,9 +121,9 @@ export function FileManagerToolbar({
               type="button"
               className="fm-toolbar-btn"
               onClick={onOpenSelected}
-              title="用默认应用打开"
+              title={t("fileManager.toolbar.openTitle")}
             >
-              打开
+              {t("fileManager.toolbar.openLabel")}
             </button>
             <button
               type="button"
@@ -142,8 +142,8 @@ export function FileManagerToolbar({
             type="button"
             className="fm-toolbar-icon-btn"
             onClick={onUndo}
-            title="撤销上一步操作"
-            aria-label="撤销"
+            title={t("fileManager.toolbar.undoTitle")}
+            aria-label={t("fileManager.toolbar.undoAria")}
           >
             <RotateCcw size={13} />
           </button>
@@ -154,10 +154,10 @@ export function FileManagerToolbar({
           type="button"
           className="fm-toolbar-btn"
           onClick={onOrganize}
-          title="智能整理"
+          title={t("fileManager.toolbar.organizeTitle")}
         >
           <Wand2 size={13} />
-          整理
+          {t("fileManager.toolbar.organizeLabel")}
         </button>
 
         {/* Hidden files toggle */}
@@ -165,7 +165,7 @@ export function FileManagerToolbar({
           type="button"
           className={`fm-toolbar-icon-btn${includeHidden ? " fm-toolbar-icon-btn--active" : ""}`}
           onClick={() => onIncludeHiddenChange(!includeHidden)}
-          title={includeHidden ? "隐藏隐藏文件" : "显示隐藏文件"}
+          title={includeHidden ? t("fileManager.toolbar.hideHidden") : t("fileManager.toolbar.showHidden")}
           aria-pressed={includeHidden}
         >
           {includeHidden ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -177,24 +177,24 @@ export function FileManagerToolbar({
           <select
             value={sort}
             onChange={(e) => onSortChange(e.target.value as DirFileSort)}
-            aria-label="排序方式"
+            aria-label={t("fileManager.toolbar.sortAria")}
           >
             {SORT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
-                {opt.labelZh}
+                {t(opt.key)}
               </option>
             ))}
           </select>
         </div>
 
         {/* View toggle */}
-        <div className="fm-toolbar-view-toggle" role="group" aria-label="视图模式">
+        <div className="fm-toolbar-view-toggle" role="group" aria-label={t("fileManager.aria.viewMode")}>
           <button
             type="button"
             className={`fm-toolbar-icon-btn${view === "list" ? " fm-toolbar-icon-btn--active" : ""}`}
             onClick={() => onViewChange("list")}
             aria-pressed={view === "list"}
-            title="列表视图"
+            title={t("fileManager.toolbar.listView")}
           >
             <LayoutList size={14} />
           </button>
@@ -203,7 +203,7 @@ export function FileManagerToolbar({
             className={`fm-toolbar-icon-btn${view === "grid" ? " fm-toolbar-icon-btn--active" : ""}`}
             onClick={() => onViewChange("grid")}
             aria-pressed={view === "grid"}
-            title="网格视图"
+            title={t("fileManager.toolbar.gridView")}
           >
             <LayoutGrid size={14} />
           </button>
