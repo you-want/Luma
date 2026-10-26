@@ -1145,7 +1145,7 @@ fn is_protected_path(path: &Path) -> bool {
                 (drive.ends_with(':') && drive.len() == 2).then(|| format!("{drive}{name}"))
             })
             .collect();
-        protected_roots
+        return protected_roots
             .iter()
             .any(|root| normalized == *root || normalized.starts_with(&format!("{root}\\")));
     }
@@ -1234,6 +1234,10 @@ mod tests {
         system_time_seconds, to_canonical, undo_operation, undo_operation_with_crash_hook,
         validate_write_path,
     };
+    // Only used by the Windows-gated drive-agnostic test below; allow unused on
+    // other platforms so `-D warnings` stays clean in a cross-target build.
+    #[allow(unused_imports)]
+    use super::is_protected_path;
     use crate::{database, error::AppError, models::FileEntry};
     use rusqlite::params;
     use std::{fs, path::PathBuf};
