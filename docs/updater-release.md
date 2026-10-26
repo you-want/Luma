@@ -8,16 +8,13 @@
 - 安全：Tauri updater minisign 公钥固化在 `src-tauri/tauri.conf.json`；私钥只保存于 GitHub Actions Secret。
 - 平台代码签名：Apple Developer ID、Windows Authenticode 和 macOS 公证尚未启用，与 updater 签名分开处理。
 
-## 首次配置
+## 密钥现状（2026-10-26 更新）
 
-本次生成的临时私钥位于 `/private/tmp/luma-updater.key`。在临时目录被清理前完成以下操作：
-
-1. 将私钥保存到受控的密码管理器或加密备份，不要放进仓库、聊天记录或普通云盘。
-2. 打开 GitHub 仓库的 `Settings > Secrets and variables > Actions`。
-3. 新建 repository secret：`TAURI_SIGNING_PRIVATE_KEY`，值为私钥文件的完整内容。
-4. 本次私钥没有口令，`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 可以不创建；若后续改用带口令密钥，再新增该 secret。
-
-已经发布过 updater 版本后，不要重新生成或替换密钥。客户端只信任当前公钥；丢失私钥意味着旧版本无法通过应用内更新迁移到使用新密钥的版本。
+- 正式密钥对已于 2026-10-26 生成并写入 `tauri.conf.json` 公钥（`C16...` 开头）。**该密钥对一经用于正式发布即永久绑定，不得重新生成或替换**——旧客户端只信任内置公钥，换钥后旧版将永远收不到更新提示。
+- 私钥存放位置（两处，互为备份）：
+  1. 本机：`~/.local/luma-updater/luma-updater.key`（口令在 `~/.local/luma-updater/.passphrase`，权限 600）
+  2. GitHub：`TAURI_SIGNING_PRIVATE_KEY`（私钥全文，含 `-----BEGIN/END` 分隔行）+ `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（口令）
+- 若 GitHub 侧尚未配置上述两个 Secret，在打 `v0.3.2` tag 前完成：仓库 → Settings → Secrets and variables → Actions → 新建两个 repository secret（私钥值 = `~/.local/luma-updater/luma-updater.key` 的完整内容，口令值 = `.passphrase` 文件中的字符串）。
 
 ## 发版流程
 
