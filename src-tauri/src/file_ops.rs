@@ -1128,12 +1128,24 @@ fn is_protected_path(path: &Path) -> bool {
             .replace('/', "\\")
             .to_ascii_lowercase();
         let protected = [
-            r"c:\windows",
-            r"c:\program files",
-            r"c:\program files (x86)",
-            r"c:\programdata",
+            r"\windows",
+            r"\program files",
+            r"\program files (x86)",
+            r"\programdata",
         ];
-        return protected
+        // Resolve the actual drive root for each protected name so the check
+        // works regardless of which letter Windows is installed on (typically
+        // `C:\`, but CI runners or custom layouts may differ).
+        let protected_roots: Vec<String> = protected
+            .iter()
+            .filter_map(|name| {
+                let idx = normalized.find(name)?;
+                let drive = normalized.get(0..idx)?;
+                // drive looks like `c:` — keep exactly the drive root.
+                (drive.ends_with(':') && drive.len() == 2).then(|| format!("{drive}{name}"))
+            })
+            .collect();
+        protected_roots
             .iter()
             .any(|root| normalized == *root || normalized.starts_with(&format!("{root}\\")));
     }
@@ -1744,6 +1756,23 @@ mod tests {
         let traversal = "/Users/example/../System/Library/example";
         let error = validate_write_path(traversal).expect_err("parent traversal must fail");
         assert_eq!(error.code, "INVALID_PATH");
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn is_protected_path_is_drive_agnostic_on_windows() {
+        // `C:\Windows` is protected regardless of case.
+        assert!(is_protected_path(std::path::Path::new(
+            r"C:\Windows\System32\kernel.dll"
+        )));
+        // A sibling of the Windows root is not protected.
+        assert!(!is_protected_path(std::path::Path::new(
+            r"C:\Users\me\docs\note.txt"
+        )));
+        // Program Files (x86) is protected.
+        assert!(is_protected_path(std::path::Path::new(
+            r"C:\Program Files (x86)\app.exe"
+        )));
     }
 
     #[test]
