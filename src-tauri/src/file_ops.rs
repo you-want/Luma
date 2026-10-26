@@ -1140,7 +1140,7 @@ fn is_protected_path(path: &Path) -> bool {
         };
         protected_names
             .iter()
-            .any(|name| rest == name || rest.starts_with(&format!("{name}\\")))
+            .any(|name| rest == *name || rest.starts_with(&format!("{name}\\")))
     }
 
     #[cfg(not(target_os = "windows"))]
