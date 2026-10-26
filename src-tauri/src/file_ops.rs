@@ -1123,31 +1123,24 @@ fn is_protected_path(path: &Path) -> bool {
 
     #[cfg(target_os = "windows")]
     {
+        // Match on the *directory name* after any `X:\` drive prefix, so the
+        // check is drive-agnostic (`C:\`, `D:\`, …) and not a hard-coded letter.
         let normalized = path
             .to_string_lossy()
             .replace('/', "\\")
             .to_ascii_lowercase();
-        let protected = [
+        let protected_names = [
             r"\windows",
             r"\program files",
             r"\program files (x86)",
             r"\programdata",
         ];
-        // Resolve the actual drive root for each protected name so the check
-        // works regardless of which letter Windows is installed on (typically
-        // `C:\`, but CI runners or custom layouts may differ).
-        let protected_roots: Vec<String> = protected
+        let Some(rest) = normalized.split_once(':').map(|(_, after)| after) else {
+            return false;
+        };
+        protected_names
             .iter()
-            .filter_map(|name| {
-                let idx = normalized.find(name)?;
-                let drive = normalized.get(0..idx)?;
-                // drive looks like `c:` — keep exactly the drive root.
-                (drive.ends_with(':') && drive.len() == 2).then(|| format!("{drive}{name}"))
-            })
-            .collect();
-        return protected_roots
-            .iter()
-            .any(|root| normalized == *root || normalized.starts_with(&format!("{root}\\")));
+            .any(|name| rest == name || rest.starts_with(&format!("{name}\\")))
     }
 
     #[cfg(not(target_os = "windows"))]
