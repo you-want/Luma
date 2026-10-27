@@ -2,15 +2,15 @@
 
 ## 当前发布与验收（2026-10-27）
 
-- 正式版本：[v0.4.0](https://github.com/you-want/Luma/releases/tag/v0.4.0)，发布提交 `e13e37f`。
-- [发布流水线](https://github.com/you-want/Luma/actions/runs/40431077912)的 macOS universal、Windows x64 构建与发布任务均成功，Release 包含 8 个资产。
-- 稳定版清单：`https://github.com/you-want/Luma/releases/latest/download/latest.json`，发布核验时版本为 `0.4.0`，覆盖 macOS Intel / Apple Silicon 与 Windows x64 的安装目标。
+- 正式版本：[v0.4.1](https://github.com/you-want/Luma/releases/tag/v0.4.1)，发布提交 `f9e3b1b`。
+- [发布流水线](https://github.com/you-want/Luma/actions/runs/40482628259)的 macOS universal、Windows x64 构建与发布任务均成功，Release 包含 8 个资产。
+- 稳定版清单：`https://github.com/you-want/Luma/releases/latest/download/latest.json`，发布核验时版本为 `0.4.1`，覆盖 macOS Intel / Apple Silicon 与 Windows x64 的安装目标。
 - 用户于 2026-10-27 确认应用内 `v0.3.2 → v0.4.0` 升级成功。该反馈证明一台现用设备的正常升级链路可用；平台、架构及升级后数据逐项核验未单独记录。
 - 尚未完成：全部目标设备的升级矩阵，Windows 真机安装/卸载/权限回归，以及坏签名、清单篡改、断网、下载中断、空间不足和安装失败场景。不能据一次成功升级将这些验收标记完成。
 
-## v0.4.1 发布准备
+## v0.4.1 发布结果
 
-包含本地索引空间管理、普通移动确认和新版 macOS 安装盘。前端 6 项、Rust 63 项测试通过，rustfmt、Clippy 与生产前端构建通过；安装界面经用户确认。等待双平台 CI、Release 资产和稳定版更新入口核验。
+包含本地索引空间管理、普通移动确认和新版 macOS 安装盘。前端 6 项、Rust 63 项测试通过，rustfmt、Clippy 与生产前端构建通过；安装界面经用户确认。双平台 CI 与发布任务成功；Release 已提供 8 个资产，稳定更新清单版本为 0.4.1。已下载核对全部 8 个资产的 SHA-256、3 类更新包的 updater 签名、5 个更新目标，以及 macOS 更新包内的版本号和 Intel / Apple Silicon 双架构。v0.4.0 → v0.4.1 真机升级尚未记录，保留待验收。
 
 ## 更新机制与签名
 

@@ -2,11 +2,11 @@
 
 Luma 是一个本地优先的文件空间观察与整理工具，当前已验证 macOS 平台，Windows 11 x64 代码适配已完成。它扫描用户明确选择的目录，在本机建立 SQLite 索引，并展示空间分类、最大文件、重复文件候选、开发项目与可解释的复查线索。普通扫描只读取路径和元数据；只有用户主动查找重复、预览内容或提交文件操作时，Luma 才会读取内容或修改文件。文件内容、索引和操作日志均不上传。
 
-当前正式版本：[`v0.4.0`](https://github.com/you-want/Luma/releases/tag/v0.4.0)（2026-10-27 已发布）
+当前正式版本：[`v0.4.1`](https://github.com/you-want/Luma/releases/tag/v0.4.1)（2026-10-27 已发布）
 
 官网：[luma.raingpt.top](https://luma.raingpt.top/)。Release 已提供 macOS universal `.dmg` 和 Windows x64 `.msi` / NSIS `.exe`，附带签名 updater 产物。用户已于 2026-10-27 确认应用内 `v0.3.2 → v0.4.0` 升级成功；该设备的平台与架构未单独记录，其他设备及 Windows 真机验收仍需补齐。
 
-本版更新见 [`docs/releases/v0.4.0.md`](docs/releases/v0.4.0.md)。v0.4.1 发布准备包含本地存储管理、移动确认与新版 macOS 安装界面，见 [`docs/local-storage.md`](docs/local-storage.md)。
+本版更新见 [`docs/releases/v0.4.1.md`](docs/releases/v0.4.1.md)，包含本地存储管理、移动确认与新版 macOS 安装界面，详见 [`docs/local-storage.md`](docs/local-storage.md) 和 [`docs/macos-installer.md`](docs/macos-installer.md)。
 
 后续功能与逐项进度见 [`docs/product-roadmap.md`](docs/product-roadmap.md)；Search v2 的拆解、验收和持续执行记录见 [`docs/search-v2-plan.md`](docs/search-v2-plan.md)。
 
