@@ -109,6 +109,64 @@ def run_workspace(page,engine):
         page.set_viewport_size({'width':1120,'height':760})
 
 
+def run_storage(page,engine):
+    for lang in ['zh-CN','en-US']:
+        english=lang=='en-US'
+        page.set_viewport_size({'width':760,'height':560})
+        page.goto(args.base_url+'/__file_manager_test__?workspace=1&lang='+lang)
+        title='Luma local storage' if english else 'Luma 本地存储'
+        trigger=page.get_by_role('button',name=title,exact=True)
+        expect(trigger).to_be_enabled()
+        page.evaluate('window.test.storageDelay=800')
+        trigger.click()
+        dialog=page.get_by_role('dialog',name=title)
+        expect(dialog).to_have_attribute('aria-busy','true')
+        expect(dialog.get_by_role('button',name='Close' if english else '关闭',exact=True)).to_be_disabled()
+        expect(dialog).to_contain_text('40.0 MB')
+        assert dialog.evaluate('el=>el.scrollWidth<=el.clientWidth+1')
+        compact=dialog.get_by_role('button',name='Reclaim unused space' if english else '回收空闲空间',exact=True)
+        compact.click()
+        expect(compact).to_be_disabled()
+        expect(compact).to_have_attribute('aria-busy','true')
+        expect(dialog.get_by_role('status')).to_contain_text('Unused space reclaimed.' if english else '空闲空间已回收。')
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='compact_index_storage').length")==1
+        dialog.get_by_role('button',name='Clear scan index' if english else '清理扫描索引',exact=True).click()
+        expect(dialog.get_by_text('Clear all scan indexes?' if english else '清理所有扫描索引？',exact=True)).to_be_visible()
+        page.screenshot(path=str(output/f'{engine}-storage-confirm-{lang}.png'))
+        dialog.get_by_role('button',name='Cancel' if english else '取消',exact=True).click()
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='clear_scan_index').length")==0
+        dialog.get_by_role('button',name='Clear scan index' if english else '清理扫描索引',exact=True).click()
+        page.evaluate('window.test.failClear=true')
+        dialog.get_by_role('button',name='Confirm clearing index' if english else '确认清理索引',exact=True).click()
+        expect(dialog.get_by_role('alert')).to_have_text('Storage unavailable')
+        expect(dialog.get_by_role('button',name='Confirm clearing index' if english else '确认清理索引',exact=True)).to_be_enabled()
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='get_latest_scan').length")>=2
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='clear_scan_index').length")==1
+        page.evaluate('window.test.failClear=false')
+        clear=dialog.get_by_role('button',name='Confirm clearing index' if english else '确认清理索引',exact=True)
+        clear.click()
+        expect(clear).to_be_disabled()
+        expect(clear.locator('.button-spinner')).to_be_visible()
+        expect(dialog).to_contain_text('Original files and undo records are kept.' if english else '原文件与撤销记录已保留。')
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='clear_scan_index').length")==2
+        expect(dialog.locator('.index-storage-stats div').nth(2).locator('dd')).to_have_text('2')
+        page.screenshot(path=str(output/f'{engine}-storage-cleared-{lang}.png'))
+        dialog.get_by_role('button',name='Close' if english else '关闭',exact=True).click()
+        expect(page.get_by_role('tab',name='File manager' if english else '文件管理',exact=True)).to_be_disabled()
+        expect(page.locator('.workspace-controls .path-button')).to_contain_text('/Users/demo/Desktop')
+        # Recover from a failed storage query and leave scanning available.
+        page.evaluate('window.test.failStorage=true')
+        trigger.click()
+        expect(dialog.get_by_role('alert')).to_have_text('Storage unavailable')
+        page.evaluate('window.test.failStorage=false')
+        dialog.get_by_role('button',name='Retry' if english else '重试',exact=True).click()
+        expect(dialog.locator('.index-storage-total')).to_be_visible()
+        page.keyboard.press('Escape')
+        expect(dialog).not_to_be_visible()
+        assert page.locator('.app-header').evaluate('el=>el.scrollWidth<=el.clientWidth+1')
+    page.set_viewport_size({'width':1120,'height':760})
+
+
 def review_layout(page,engine):
     # Capture the actual app shell, including selection and compact preview states.
     for lang in ['zh-CN','en-US']:
@@ -155,6 +213,7 @@ def run_suite(browser,engine):
             return
         if args.workspace_only:
             run_workspace(page,engine)
+            run_storage(page,engine)
             assert not errors,errors
             print(json.dumps({'engine':engine,'status':'passed','suite':'workspace','screenshots':str(output)},ensure_ascii=False),flush=True)
             return
@@ -336,7 +395,20 @@ def run_suite(browser,engine):
         assert copied['paths']==['/Users/demo/Desktop/最新笔记.txt']
         page.get_by_role('checkbox',name='选择 最新笔记.txt',exact=True).check()
         page.get_by_role('button',name='移动',exact=True).click()
+        move_dialog=page.get_by_role('dialog')
+        expect(move_dialog).to_contain_text('/Users/demo/Desktop/Destination')
+        expect(move_dialog).to_contain_text('/Users/demo/Desktop')
+        expect(move_dialog).to_contain_text('即将移动 1 个文件')
+        page.screenshot(path=str(output/f'{engine}-move-confirm.png'))
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='move_files').length")==0
+        expect(move_dialog.get_by_role('button',name='取消',exact=True)).to_be_focused()
+        page.keyboard.press('Escape')
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='move_files').length")==0
+        page.get_by_role('button',name='移动',exact=True).click()
+        page.get_by_role('dialog').get_by_role('button',name='确认移动',exact=True).click()
+        expect(page.get_by_role('button',name='移动',exact=True)).to_be_disabled()
         expect(page.get_by_text('已移动 1 个文件',exact=True)).to_be_visible()
+        assert page.evaluate("window.calls.filter(c=>c.cmd==='move_files').length")==1
         page.get_by_role('checkbox',name='选择 最新笔记.txt',exact=True).check()
         page.get_by_role('button',name='废纸篓',exact=True).click()
         confirm=page.get_by_role('dialog')
@@ -447,6 +519,7 @@ def run_suite(browser,engine):
         expect(page.get_by_text('扫描已取消',exact=True)).to_be_visible()
         assert page.evaluate("window.calls.filter(c=>c.cmd==='cancel_scan').length")==1
         run_workspace(page,engine)
+        run_storage(page,engine)
         assert not errors,errors
         print(json.dumps({'engine':engine,'status':'passed','screenshots':str(output)},ensure_ascii=False),flush=True)
     except Exception:

@@ -2,7 +2,7 @@
 // Fully controlled — caller owns open/close state.
 
 import { AlertTriangle, Trash2 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 type Variant = "danger" | "warning";
@@ -10,7 +10,7 @@ type Variant = "danger" | "warning";
 type Props = {
   open: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: Variant;
@@ -29,6 +29,8 @@ export function ConfirmDialog({
   onCancel,
 }: Props) {
   const { t } = useTranslation();
+  const titleId = useId();
+  const messageId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -45,7 +47,7 @@ export function ConfirmDialog({
 
   return (
     <dialog ref={dialogRef} className="fm-dialog"
-      aria-labelledby="fm-dialog-title" aria-describedby="fm-dialog-msg"
+      aria-labelledby={titleId} aria-describedby={messageId}
       onCancel={event => { event.preventDefault(); onCancel(); }}
       onKeyDown={event => {
         // WebKit follows the system keyboard-navigation preference, which may
@@ -59,8 +61,8 @@ export function ConfirmDialog({
         <div className="fm-dialog-icon" data-variant={variant}>
           {variant === "danger" ? <Trash2 size={20} /> : <AlertTriangle size={20} />}
         </div>
-        <h2 id="fm-dialog-title" className="fm-dialog-title">{title}</h2>
-        <p id="fm-dialog-msg" className="fm-dialog-msg">{message}</p>
+        <h2 id={titleId} className="fm-dialog-title">{title}</h2>
+        <div id={messageId} className="fm-dialog-msg">{message}</div>
         <div className="fm-dialog-actions">
           <button ref={cancelRef} type="button" className="button" onClick={onCancel}>
             {cancelLabel ?? t("fileManager.dialog.cancel")}

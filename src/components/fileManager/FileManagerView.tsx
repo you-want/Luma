@@ -71,6 +71,7 @@ export function FileManagerView({ scanId, rootPath, onWorkingChange }: Props) {
 
   // Confirm-trash dialog state
   const [trashPending, setTrashPending] = useState<string[] | null>(null);
+  const [movePending, setMovePending] = useState<{ paths: string[]; source: string; destination: string } | null>(null);
 
   // Organize wizard state
   const [organizeOpen, setOrganizeOpen] = useState(false);
@@ -107,8 +108,9 @@ export function FileManagerView({ scanId, rootPath, onWorkingChange }: Props) {
     await action.run("move", async () => {
       try {
         const paths = [...ops.checkedPaths];
+        const source = fm.currentPath;
         const dest = await chooseDirectory();
-        if (dest) await ops.move(paths, dest);
+        if (dest && paths.length > 0) setMovePending({ paths, source, destination: dest });
       } catch (error) { pushToast({ kind: "error", message: errorMessage(error) }); }
     });
   }
@@ -225,6 +227,27 @@ export function FileManagerView({ scanId, rootPath, onWorkingChange }: Props) {
       </div>
 
       {/* Confirmation dialog */}
+      <ConfirmDialog
+        open={movePending !== null}
+        title={t("fileManager.confirmMove.title")}
+        confirmLabel={t("fileManager.confirmMove.confirm")}
+        variant="warning"
+        message={movePending && <>
+          <p>{t("fileManager.confirmMove.count", { count: movePending.paths.length })}</p>
+          <dl className="fm-move-summary">
+            <dt>{t("fileManager.confirmMove.source")}</dt><dd>{movePending.source}</dd>
+            <dt>{t("fileManager.confirmMove.destination")}</dt><dd>{movePending.destination}</dd>
+          </dl>
+          <p>{t("fileManager.confirmMove.hint")}</p>
+        </>}
+        onConfirm={() => {
+          if (!movePending) return;
+          const request = movePending;
+          setMovePending(null);
+          void action.run("move", () => ops.move(request.paths, request.destination));
+        }}
+        onCancel={() => setMovePending(null)}
+      />
       <ConfirmDialog
         open={trashPending !== null}
         title={t("fileManager.confirmTrash.title")}

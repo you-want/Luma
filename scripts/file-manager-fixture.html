@@ -39,6 +39,7 @@ let files = [
 if(params.has('pages')) files = Array.from({length:205},(_,id)=>({id,path:rootPath+'/file-'+String(id).padStart(3,'0')+'.txt',name:'file-'+String(id).padStart(3,'0')+'.txt',category:'documents',extension:'txt',sizeBytes:100,modifiedAt:123,isHidden:false}));
 const directory = {path:rootPath+'/Project',name:'Project',fileCount:10,sizeBytes:1000,hasChildren:false};
 let completed = false;
+let indexCleared = false;
 window.calls=[];
 window.test = {failPlan:false,failExecute:false,failPicker:false,failBinary:false,invalidPdf:false,failOpen:false,slowOps:false,emptyPlan:false,picker:rootPath+'/Destination',pickerDelay:0,planDelay:0,listDelay:0,openDelay:0};
 let scanStatus = params.has('workspace') ? 'completed' : 'running';
@@ -48,7 +49,14 @@ const summary = () => ({scanId:'new-scan',rootPath:scanRoot,status:scanStatus,st
 const delay = ms => new Promise(resolve=>setTimeout(resolve,ms));
 mockIPC(async (cmd,args) => {
   window.calls.push({cmd,args});
-  if(cmd==='get_latest_scan') return params.has('workspace')?summary():null;
+  if(cmd==='get_latest_scan') return params.has('workspace')&&!indexCleared?summary():null;
+  if(cmd==='get_index_storage'||cmd==='compact_index_storage'||cmd==='clear_scan_index') {
+    await delay(window.test.storageDelay||0);
+    if(window.test.failStorage || (cmd==='clear_scan_index' && window.test.failClear)) throw {message:'Storage unavailable'};
+    if(cmd==='clear_scan_index') indexCleared=true;
+    return {databaseBytes:indexCleared?65536:41943040,journalBytes:0,reclaimableBytes:indexCleared||cmd==='compact_index_storage'?0:16777216,
+      scanCount:indexCleared?0:3,indexedFiles:indexCleared?0:60000,undoRecords:2,scanBudgetBytes:268435456};
+  }
   if(cmd==='start_scan') { await delay(800); scanRoot=args.request.rootPath; scanStatus=params.has('workspace')?'completed':'running'; return 'new-scan'; }
   if(cmd==='cancel_scan') { await delay(800); scanStatus='cancelled'; return null; }
   if(cmd==='get_scan_summary') return summary();

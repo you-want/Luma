@@ -107,6 +107,10 @@ export const appStore = {
       loading: false,
     });
   },
+  clearIndex() {
+    update({ phase: "idle", activeScanId: undefined, progress: undefined, summary: undefined,
+      largeFiles: [], insights: [], error: undefined, loading: false });
+  },
   ready() {
     update({ loading: false });
   },

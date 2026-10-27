@@ -13,7 +13,7 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
     let connection = open(path)?;
     let schema_version =
         connection.query_row("PRAGMA user_version", [], |row| row.get::<_, u32>(0))?;
-    if schema_version > 4 {
+    if schema_version > 5 {
         return Err(AppError::new(
             "DATABASE_ERROR",
             format!("数据库版本 {schema_version} 高于当前应用支持的版本。"),
@@ -45,6 +45,11 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
           is_hidden INTEGER NOT NULL DEFAULT 0,
           content_hash TEXT,
           FOREIGN KEY(scan_id) REFERENCES scan_runs(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS archived_scan_summaries (
+          scan_id TEXT PRIMARY KEY REFERENCES scan_runs(id) ON DELETE CASCADE,
+          summary_json TEXT NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_files_scan_size ON files(scan_id, size_bytes DESC);
@@ -154,13 +159,14 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
 
     if schema_version < 4 {
         connection.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')", [])?;
-        connection.execute("PRAGMA user_version = 4", [])?;
     }
+    connection.execute("PRAGMA user_version = 5", [])?;
     Ok(())
 }
 
 pub fn open(path: &Path) -> Result<Connection, AppError> {
     let connection = Connection::open(path)?;
+    connection.busy_timeout(std::time::Duration::from_secs(5))?;
     connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
     Ok(connection)
 }
@@ -178,10 +184,20 @@ pub fn create_scan_run(
     Ok(())
 }
 
+#[cfg(test)]
 pub fn insert_file_batch(
     connection: &mut Connection,
     scan_id: &str,
     files: &[FileEntry],
+) -> Result<(), AppError> {
+    insert_file_batch_with_limit(connection, scan_id, files, u64::MAX)
+}
+
+pub fn insert_file_batch_with_limit(
+    connection: &mut Connection,
+    scan_id: &str,
+    files: &[FileEntry],
+    used_bytes_limit: u64,
 ) -> Result<(), AppError> {
     let transaction = connection.transaction()?;
     {
@@ -203,6 +219,12 @@ pub fn insert_file_batch(
                 file.content_hash,
             ])?;
         }
+    }
+    if crate::storage::used_bytes(&transaction)? > used_bytes_limit {
+        return Err(AppError::new(
+            "INDEX_LIMIT",
+            "扫描索引达到容量预算，请选择更小的目录。",
+        ));
     }
     transaction.commit()?;
     Ok(())
@@ -243,7 +265,7 @@ pub fn latest_scan(path: &Path) -> Result<Option<ScanSummary>, AppError> {
     let connection = open(path)?;
     let scan_id = connection
         .query_row(
-            "SELECT id FROM scan_runs WHERE status = 'completed' ORDER BY finished_at DESC LIMIT 1",
+            "SELECT id FROM scan_runs WHERE status = 'completed' ORDER BY finished_at DESC, started_at DESC, rowid DESC LIMIT 1",
             [],
             |row| row.get::<_, String>(0),
         )
@@ -273,10 +295,21 @@ pub fn scan_summary(path: &Path, scan_id: &str) -> Result<Option<ScanSummary>, A
 /// copy, …) keep the head-of-table numbers and the category breakdown
 /// consistent with each other — they previously disagreed because the
 /// totals were a frozen snapshot written once at scan time.
-fn scan_summary_with_connection(
+pub(crate) fn scan_summary_with_connection(
     connection: &Connection,
     scan_id: &str,
 ) -> Result<ScanSummary, AppError> {
+    let archived: Option<String> = connection
+        .query_row(
+            "SELECT summary_json FROM archived_scan_summaries WHERE scan_id = ?1",
+            [scan_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(json) = archived {
+        return serde_json::from_str(&json)
+            .map_err(|error| AppError::new("DATABASE_ERROR", error.to_string()));
+    }
     let (root_path, status, started_at, finished_at, error_count): (
         String,
         String,
@@ -546,10 +579,12 @@ pub fn prune_old_scans(connection: &Connection) -> Result<(), AppError> {
            SELECT id FROM (
              SELECT id, ROW_NUMBER() OVER (
                PARTITION BY root_path
-               ORDER BY COALESCE(finished_at, started_at) DESC
+               ORDER BY (id = COALESCE((SELECT id FROM scan_runs WHERE status = 'completed' ORDER BY finished_at DESC, started_at DESC, rowid DESC LIMIT 1), '')) DESC,
+                        COALESCE(finished_at, started_at) DESC, rowid DESC
              ) AS rn
              FROM scan_runs WHERE status != 'running'
            ) WHERE rn > 3
+             AND id != COALESCE((SELECT id FROM scan_runs WHERE status = 'completed' ORDER BY finished_at DESC, started_at DESC, rowid DESC LIMIT 1), '')
          )",
         [],
     )?;
@@ -1302,7 +1337,7 @@ mod tests {
             .expect("query schema version");
 
         assert_eq!(status, "failed");
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
         drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");
     }
@@ -1370,7 +1405,7 @@ mod tests {
             )
             .expect("query retained file");
 
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
         assert!(columns.iter().any(|column| column == "content_hash"));
         let operation_table: String = connection
             .query_row(

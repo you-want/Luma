@@ -8,7 +8,7 @@ pub struct StartScanRequest {
     pub stay_on_file_system: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ScanStatus {
     Running,
@@ -66,7 +66,7 @@ pub struct FileEntry {
     pub content_hash: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CategorySummary {
     pub category: String,
@@ -74,7 +74,7 @@ pub struct CategorySummary {
     pub size_bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanSummary {
     pub scan_id: String,

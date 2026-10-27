@@ -6,8 +6,29 @@ export const enUS: Resources = {
   app: {
     name: "Luma",
     tagline: "Local Space Insight",
-    privacyNote: "Read-only scans; writes require confirmation",
+    privacyNote: "Scans leave files unchanged; preview before organizing",
   },
+  indexStorage: {
+    "shortTitle": "Local data",
+    "title": "Luma local storage",
+    "description": "This is Luma’s scan index, history summaries and undo records, not your original files.",
+    "loading": "Reading storage usage…",
+    "total": "Local data (including temporary journal)",
+    "files": "Indexed files",
+    "scans": "Scan records",
+    "undo": "Undo records",
+    "reclaimable": "Unused database space",
+    "policy": "Only the latest successful scan keeps a full file index. History keeps summaries: up to 3 per folder and 30 in total. Each scan has a {{budget}} budget for added index data. Unused space is reclaimed after scanning or at the next launch. Undo records are kept separately and survive index cleanup.",
+    "compact": "Reclaim unused space",
+    "clear": "Clear scan index",
+    "confirmTitle": "Clear all scan indexes?",
+    "confirmBody": "Scan results and history comparisons will be removed and you will need to rescan. Original files and undo records are kept. Rescan the original folder to use its undo records again.",
+    "confirmClear": "Confirm clearing index",
+    "cleared": "Scan indexes cleared. Original files and undo records are kept.",
+    "compacted": "Unused space reclaimed.",
+    "compactFailed": "The index was cleared, but space reclamation did not finish. Try Reclaim unused space again later.",
+    "retry": "Retry"
+},
   workspace: {
     directory: "Current folder", choose: "Choose folder", change: "Change folder", quickLocations: "Quick locations",
     chooseHint: "Desktop, Downloads, or any folder to organize", rescan: "Rescan",
@@ -351,6 +372,14 @@ export const enUS: Resources = {
       copyItemFailed: "Copy failed: {{reason}}",
       unknownError: "Unknown error",
     },
+    confirmMove: {
+      "title": "Confirm file move",
+      "confirm": "Confirm move",
+      "count": "Move {{count}} files",
+      "source": "From",
+      "destination": "To",
+      "hint": "Existing files will not be overwritten. This move can be undone."
+},
     confirmTrash: {
       title: "Move to trash",
       messageOne: "Move \"{{name}}\" to trash?",
@@ -439,6 +468,8 @@ export const enUS: Resources = {
     },
   },
   errors: {
+    INDEX_DISK_FULL: "Index writing stopped because the disk is full. Free disk space or clear Luma’s scan index, then scan a smaller folder. Original files were not changed.",
+    INDEX_LIMIT: "This scan reached its 256 MB index budget. Incomplete index data was discarded. Choose a smaller folder; the last successful scan and undo records are kept.",
     OP_BUSY: "Another file operation is still running. Please wait for it to finish.",
     PREVIEW_TOO_LARGE: "This file exceeds the 20 MB preview limit. Open it in its default application.",
     PREVIEW_UNSUPPORTED: "Inline preview is unavailable for this format. Open it in its default application.",

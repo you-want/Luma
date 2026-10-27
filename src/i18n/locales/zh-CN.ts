@@ -5,8 +5,29 @@ export const zhCN = {
   app: {
     name: "Luma",
     tagline: "本地空间观察",
-    privacyNote: "扫描只读，写操作均需确认",
+    privacyNote: "扫描不改原文件，整理前预览确认",
   },
+  indexStorage: {
+    "shortTitle": "本地存储",
+    "title": "Luma 本地存储",
+    "description": "这里是 Luma 自己的扫描索引、历史统计与撤销记录，不是你的原文件。",
+    "loading": "正在读取占用…",
+    "total": "本地数据占用（含临时日志）",
+    "files": "已索引文件",
+    "scans": "扫描记录",
+    "undo": "可撤销记录",
+    "reclaimable": "数据库空闲空间",
+    "policy": "仅保留最近一次成功扫描的完整索引，历史保留统计摘要：每个目录最多 3 次、总计最多 30 次。单次扫描新增索引预算为 {{budget}}；扫描结束或下次启动时自动回收空闲空间。撤销记录单独保留，不受索引清理影响。",
+    "compact": "回收空闲空间",
+    "clear": "清理扫描索引",
+    "confirmTitle": "清理所有扫描索引？",
+    "confirmBody": "将清除扫描结果与历史对比，之后需要重新扫描。你的原文件和撤销记录都会保留；重新扫描原目录后，可以继续使用对应的撤销记录。",
+    "confirmClear": "确认清理索引",
+    "cleared": "扫描索引已清理，原文件与撤销记录已保留。",
+    "compacted": "空闲空间已回收。",
+    "compactFailed": "索引已清理，但空间回收未完成，请稍后点击“回收空闲空间”重试。",
+    "retry": "重试"
+},
   workspace: {
     directory: "当前目录", choose: "选择目录", change: "更换目录", quickLocations: "常用目录",
     chooseHint: "桌面、下载，或任何需要整理的文件夹", rescan: "重新扫描",
@@ -350,6 +371,14 @@ export const zhCN = {
       copyItemFailed: "复制失败：{{reason}}",
       unknownError: "未知错误",
     },
+    confirmMove: {
+      "title": "确认移动文件",
+      "confirm": "确认移动",
+      "count": "即将移动 {{count}} 个文件",
+      "source": "源目录",
+      "destination": "目标目录",
+      "hint": "同名文件不会被覆盖，移动后可撤销。"
+},
     confirmTrash: {
       title: "移至废纸篓",
       messageOne: "确认将 \"{{name}}\" 移至废纸篓？",
@@ -438,6 +467,8 @@ export const zhCN = {
     },
   },
   errors: {
+    INDEX_DISK_FULL: "磁盘空间不足，索引写入已停止。请先释放磁盘空间或清理 Luma 扫描索引，再扫描较小目录；原文件未被修改。",
+    INDEX_LIMIT: "本次扫描索引达到 256 MB 预算，已停止并清理未完成索引。请缩小扫描目录；上次成功扫描与撤销记录已保留。",
     OP_BUSY: "另一项文件操作尚未完成，请等待完成后再操作。",
     PREVIEW_TOO_LARGE: "此文件超过 20 MB 预览限制，请在默认应用中打开。",
     PREVIEW_UNSUPPORTED: "此格式暂不支持内嵌预览，请在默认应用中打开。",

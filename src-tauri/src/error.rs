@@ -42,6 +42,14 @@ impl From<std::io::Error> for AppError {
 
 impl From<rusqlite::Error> for AppError {
     fn from(error: rusqlite::Error) -> Self {
+        if let rusqlite::Error::SqliteFailure(code, _) = &error {
+            if code.code == rusqlite::ErrorCode::DiskFull {
+                return Self::new(
+                    "INDEX_DISK_FULL",
+                    "磁盘空间不足，索引写入已停止。请释放空间后重试。原文件未被修改。",
+                );
+            }
+        }
         Self::new("DATABASE_ERROR", error.to_string())
     }
 }

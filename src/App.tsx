@@ -17,6 +17,7 @@ import { ScanHistory } from "./components/ScanHistory";
 import { ScanProgress } from "./components/ScanProgress";
 import Search from "./components/Search";
 import { StorageOverview } from "./components/StorageOverview";
+import { IndexStorage } from "./components/IndexStorage";
 import { UpdateButton } from "./components/UpdateButton";
 import { useScanEvents } from "./hooks/useScanEvents";
 import { useAsyncAction } from "./hooks/useAsyncAction";
@@ -41,6 +42,7 @@ function App() {
   const app = useAppStore();
   const [activeTab, setActiveTab] = useState<AppTab>("analysis");
   const scanAction = useAsyncAction<"choose" | "desktop" | "downloads" | "start" | "cancel">();
+  const [storagePending, setStoragePending] = useState(false);
   const [fileOperationPending, setFileOperationPending] = useState(false);
   const currentResult = app.phase === "completed" && app.summary
     && app.selectedPath.replace(/[/\\]+$/, "") === app.summary.rootPath.replace(/[/\\]+$/, "")
@@ -87,7 +89,7 @@ function App() {
         if (summary) await loadResult(summary.scanId);
         else appStore.ready();
       })
-      .catch(() => appStore.ready());
+      .catch(error => appStore.fail(errorMessage(error)));
   }, [loadResult]);
 
   // Events are the fast path, but a terminal event can be missed while the
@@ -126,7 +128,7 @@ function App() {
   }, [app.activeScanId, app.phase, loadResult]);
 
   async function handleChoose() {
-    if (fileOperationPending || appStore.getState().phase === "running") return;
+    if (storagePending || fileOperationPending || appStore.getState().phase === "running") return;
     await scanAction.run("choose", async () => {
       try {
         const path = await chooseDirectory();
@@ -138,7 +140,7 @@ function App() {
   }
 
   async function handleShortcut(location: "desktop" | "downloads") {
-    if (fileOperationPending || appStore.getState().phase === "running") return;
+    if (storagePending || fileOperationPending || appStore.getState().phase === "running") return;
     await scanAction.run(location, async () => {
       try {
         const path = await (location === "desktop" ? desktopDir() : downloadDir());
@@ -150,7 +152,7 @@ function App() {
   }
 
   async function handleStart() {
-    if (!app.selectedPath || fileOperationPending || appStore.getState().phase === "running") return;
+    if (!app.selectedPath || storagePending || fileOperationPending || appStore.getState().phase === "running") return;
     await scanAction.run("start", async () => {
       try {
         const scanId = await startScan({
@@ -199,6 +201,8 @@ function App() {
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
         <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
         <div className="privacy-note"><ShieldCheck size={15} />{t("app.privacyNote")}</div>
+        <IndexStorage disabled={app.loading || app.phase === "running" || fileOperationPending || scanAction.pending !== null}
+          onCleared={appStore.clearIndex} onWorkingChange={setStoragePending} />
         <UpdateButton />
         <LanguageSwitcher />
       </header>
@@ -209,7 +213,7 @@ function App() {
         isRunning={app.phase === "running"}
         isLoading={app.loading}
         hasResult={currentResult !== null}
-        locked={fileOperationPending}
+        locked={fileOperationPending || storagePending}
         pendingAction={scanAction.pending}
         statusText={fileOperationPending ? t("fileManager.state.working") : app.phase === "running"
           ? t("workspace.scanning") : currentResult ? t("workspace.scanned", { count: currentResult.totalFiles })

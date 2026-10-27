@@ -11,6 +11,7 @@ mod organizer;
 mod projects;
 mod scanner;
 mod search;
+mod storage;
 
 use commands::AppState;
 use std::{collections::HashMap, sync::Mutex};
@@ -65,6 +66,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::start_scan,
+            commands::get_index_storage,
+            commands::compact_index_storage,
+            commands::clear_scan_index,
             commands::cancel_scan,
             commands::get_latest_scan,
             commands::get_scan_summary,

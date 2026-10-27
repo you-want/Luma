@@ -11,7 +11,7 @@ use crate::{
     },
     organizer,
     projects::{self, ProjectCandidate},
-    scanner, search,
+    scanner, search, storage,
 };
 use std::{
     collections::HashMap,
@@ -49,14 +49,27 @@ async fn database_task<T: Send + 'static>(
     background_task(move || task(&database_path)).await
 }
 
-static FILE_MUTATION_LOCK: Mutex<()> = Mutex::new(());
+static DATABASE_BUSY: AtomicBool = AtomicBool::new(false);
+
+struct DatabaseActivity;
+impl DatabaseActivity {
+    fn acquire() -> Result<Self, AppError> {
+        DATABASE_BUSY
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| AppError::new("OP_BUSY", "扫描、文件操作或索引维护仍在进行。"))?;
+        Ok(Self)
+    }
+}
+impl Drop for DatabaseActivity {
+    fn drop(&mut self) {
+        DATABASE_BUSY.store(false, Ordering::Release);
+    }
+}
 
 fn file_mutation<T>(task: impl FnOnce() -> Result<T, AppError>) -> Result<T, AppError> {
     // Async commands can overlap across tabs or windows. Reject another write
     // instead of queueing a duplicate operation against a stale file snapshot.
-    let _guard = FILE_MUTATION_LOCK
-        .try_lock()
-        .map_err(|_| AppError::new("OP_BUSY", "Another file operation is still running."))?;
+    let _guard = DatabaseActivity::acquire()?;
     task()
 }
 
@@ -66,6 +79,7 @@ pub async fn start_scan(
     state: State<'_, AppState>,
     request: StartScanRequest,
 ) -> Result<String, AppError> {
+    let activity = DatabaseActivity::acquire()?;
     let scan_id = Uuid::new_v4().to_string();
     let cancel = Arc::new(AtomicBool::new(false));
     let database_path = state.database_path.clone();
@@ -91,16 +105,26 @@ pub async fn start_scan(
 
     let task_scan_id = scan_id.clone();
     tauri::async_runtime::spawn(async move {
+        let _activity = activity;
         let progress_app = app.clone();
         let worker_database_path = database_path.clone();
         let worker_scan_id = task_scan_id.clone();
         let result = tauri::async_runtime::spawn_blocking(move || {
             let mut connection = database::open(&worker_database_path)?;
+            let used_bytes_limit =
+                storage::used_bytes(&connection)?.saturating_add(storage::SCAN_BUDGET_BYTES);
             let outcome = scanner::scan_directory(
                 &request,
                 &worker_scan_id,
                 cancel,
-                |files| database::insert_file_batch(&mut connection, &worker_scan_id, &files),
+                |files| {
+                    database::insert_file_batch_with_limit(
+                        &mut connection,
+                        &worker_scan_id,
+                        &files,
+                        used_bytes_limit,
+                    )
+                },
                 |progress| {
                     let _ = progress_app.emit("scan-progress", progress);
                 },
@@ -119,7 +143,6 @@ pub async fn start_scan(
             } else {
                 None
             };
-            database::prune_old_scans(&connection)?;
 
             Ok::<_, AppError>(ScanFinished {
                 scan_id: worker_scan_id,
@@ -153,12 +176,19 @@ pub async fn start_scan(
             }
         };
 
-        let _ = app.emit("scan-finished", finished);
+        // Purge partial failed/cancelled listings too; preserve the previous
+        // successful index and independently persisted undo records.
+        let maintenance_path = database_path.clone();
+        if let Err(error) = background_task(move || storage::maintain(&maintenance_path)).await {
+            eprintln!("Luma index retention: {error}");
+        }
         if let Some(state) = app.try_state::<AppState>() {
             if let Ok(mut cancellations) = state.cancellations.lock() {
                 cancellations.remove(&task_scan_id);
             }
         }
+        drop(_activity);
+        let _ = app.emit("scan-finished", finished);
     });
 
     Ok(scan_id)
@@ -180,6 +210,9 @@ pub fn cancel_scan(state: State<'_, AppState>, scan_id: String) -> Result<(), Ap
 #[tauri::command]
 pub async fn get_latest_scan(state: State<'_, AppState>) -> Result<Option<ScanSummary>, AppError> {
     database_task(state, move |database_path| {
+        if let Ok(_activity) = DatabaseActivity::acquire() {
+            storage::maintain(database_path)?;
+        }
         database::latest_scan(database_path)
     })
     .await
@@ -190,9 +223,19 @@ pub async fn get_scan_summary(
     state: State<'_, AppState>,
     scan_id: String,
 ) -> Result<ScanSummary, AppError> {
+    let still_active = state
+        .cancellations
+        .lock()
+        .map_err(|_| AppError::new("OP_BUSY", "扫描状态不可用。"))?
+        .contains_key(&scan_id);
     database_task(state, move |database_path| {
-        database::scan_summary(database_path, &scan_id)?
-            .ok_or_else(|| AppError::new("SCAN_NOT_FOUND", "找不到对应的扫描记录。"))
+        let mut summary = database::scan_summary(database_path, &scan_id)?
+            .ok_or_else(|| AppError::new("SCAN_NOT_FOUND", "找不到扫描记录。"))?;
+        // Do not unlock the UI while retention/compaction is still running.
+        if still_active {
+            summary.status = ScanStatus::Running;
+        }
+        Ok(summary)
     })
     .await
 }
@@ -659,7 +702,7 @@ mod tests {
 
     #[test]
     fn overlapping_file_writes_are_rejected_without_executing_and_unlock_after_failure() {
-        let guard = FILE_MUTATION_LOCK.lock().unwrap();
+        let guard = DatabaseActivity::acquire().unwrap();
         let mut executed = false;
         let result = file_mutation(|| {
             executed = true;
@@ -671,4 +714,34 @@ mod tests {
         assert!(file_mutation(|| Err::<(), _>(AppError::new("TEST_IO", "failure"))).is_err());
         assert_eq!(file_mutation(|| Ok(42)).unwrap(), 42);
     }
+}
+
+#[tauri::command]
+pub async fn get_index_storage(
+    state: State<'_, AppState>,
+) -> Result<storage::StorageUsage, AppError> {
+    database_task(state, storage::usage).await
+}
+
+#[tauri::command]
+pub async fn compact_index_storage(
+    state: State<'_, AppState>,
+) -> Result<storage::StorageUsage, AppError> {
+    database_task(state, |path| {
+        file_mutation(|| {
+            let mut connection = database::open(path)?;
+            storage::retain(&mut connection)?;
+            storage::compact(&connection, true)?;
+            drop(connection);
+            storage::usage(path)
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn clear_scan_index(
+    state: State<'_, AppState>,
+) -> Result<storage::StorageUsage, AppError> {
+    database_task(state, |path| file_mutation(|| storage::clear(path))).await
 }
