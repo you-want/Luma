@@ -16,20 +16,20 @@
 | `HOLD` | 暂不实施，等待产品决策 |
 | `SHELVED` | 产品决策明确暂缓，无新决策前不投入实现 |
 
-> 关于签名与自动更新（工作包 F）：Tauri updater 的独立签名链路已恢复实施；Apple Developer ID、Windows 代码签名和公证仍标记为 `SHELVED`。updater 私钥只进入 GitHub Actions Secret，仓库和客户端只保存公钥。
+> 关于签名与自动更新（工作包 F）：Tauri updater 的独立签名链路已恢复实施；Apple Developer ID、Windows 代码签名和公证仍标记为 `SHELVED`。发布构建从 GitHub Actions Secret 读取 updater 私钥，受限权限的本机备份见发布手册；仓库和客户端只保存公钥。
 
 完成状态不能只凭“代码已写”更新。至少需要测试通过，并满足该工作包的验收标准。
 
 ## 2. 当前基线
 
-当前工作区已具备目录扫描、进度与取消、本地 SQLite 索引、空间分类、最大文件、透明发现、重复文件候选、开发项目识别、扫描历史对比、搜索、批量选择、文件浏览/预览/操作、规则整理和中英文界面。文件写入已收敛为显式确认、受保护路径、执行前复核、操作日志与持久化撤销；Windows 真机验收仍是发布前置条件。
+当前工作区已具备目录扫描、进度与取消、本地 SQLite 索引、空间分类、最大文件、透明发现、重复文件候选、开发项目识别、扫描历史对比、搜索、批量选择、文件浏览/预览/操作、规则整理和中英文界面。文件写入已收敛为显式确认、受保护路径、执行前复核、操作日志与持久化撤销；v0.4.0 已公开发布，macOS/Windows 构建通过；完整 Windows 真机验收仍未完成。
 | 基线能力 | 状态 | 证据 |
 |---|---|---|
-| macOS universal 内部预览版 | `DONE` | Tauri universal `.app`/`.dmg` bundle 通过；发布版本 v0.4.0 |
+| macOS universal 安装包 | `DONE` | Tauri universal `.app`/`.dmg` bundle 通过；发布版本 v0.4.0 |
 | 旧数据库 v1 → v4 迁移 | `DONE` | 保留 v1 文件数据，新增操作日志表与 FTS5 索引并执行 rebuild；Rust 迁移测试通过 |
 | 前端与 Rust 质量门禁 | `DONE` | 前端 6 项测试、Rust 59 项自动测试（另有 1 项手工性能基线）、rustfmt、Clippy、生产构建通过 |
 | 文件管理界面文案国际化 | `DONE` | 2026-10-26 将文件管理全部组件（工具栏、列表、预览、整理向导、确认框、toast、目录树、面包屑、重命名输入）迁入 i18n 资源，中英双语键集合一致测试通过；Chrome/WebKit 中英文交互与大小窗口回归通过 |
-| 自动更新 | `IN PROGRESS` | Tauri updater 插件、签名公钥、启动检查、下载进度、安装重启和 `latest.json` workflow 已接入；待配置 GitHub Secret 并完成跨版本验收 |
+| 自动更新 | `IN PROGRESS` | 签名密钥与 CI Secrets 已用于生产，v0.4.0 的 5 个 updater 目标已发布；2026-10-27 用户确认 v0.3.2 → v0.4.0 升级成功。其余设备和失败场景见 [发布手册](updater-release.md) |
 | Windows | `IN PROGRESS` | WIN-001~004/006 已完成（CI矩阵、路径规范化统一为`/`、项目识别、隐藏属性、reveal本地化）；Windows `.msi`/NSIS `.exe` 发布 workflow 已加入，WIN-005/007部分待办，WIN-008待真机，WIN-009阻塞于无Windows环境 |
 | 搜索 | `IN PROGRESS` | Search v1 已完成；Search v2 已完成 SQLite FTS5、BM25 相关度、确定性条件解析和本地 provider，Spotlight 与多 provider 去重待办 |
 | 批量选择 | `DONE` | 搜索页支持本页/全部筛选结果选择、复制路径和 CSV 导出 |
@@ -70,15 +70,15 @@ updater 签名密钥 ───────────────────�
 
 ## 5. 版本路线
 
-版本号是规划目标，可在开发中调整；依赖顺序不应随意打乱。
+已发布版本按实际交付记录；后续版本为规划目标。已发布不代表所有平台和异常场景都已完成验收。
 
 | 里程碑 | 目标 | 状态 | 发布门槛 |
 |---|---|---|---|
-| v0.2.0 | 搜索 + 批量选择 + 国际化基础 + Windows 适配 + 双平台内部预览 | `IN PROGRESS` | 十万文件索引可分页搜索；选择语义稳定；macOS universal 与 Windows x64 安装包通过 CI 和真机验收 |
-| v0.3.0 | Windows 真机完善 + 官网中英文入口 + 性能基线 | `TODO` | Windows 11 x64 完整扫描闭环；官网中英文入口；大规模索引性能数据 |
-| v0.4.0 | 安全归纳预览 + 文件操作日志与撤销 | `IN PROGRESS` | 默认预览、显式确认、冲突跳过、系统目录保护、执行前复核、SQLite 日志与重启后撤销；待跨平台回归 |
-| v0.5.0 | 后续本地理解能力 | `TODO` | 依赖 v0.2.0 发布反馈和产品决策 |
-| v0.6.0 | macOS/Windows 代码签名、公证与自动更新完善 | `IN PROGRESS` | updater 签名链路已实现；代码签名、公证仍待证书，跨版本更新和失败回退验收通过 |
+| v0.2.0 | 搜索、批量选择、国际化基础与 Windows 适配 | `DONE`（已发布） | 历史发布；未完成的跨平台真机验收继续跟踪，不按发布状态视为通过 |
+| v0.3.0–v0.3.2 | 文件操作可靠性、Windows 适配与正式 updater 密钥 | `DONE`（已发布） | 旧规划中的官网英文入口和 Windows 真机验收未随版本完成，继续保留待办 |
+| v0.4.0 | 文件夹整理、统一目录工作区、操作反馈与预览布局 | `DONE`（已发布） | 双平台 CI 和安装包发布成功，Chrome/WebKit 中英文交互回归通过；已确认一次 v0.3.2 → v0.4.0 升级，完整平台验收另行跟踪 |
+| v0.5.0 | 后续本地理解能力 | `TODO` | 依赖当前版本反馈和产品决策 |
+| v0.6.0 | macOS/Windows 代码签名、公证与自动更新完善 | `IN PROGRESS` | updater 签名链路已实现；代码签名、公证仍待证书，全部设备升级和失败场景验收仍待完成 |
 
 updater 产物签名已纳入近期发布链路；Apple Developer ID、Windows 代码签名和公证仍未启用，不得以未签名安装包替代更新签名验收。
 
@@ -218,12 +218,12 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 
 | ID | 任务 | 状态 | 说明 |
 |---|---|---|---|
-| ORG-001 | 明确规则范围：类型、年份/月、扩展名 | `DONE` | 四类规则已实现；源目录必须位于当前扫描根目录内 |
+| ORG-001 | 明确规则范围：类型、年份/月、扩展名 | `DONE` | 五类方案已实现（含桌面/下载细分类），支持关键词与单文件去向覆盖；源目录位于当前扫描范围内 |
 | ORG-002 | 设计归纳计划模型：源、目标、规则、冲突、预期变化 | `DONE` | `OrganizePlan` 返回完整移动清单和冲突统计 |
-| ORG-003 | 实现只读 dry-run，生成可审阅计划 | `DONE` | 预览阶段不触碰文件系统 |
+| ORG-003 | 实现只读 dry-run，生成可审阅计划 | `DONE` | 预览只读索引及目标元数据检查，不创建文件夹或移动文件 |
 | ORG-004 | 设计预览 UI，支持冲突说明 | `DONE` | 四步向导：规则、目录、预览、执行 |
 | ORG-005 | 只允许显式确认的文件写入 | `DONE` | 操作只从文件管理器或确认后的整理向导触发 |
-| ORG-006 | 实现同卷移动与跨卷回退 | `DONE` | `rename` 失败时采用复制后删除源文件 |
+| ORG-006 | 实现同卷移动与跨卷回退 | `DONE` | 同卷使用不覆盖目标的移动，跨卷复制后删除源文件；失败时保留明细 |
 | ORG-007 | 处理冲突、权限、文件变化和系统目录 | `DONE` | 不覆盖目标；执行前复核大小/修改时间；系统和应用关键目录受保护 |
 | ORG-008 | 建立操作日志：running/completed/failed/partial/interrupted/undone | `DONE` | SQLite `file_operations` 表，成功项逐条写入反向路径 |
 | ORG-009 | 实现撤销并支持重启后恢复 | `DONE` | 重命名、移动、规则整理支持持久化撤销；异常退出标记为 `interrupted` |
@@ -246,19 +246,19 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 
 ### F. 软件自动升级更新（`IN PROGRESS`）
 
-> 当前采用 GitHub Releases stable 通道。Tauri updater 的安装包签名与更新清单已经接入；Apple Developer ID、Windows 代码签名和公证仍暂缓，因此系统首次安装仍可能提示来源未验证。私钥只进入 GitHub Actions Secret，不进入仓库。
+> 当前采用 GitHub Releases stable 通道。Tauri updater 的安装包签名与更新清单已经接入；Apple Developer ID、Windows 代码签名和公证仍暂缓，因此系统首次安装仍可能提示来源未验证。发布构建从 GitHub Actions Secret 读取私钥，私钥不进入仓库。
 
-产品定义：后台检查版本，向用户展示版本和下载进度；安装与重启必须由用户点击更新按钮确认，不静默强制升级。完整更新说明展示仍是 UPDATE-006 的剩余项。
+产品定义：后台检查版本，向用户展示版本和下载进度；安装与重启必须由用户点击更新按钮确认，不静默强制升级。发布说明目前仅在更新按钮悬浮提示中展示，独立说明面板仍是 UPDATE-006 的剩余项。
 
 | ID | 任务 | 状态 | 恢复前置条件 |
 |---|---|---|---|
 | UPDATE-001 | 决定更新渠道：stable/beta，定义跳过版本与稍后提醒 | `DONE` | 无；当前采用 GitHub Releases stable |
-| UPDATE-002 | 获取并安全保存 Tauri updater 签名密钥，配置 CI secrets | `IN PROGRESS` | 维护方将私钥配置为 `TAURI_SIGNING_PRIVATE_KEY` Secret |
+| UPDATE-002 | 获取并安全保存 Tauri updater 签名密钥，配置 CI secrets | `DONE` | v0.3.2 / v0.4.0 已通过签名构建并发布，私钥不进入仓库 |
 | UPDATE-003 | 配置 macOS Developer ID 签名、公证和 staple | `SHELVED` | 决定恢复 + Apple Developer 证书 |
 | UPDATE-004 | 配置 Windows 代码签名和受信任安装包 | `SHELVED` | 决定恢复 + Windows 签名证书, WIN-007 |
-| UPDATE-005 | 接入 updater 插件、公钥、签名产物和 `latest.json` | `IN PROGRESS` | UPDATE-002 |
+| UPDATE-005 | 接入 updater 插件、公钥、签名产物和 `latest.json` | `DONE` | v0.4.0 正式清单、5 个平台目标和 3 类签名更新产物已发布 |
 | UPDATE-006 | 实现检查、版本说明、进度、失败重试与重启 UI | `IN PROGRESS` | 版本检查、下载进度、失败重试和重启已完成；完整更新说明展示待补 |
-| UPDATE-007 | 发布旧版测试包，验证跨一个版本的真实升级 | `TODO` | UPDATE-002, UPDATE-005~006 |
+| UPDATE-007 | 发布旧版测试包，验证跨一个版本的真实升级 | `IN PROGRESS` | 2026-10-27 用户确认 v0.3.2 → v0.4.0 成功；平台/架构未单独记录，完整设备矩阵待补 |
 | UPDATE-008 | 验证清单篡改、坏签名、断网、下载中断和回退提示 | `TODO` | UPDATE-007 |
 
 验收标准（恢复后适用）：
@@ -297,6 +297,8 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 
 ## 9. 进度记录
 
+以下为按日期保留的历史记录，历史“待发布/待配置”不覆盖上方当前状态。
+
 | 日期 | 工作包 | 状态变化 | 结果/证据 | 下一步 |
 |---|---|---|---|---|
 | 2026-08-05 | PLAN-001 | `TODO → DONE` | 基于 v0.2.0 代码建立六项需求路线图 | 从 I18N-001 和 WIN-001 开始 |
@@ -320,6 +322,7 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 | 2026-10-26 | 文档 | `—` | 补记 2026-10-16 可靠性修复进度；统一 README / `package.json` / `tauri.conf.json` / 公开 Release 的版本口径（0.2.0 → 0.3.1）；`output/` 目录（分析报告产物）加入 `.gitignore`，不纳入版本库 | 发布 v0.3.2 前完成发布门槛核对 |
 | 2026-10-26 | UPDATE-002 | `IN PROGRESS` | 生成正式的 minisign 密钥对（带口令），公钥写入 `tauri.conf.json`，私钥存放于 `~/.local/luma-updater/` 与 GitHub Actions Secrets（`TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）；`docs/updater-release.md` 重写密钥现状章节。旧临时测试密钥（私钥已随 /private/tmp 清理丢失）作废，自 v0.3.2 起客户端信任新公钥 | 发布 v0.3.2 并完成 UPDATE-007/008 跨版本验收 |
 | 2026-10-26 | ORG-010 / WIN-005 | `IN PROGRESS` | 修复 Windows 保护路径判定：`is_protected_path` 原先硬编码 `c:\` 盘符，盘符不同的系统（如 D 盘装 Windows）保护失效；改为从路径自身解析实际盘符（盘符不敏感匹配 `\windows`、`\program files` 等根目录），并新增 `is_protected_path_is_drive_agnostic_on_windows` 测试。CI 1.97 Clippy `question_mark` 规则同步修复（`parse_size_literal` 改为 suffix 表 + `find_map`） | Windows 真机回归（WIN-009）仍 BLOCKED |
+| 2026-10-27 | v0.4.0 / UPDATE-002,005,007 | `已发布；正常升级部分验证` | 发布提交 `e13e37f`；macOS universal / Windows x64 构建和发布成功；前端 6、Rust 59 项测试通过（另 1 项性能基线忽略），Chrome/WebKit 中英文工作区与文件管理回归通过；用户确认 v0.3.2 → v0.4.0 升级成功 | 完整设备升级矩阵、Windows 真机和 UPDATE-008 失败场景；官网英文入口仍待办 |
 
 ## 10. 决策记录
 

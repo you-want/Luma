@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Luma · 照见你的数字世界</title>
-  <meta name="description" content="Luma 是一款面向 macOS 与 Windows 11 x64 的本地文件空间观察与整理工具，可查看空间分类、搜索过滤、重复文件候选和扫描历史，并在明确确认后安全执行文件操作。扫描只读，数据不出本机。">
+  <meta name="luma-version" content="0.4.0">
+  <meta name="luma-content-revision" content="2026-10-27-docs-sync">
+  <link rel="canonical" href="https://luma.raingpt.top/">
+  <meta name="description" content="Luma v0.4.0 已发布：在同一目录中分析空间、管理文件，按类型、日期或关键词预览整理，确认后移动并支持撤销。提供 macOS 与 Windows 安装包，文件和索引留在本机。">
   <meta name="theme-color" content="#17211f">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -845,13 +848,14 @@
           <li><a href="#capabilities">能力</a></li>
           <li><a href="#insights">发现</a></li>
           <li><a href="#search">检索</a></li>
-          <li><a href="#flow">理解之道</a></li>
+          <li><a href="#organize">整理</a></li>
+          <li><a href="#flow">使用流程</a></li>
           <li><a href="#privacy">隐私</a></li>
           <li><a href="#tech">技术</a></li>
           <li><a href="#roadmap">路线图</a></li>
         </ul>
       </nav>
-      <a class="lm-nav__cta lm-nav__cta--top" href="#download">获取预览版</a>
+      <a class="lm-nav__cta lm-nav__cta--top" href="#download">下载 v0.4.0</a>
       <button class="lm-nav__toggle" type="button" aria-expanded="false" aria-controls="lm-menu" aria-label="打开导航菜单">
         <span></span><span></span><span></span>
       </button>
@@ -864,12 +868,12 @@
       <div class="lm-hero__seal-col" aria-hidden="true">观其形 · 知其里 · 各归其位</div>
       <div class="lm-container lm-hero__grid">
         <div class="lm-hero__copy">
-          <span class="lm-kicker">v0.2.0 双平台内部预览 · MACOS + WINDOWS</span>
+          <span class="lm-kicker">v0.4.0 已发布 · MACOS + WINDOWS</span>
           <h1 class="lm-hero__title" id="hero-title">看得见的，<em>才谈得上理解。</em></h1>
           <p class="lm-hero__en">Luma — Local insight for your digital world.</p>
-          <p class="lm-hero__lead">你的电脑里装着数年的文件，却没有一张地图。Luma 以只读方式扫描你指定的目录，呈现空间分类、重复文件候选、开发项目与历史变化；当你进入文件管理并明确确认后，也可以安全地重命名、移动、复制或整理文件。所有索引和操作日志都留在这台电脑。</p>
+          <p class="lm-hero__lead">从桌面、下载目录或任意文件夹开始。Luma 先只读扫描，再让你在同一目录下分析空间、预览和管理文件。面对堆积的资料，先看整理清单、调整分类，确认后再移动。文件、索引和操作日志都留在这台电脑。</p>
           <div class="lm-hero__actions">
-            <a class="lm-btn-primary" href="#download">获取 Luma 0.2.0</a>
+            <a class="lm-btn-primary" href="#download">下载 Luma 0.4.0</a>
             <a class="lm-text-link" href="#capabilities">看看它怎么工作</a>
           </div>
           <div class="lm-hero__meta">
@@ -1011,36 +1015,65 @@
       </div>
     </section>
 
+    <!-- ==================== 文件管理与整理 ==================== -->
+    <section class="lm-section" id="organize" aria-labelledby="organize-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">v0.4.0 · 从看清到归位</span>
+            <h2 id="organize-title">桌面再乱，<br>也能有序归位。</h2>
+          </div>
+          <p>先选目录，再扫描。空间分析与文件管理共用顶部目录栏，切换视图保留位置；更换目录后重新扫描，让你始终知道正在处理哪一批文件。</p>
+        </div>
+        <div class="lm-eyes">
+          <article class="lm-eye lm-reveal">
+            <div class="lm-eye__idx" aria-hidden="true">理</div>
+            <h3>先预览，再整理</h3>
+            <p class="lm-eye__en">Preview before moving</p>
+            <p>桌面与下载整理可细分截图、文档、表格、演示文稿和安装包；也支持按类型、日期或文件名关键词归类。预览中能排除文件、改分类名称和单个文件去向，同名目标可跳过或自动编号。</p>
+            <span class="lm-eye__tag">默认保留已有文件夹与隐藏文件 · 确认后移动</span>
+          </article>
+          <article class="lm-eye lm-reveal">
+            <div class="lm-eye__idx" aria-hidden="true">览</div>
+            <h3>看文件，也看清操作</h3>
+            <p class="lm-eye__en">Browse, preview and manage</p>
+            <p>图片、文本和 PDF 首页可在本地预览。文件管理支持重命名、移动、复制和移至废纸篓；耗时操作显示等待状态并禁止重复提交。重命名、移动和整理记录可跨重启撤销，复制和废纸篓操作暂不提供应用内撤销。</p>
+            <span class="lm-eye__tag">本地预览 · 明确反馈 · 持久化撤销</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <!-- ==================== 价值链 ==================== -->
     <section class="lm-section lm-flow" id="flow" aria-labelledby="flow-title">
       <div class="lm-container">
         <div class="lm-heading lm-reveal">
           <div>
-            <span class="lm-kicker">Luma 的理解之道</span>
+            <span class="lm-kicker">选好目录，循序整理</span>
             <h2 id="flow-title">从文件，<br>到行动。</h2>
           </div>
-          <p>真正的价值不在「扫描」—— 扫描谁都会。Luma 想走的是一条更长的路：先看见，再理解，然后记住，最后在你确认下行动。</p>
+          <p>从只读扫描开始，在同一目录下查看空间或管理文件，生成整理预览，再决定哪些文件需要移动。每一步都有明确的对象和反馈。</p>
         </div>
         <ol class="lm-steps">
           <li class="lm-step lm-reveal">
             <div class="lm-step__zh" aria-hidden="true">见</div>
             <h3>Scan</h3>
-            <p>遍历目录，读取元数据，画出空间全貌。</p>
+            <p>选择桌面、下载或其他目录，只读扫描元数据。</p>
           </li>
           <li class="lm-step lm-reveal">
             <div class="lm-step__zh" aria-hidden="true">识</div>
             <h3>Understand</h3>
-            <p>分类、识别开发项目、确认重复候选并呈现历史变化。</p>
+            <p>在空间分析与文件管理之间切换，查看分类、文件和内容预览。</p>
           </li>
           <li class="lm-step lm-reveal">
             <div class="lm-step__zh" aria-hidden="true">记</div>
             <h3>Remember</h3>
-            <p>把稳定的元数据沉淀为可查询、可恢复的本地记忆。</p>
+            <p>索引保存在本机，整理前先核对分类、目标路径与同名冲突。</p>
           </li>
           <li class="lm-step lm-reveal">
             <div class="lm-step__zh" aria-hidden="true">行</div>
             <h3>Act</h3>
-            <p>在你明确确认后，才归档或整理 —— 永远由你做主。</p>
+            <p>确认后才移动文件，重命名、移动与整理可通过本地记录撤销。</p>
           </li>
         </ol>
       </div>
@@ -1063,7 +1096,11 @@
             </li>
             <li>
               <span class="lm-pledge__seal" aria-hidden="true">界</span>
-              <div><strong>不越界扫描</strong><span>默认不跟随符号链接，避免循环遍历，也不擅自跨越到其他挂载点。</span></div>
+              <div><strong>不越界扫描</strong><span>默认不跟随符号链接，不跨越文件系统边界；整理源目录必须位于当前扫描范围内。</span></div>
+            </li>
+            <li>
+              <span class="lm-pledge__seal" aria-hidden="true">更</span>
+              <div><strong>更新联网，文件留在本机</strong><span>应用启动或手动检查更新时会连接 GitHub Releases，下载更新也需要联网。该过程不上传文件内容、扫描索引或操作日志，安装前校验更新产物签名。</span></div>
             </li>
           </ul>
         </div>
@@ -1095,7 +1132,7 @@
           </article>
           <article class="lm-tech-card lm-reveal">
             <h3>React <small>Interface</small></h3>
-            <p>React 19 + TypeScript 构建界面，内置简体中文与英文并跟随系统语言，跟随系统的浅色与深色主题，键盘可操作，窄窗口下也不会横向溢出。</p>
+            <p>React 19 + TypeScript 构建界面，内置简体中文与英文，按系统语言初始化并可手动切换。统一目录工作区、键盘操作与窄窗口布局，让分析和文件管理衔接自然。</p>
           </article>
         </div>
       </div>
@@ -1109,7 +1146,7 @@
             <span class="lm-kicker">诚实的进度</span>
             <h2 id="road-title">一步一步，<br>把地基打牢。</h2>
           </div>
-          <p>Luma 还年轻。v0.2.0 先把「看见、复查、比较」做到可靠，再继续探索更深的本地理解能力。</p>
+          <p>v0.4.0 已把「看见、复查、整理」连成一条可操作的流程。我们继续完善平台验收，再探索更深的本地理解能力。</p>
         </div>
         <ol class="lm-road">
           <li class="lm-reveal">
@@ -1130,14 +1167,21 @@
             <div class="lm-road__phase">可用版<small>Milestone 3</small></div>
             <div class="lm-road__body">
               <h3>重复候选、项目识别与历史对比</h3>
-              <p>在透明发现之上增加内容重复确认、开发项目识别和同目录历史比较，并打包为可安装的内部预览版。</p>
+              <p>在透明发现之上增加内容重复确认、开发项目识别和同目录历史比较，并提供可安装的桌面版本。</p>
             </div>
           </li>
           <li class="lm-reveal">
             <div class="lm-road__phase">检索与多语言<small>Milestone 4</small></div>
             <div class="lm-road__body">
-              <h3>索引检索、批量导出与中英文界面 <span class="lm-road__now">v0.2.0</span></h3>
-              <p>本版已支持按名称、分类、大小、时间检索与分页排序；跨页批量选择并复制路径或导出清单（非破坏性，不移动删除）；界面内置简体中文与英文，跟随系统语言并可手动切换。应用会检查经过签名的 GitHub Release 更新，由你确认后下载、安装并重启。Windows 11 x64 真机安装、扫描和更新烟测仍待验收。</p>
+              <h3>索引检索、批量导出与中英文界面</h3>
+              <p>按名称、分类、大小、时间检索并分页排序；跨页批量选择后复制路径或导出 CSV。搜索保持只读，文件修改在文件管理中主动触发；应用界面内置简体中文与英文。</p>
+            </div>
+          </li>
+          <li class="lm-reveal">
+            <div class="lm-road__phase">管理与整理<small>Milestone 5</small></div>
+            <div class="lm-road__body">
+              <h3>统一工作区、整理预览与撤销 <span class="lm-road__now">v0.4.0</span></h3>
+              <p>文件管理和规则整理已发布，macOS universal 与 Windows x64 安装包构建通过。2026-10-27，用户已确认一次 v0.3.2 → v0.4.0 应用内升级成功；完整设备升级矩阵和 Windows 真机回归继续完善。</p>
             </div>
           </li>
           <li class="lm-reveal">
@@ -1156,10 +1200,11 @@
       <div class="lm-container lm-final__inner">
         <span class="lm-kicker" style="justify-content:center;">给你的电脑一张地图</span>
         <h2 id="final-title">让计算，<br>回归从容。</h2>
-        <p>Luma 0.2.0 提供 macOS universal 与 Windows 11 x64 安装包，并支持签名校验的应用内更新。当前安装包尚未进行 Apple/Windows 代码签名或公证，首次打开时系统可能需要手动确认运行来源；Windows 安装与更新仍需真机烟测。</p>
+        <p>Luma 0.4.0 提供 macOS 通用版（Apple Silicon 与 Intel）和 Windows x64 安装包。已有版本可通过应用内检查更新；v0.3.2 → v0.4.0 已有用户升级成功。安装包尚未启用 Apple/Windows 平台代码签名或公证，Windows 真机验收仍待补齐。</p>
         <div class="lm-final__actions">
-          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases" rel="noopener noreferrer">前往 GitHub Releases</a>
-          <a class="lm-text-link" href="https://github.com/you-want/Luma" rel="noopener noreferrer">查看源代码</a>
+          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.4.0/Luma_0.4.0_universal.dmg" rel="noopener noreferrer">下载 macOS 通用版</a>
+          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.4.0/Luma-0.4.0-windows-x64-setup.exe" rel="noopener noreferrer">下载 Windows 安装包</a>
+          <a class="lm-text-link" href="https://github.com/you-want/Luma/releases/tag/v0.4.0" rel="noopener noreferrer">全部安装包与更新说明</a>
         </div>
       </div>
     </section>
@@ -1175,8 +1220,8 @@
         <p class="lm-footer__tag">Luma 是一款面向 macOS 与 Windows 的本地文件理解工具。看见你的数字空间，理解它，并始终把决定权交还给你。</p>
       </div>
       <div class="lm-footer__bottom">
-        <span>© 2026 Luma · v0.2.0 内部预览</span>
-        <span>本页由 Han design skill（宋 · song 主题）构建 · 响应式 · 可访问</span>
+        <span>© 2026 Luma · v0.4.0</span>
+        <span>扫描只读 · 确认后整理 · 本地优先</span>
       </div>
     </div>
   </footer>
