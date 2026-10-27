@@ -6,7 +6,7 @@ Luma 是一个本地优先的文件空间观察与整理工具，当前已验证
 
 官网：[luma.raingpt.top](https://luma.raingpt.top/)。Release 已提供 macOS universal `.dmg` 和 Windows x64 `.msi` / NSIS `.exe`，附带签名 updater 产物。用户已于 2026-10-27 确认应用内 `v0.3.2 → v0.4.0` 升级成功；该设备的平台与架构未单独记录，其他设备及 Windows 真机验收仍需补齐。
 
-本版更新见 [`docs/releases/v0.4.0.md`](docs/releases/v0.4.0.md)。当前开发分支另包含尚未发布的本地存储管理与移动确认，见 [`docs/local-storage.md`](docs/local-storage.md)。
+本版更新见 [`docs/releases/v0.4.0.md`](docs/releases/v0.4.0.md)。v0.4.1 发布准备包含本地存储管理、移动确认与新版 macOS 安装界面，见 [`docs/local-storage.md`](docs/local-storage.md)。
 
 后续功能与逐项进度见 [`docs/product-roadmap.md`](docs/product-roadmap.md)；Search v2 的拆解、验收和持续执行记录见 [`docs/search-v2-plan.md`](docs/search-v2-plan.md)。
 
@@ -25,7 +25,7 @@ Luma 是一个本地优先的文件空间观察与整理工具，当前已验证
 - **重复文件候选** — 先按文件大小筛选，再对候选文件计算 BLAKE3 内容哈希，展示重复组、可节省空间和 Finder 定位入口。只有用户主动执行查找时才读取文件内容。
 - **开发项目识别** — 识别 Node.js、Rust、Python、Git、Xcode、Maven 和 Gradle 项目，展示项目类型、文件数、占用空间与路径。
 - **扫描历史对比** — 按目录保留最近 3 次终态扫描，可比较总容量、文件数量和分类变化。
-- **本地持久化** — 结果保留在本机 SQLite，启动后自动恢复最近一次成功结果。开发分支仅保留最近一次成功扫描的完整索引，历史转为统计摘要，每目录最多 3 次、全局最多 30 次；单次扫描新增索引预算 256 MiB。顶部「本地存储」可查看占用、回收空闲空间或确认清理索引，撤销记录独立保留。完整索引不进入前端状态。
+- **本地持久化** — 结果保留在本机 SQLite，启动后自动恢复最近一次成功结果。v0.4.1 仅保留最近一次成功扫描的完整索引，历史转为统计摘要，每目录最多 3 次、全局最多 30 次；单次扫描新增索引预算 256 MiB。顶部「本地存储」可查看占用、回收空闲空间或确认清理索引，撤销记录独立保留。完整索引不进入前端状态。
 - **中英文界面** — 内置简体中文与英文，首次启动按系统语言自动选择，可在标题栏手动切换并持久化保存；数字、容量与日期随语言本地化。
 
 ## 安全与隐私
@@ -101,6 +101,8 @@ pnpm tauri build
 ```
 
 产物位于 `src-tauri/target/release/bundle/`：macOS 为 `.app`/`.dmg`，Windows 为 `.msi`/NSIS `.exe`。
+
+macOS 正式安装盘使用独立脚本生成品牌背景、128 点图标和拖拽引导，避免 Finder 自动化未保存外观设置的问题。CI 已接入；本地构建方法见 [macOS 安装盘](docs/macos-installer.md)。
 
 ### 打 tag 自动发版
 

@@ -76,7 +76,13 @@ jobs:
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - name: Build macOS bundles
-        run: pnpm tauri build --target universal-apple-darwin --bundles app,dmg
+        run: pnpm tauri build --target universal-apple-darwin --bundles app
+
+      - name: Build branded macOS installer
+        run: |
+          python3 -m venv "$RUNNER_TEMP/luma-dmg-tools"
+          "$RUNNER_TEMP/luma-dmg-tools/bin/pip" install -r scripts/requirements-dmg.txt
+          "$RUNNER_TEMP/luma-dmg-tools/bin/python" scripts/build-macos-dmg.py --app src-tauri/target/universal-apple-darwin/release/bundle/macos/Luma.app --output "src-tauri/target/universal-apple-darwin/release/bundle/dmg/Luma_${GITHUB_REF_NAME#v}_universal.dmg"
 
       - name: Collect macOS artifacts
         run: |
