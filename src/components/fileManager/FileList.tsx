@@ -106,6 +106,7 @@ function FileRow({
       aria-selected={isSelected}
       tabIndex={0}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter") onOpen(file.path);
         if (e.key === " ")     { e.preventDefault(); onSelect(file); }
         if (e.key === "F2")    onStartRename(file.path);
@@ -205,6 +206,7 @@ function GridCell({ file, isSelected, isChecked, onSelect, onToggleCheck, onOpen
       aria-selected={isSelected}
       tabIndex={0}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter") onOpen(file.path);
         if (e.key === " ")     { e.preventDefault(); onSelect(file); }
       }}
@@ -256,7 +258,7 @@ function ListHeader({ allChecked, someChecked, onToggleAll }: HeaderProps) {
       <span />
       <span>{t("fileManager.list.header.name")}</span>
       <span>{t("fileManager.list.header.modified")}</span>
-      <span>{t("fileManager.list.header.size")}</span>
+      <span className="fm-file-size">{t("fileManager.list.header.size")}</span>
       <span />
     </div>
   );
@@ -353,6 +355,9 @@ export function FileList({
 
   return (
     <div className="fm-file-list">
+      {view === "list" && files.length > 0 && (
+        <ListHeader allChecked={allChecked} someChecked={someChecked} onToggleAll={handleToggleAll} />
+      )}
       {/* Directories — always list style */}
       {dirs.length > 0 && (
         <div className="fm-file-dirs">
@@ -380,11 +385,7 @@ export function FileList({
           </div>
         ) : (
           <div className="fm-file-rows" role="rowgroup">
-            <ListHeader
-              allChecked={allChecked}
-              someChecked={someChecked}
-              onToggleAll={handleToggleAll}
-            />
+
             {files.map((f) => (
               <FileRow
                 key={f.id}

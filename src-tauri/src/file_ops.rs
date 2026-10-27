@@ -1187,12 +1187,36 @@ fn resolve_for_protection(path: &Path) -> PathBuf {
     resolved
 }
 
-fn move_path(src: &Path, dst: &Path) -> Result<(), String> {
-    match std::fs::rename(src, dst) {
-        Ok(()) => Ok(()),
-        Err(rename_error) => copy_then_remove(src, dst)
-            .map_err(|copy_error| format!("{rename_error} / {copy_error}")),
+pub(crate) fn move_path(src: &Path, dst: &Path) -> Result<(), String> {
+    // hard_link and create_new both fail atomically if another process creates
+    // the destination after preview; rename/copy would overwrite it on Unix.
+    if std::fs::hard_link(src, dst).is_err() {
+        let mut input = std::fs::File::open(src).map_err(|e| e.to_string())?;
+        let mut output = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(dst)
+            .map_err(|e| e.to_string())?;
+        let copied = (|| -> std::io::Result<()> {
+            let metadata = input.metadata()?;
+            std::io::copy(&mut input, &mut output)?;
+            output.set_permissions(metadata.permissions())?;
+            if let Ok(modified) = metadata.modified() {
+                output.set_times(std::fs::FileTimes::new().set_modified(modified))?;
+            }
+            output.sync_all()
+        })();
+        drop(output);
+        if let Err(error) = copied {
+            let cleanup = std::fs::remove_file(dst).err();
+            return Err(format!("{error}; rollback: {cleanup:?}"));
+        }
     }
+    if let Err(error) = std::fs::remove_file(src) {
+        let cleanup = std::fs::remove_file(dst).err();
+        return Err(format!("{error}; rollback: {cleanup:?}"));
+    }
+    Ok(())
 }
 
 fn system_time_seconds(time: SystemTime) -> Option<i64> {

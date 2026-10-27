@@ -2,7 +2,7 @@
 // Self-dismisses after `duration` ms; undo button resets the timer.
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle, AlertTriangle, X, RotateCcw } from "lucide-react";
+import { CheckCircle, AlertTriangle, X, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 export type ToastKind = "success" | "error" | "info";
@@ -64,7 +64,7 @@ function ToastItem({
           onClick={handleUndo}
           onMouseEnter={resetTimer}
         >
-          <RotateCcw size={12} />
+          <Undo2 size={12} />
           {toast.undoLabel ?? t("fileManager.toast.undo")}
         </button>
       )}

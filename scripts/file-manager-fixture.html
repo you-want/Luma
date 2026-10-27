@@ -1,0 +1,127 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body><div id="root"></div><script type="module">
+import RefreshRuntime from '/@react-refresh';
+RefreshRuntime.injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => type => type;
+window.__vite_plugin_react_preamble_installed__ = true;
+const params = new URLSearchParams(location.search);
+localStorage.setItem('luma.language', params.get('lang') || 'zh-CN');
+const React = (await import('/node_modules/.vite/deps/react.js')).default;
+const {createRoot} = (await import('/node_modules/.vite/deps/react-dom_client.js')).default;
+await import('/src/i18n/index.ts');
+await import('/src/App.css');
+const {mockIPC} = await import('/node_modules/@tauri-apps/api/mocks.js');
+const rootPath = '/Users/demo/Desktop';
+const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+// One real PDF page, including offsets, so preview tests do not feed PNG data to a PDF frame.
+const pdfObjects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+  '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 260 340] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+  '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+const pdfContent = 'BT /F1 16 Tf 20 290 Td (Luma PDF preview) Tj ET';
+pdfObjects.push(`<< /Length ${pdfContent.length} >>\nstream\n${pdfContent}\nendstream`);
+let pdf = '%PDF-1.4\n';
+const offsets = [0];
+pdfObjects.forEach((object,index) => { offsets.push(pdf.length); pdf += `${index+1} 0 obj\n${object}\nendobj\n`; });
+const xref = pdf.length;
+pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+pdf += offsets.slice(1).map(offset=>`${String(offset).padStart(10,'0')} 00000 n \n`).join('');
+pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+let files = [
+  {name:'客户A-合同.pdf',category:'documents',extension:'pdf'},
+  {name:'Screenshot 2026-10-26.png',category:'images',extension:'png'},
+  {name:'预算.xlsx',category:'documents',extension:'xlsx'},
+  {name:'其他资料.pdf',category:'documents',extension:'pdf'},
+  {name:'慢速笔记.txt',category:'documents',extension:'txt'},
+  {name:'最新笔记.txt',category:'documents',extension:'txt'},
+  {name:'.hidden.txt',category:'documents',extension:'txt',isHidden:true},
+].map((f,id) => ({id,path:rootPath+'/'+f.name,sizeBytes:100,modifiedAt:123,isHidden:false,...f}));
+if(params.has('pages')) files = Array.from({length:205},(_,id)=>({id,path:rootPath+'/file-'+String(id).padStart(3,'0')+'.txt',name:'file-'+String(id).padStart(3,'0')+'.txt',category:'documents',extension:'txt',sizeBytes:100,modifiedAt:123,isHidden:false}));
+const directory = {path:rootPath+'/Project',name:'Project',fileCount:10,sizeBytes:1000,hasChildren:false};
+let completed = false;
+window.calls=[];
+window.test = {failPlan:false,failExecute:false,failPicker:false,failBinary:false,invalidPdf:false,failOpen:false,slowOps:false,emptyPlan:false,picker:rootPath+'/Destination',pickerDelay:0,planDelay:0,listDelay:0,openDelay:0};
+let scanStatus = params.has('workspace') ? 'completed' : 'running';
+let scanRoot = rootPath;
+const summary = () => ({scanId:'new-scan',rootPath:scanRoot,status:scanStatus,startedAt:1793000000,finishedAt:1793000060,
+  totalFiles:6,totalDirectories:1,totalBytes:600,errorCount:0,categories:[{category:'documents',fileCount:6,sizeBytes:600}]});
+const delay = ms => new Promise(resolve=>setTimeout(resolve,ms));
+mockIPC(async (cmd,args) => {
+  window.calls.push({cmd,args});
+  if(cmd==='get_latest_scan') return params.has('workspace')?summary():null;
+  if(cmd==='start_scan') { await delay(800); scanRoot=args.request.rootPath; scanStatus=params.has('workspace')?'completed':'running'; return 'new-scan'; }
+  if(cmd==='cancel_scan') { await delay(800); scanStatus='cancelled'; return null; }
+  if(cmd==='get_scan_summary') return summary();
+  if(cmd==='list_large_files') return files.filter(file=>!file.isHidden).slice(0,3).map(file=>({...file,path:scanRoot+'/'+file.name}));
+  if(cmd==='list_insights'||cmd==='list_scan_history') return [];
+  if(cmd==='get_cleanup_summary') return {items:[],totalBytes:0};
+  if(cmd==='plugin:app|version') return '0.3.2';
+  if(cmd==='plugin:path|resolve_directory') return args.directory===18?rootPath:'/Users/demo/Downloads';
+  if(cmd==='list_directory_files') {
+    await delay(window.test.listDelay);
+    const isRoot=args.dirPath===scanRoot;
+    let visible=isRoot?files.map(file=>({...file,path:scanRoot+'/'+file.name})):[{id:1000,path:args.dirPath+'/project.txt',name:'project.txt',category:'documents',extension:'txt',sizeBytes:50,modifiedAt:123,isHidden:false}];
+    if(!args.includeHidden) visible=visible.filter(f=>!f.isHidden);
+    if(args.sort==='nameDesc') visible=[...visible].sort((a,b)=>b.name.localeCompare(a.name));
+    return {dirs:isRoot?[{...directory,path:scanRoot+'/Project'}]:[],files:visible.slice(args.offset||0,(args.offset||0)+(args.limit||100)),totalFiles:visible.length};
+  }
+  if(cmd==='get_directory_nodes') return args.parentPath===scanRoot?[{...directory,path:scanRoot+'/Project'}]:[];
+  if(cmd==='list_undoable_operations') return completed ? [{id:'op-1',kind:'organize',label:'Organize',status:'completed',createdAt:123,canUndo:true}] : [];
+  if(cmd==='read_text_preview') {
+    await delay(args.path.includes('慢速')?650:20);
+    return args.path.includes('慢速')?'OLD CONTENT':'LATEST CONTENT';
+  }
+  if(cmd==='read_binary_preview') {
+    if(window.test.failBinary) throw {message:'Preview too large'};
+    return args.path.endsWith('.pdf') ? {mimeType:'application/pdf',data:btoa(window.test.invalidPdf?'not a PDF':pdf)} : {mimeType:'image/png',data:png};
+  }
+  if(cmd==='plugin:dialog|open') {
+    await delay(window.test.pickerDelay);
+    if(window.test.failPicker) throw {message:'Picker unavailable'};
+    return window.test.picker;
+  }
+  if(cmd==='open_path'||cmd==='reveal_path') {
+    await delay(window.test.openDelay);
+    if(window.test.failOpen) throw {message:'Open unavailable'};
+    return null;
+  }
+  if(cmd==='rename_file') {
+    const file=files.find(f=>f.path===args.oldPath);
+    file.name=args.newName; file.path=rootPath+'/'+args.newName;
+    completed=true; return {operationId:'op-1',newPath:file.path};
+  }
+  if(cmd==='move_files'||cmd==='copy_files'||cmd==='trash_files') {
+    await delay(window.test.slowOps?1000:150);
+    if(cmd==='trash_files' && params.has('pages')) files=files.filter(file=>!args.paths.includes(file.path));
+    return {operationId:'op-1',succeeded:args.paths,failed:[]};
+  }
+  if(cmd==='plan_organize') {
+    await delay(window.test.planDelay);
+    if(window.test.failPlan) throw {message:'Plan unavailable'};
+    if([...Object.values(args.options.folderNames),...Object.values(args.options.fileFolders)].some(v=>v.includes('/'))) throw {code:'INVALID_ORGANIZE_FOLDER',message:'Invalid folder'};
+    const en=args.options.language.startsWith('en');
+    const moves=(window.test.emptyPlan?[]:files).filter(f=>!f.isHidden).slice(0,4).map((f,i)=>{
+      const key=i===1?'截图':i===2?'表格':'文档';
+      const defaults=en?({'截图':'Screenshots','表格':'Spreadsheets','文档':'Documents'}[key]):key;
+      const subfolder=args.options.fileFolders[f.path]||args.options.folderNames[key]||defaults;
+      const conflict=i===3 && args.options.conflictStrategy==='skip';
+      const renamed=i===3 && args.options.conflictStrategy==='rename';
+      return {from:f.path,fromName:f.name,to:args.destDir+'/'+subfolder+'/'+(renamed?'其他资料 (2).pdf':f.name),subfolder,groupKey:key,matchedKeyword:null,conflict,renamed,expectedSizeBytes:f.sizeBytes,expectedModifiedAt:f.modifiedAt};
+    });
+    return {ruleName:'Purpose',sourceDir:args.sourceDir,destDir:args.destDir,moves,conflictCount:moves.filter(m=>m.conflict).length,alreadyPlaced:0,preservedFiles:10};
+  }
+  if(cmd==='execute_organize_plan') {
+    await delay(100);
+    if(window.test.failExecute) throw {message:'Execution unavailable'};
+    completed=true; return {operationId:'op-1',succeeded:args.moves.length,failed:[]};
+  }
+  if(cmd==='undo_file_operation') {completed=false; return {operationId:'undo-1',succeeded:['a'],failed:[]};}
+  return null;
+},{shouldMockEvents:true});
+const {FileManagerView}=await import('/src/components/fileManager/FileManagerView.tsx');
+const {default:App}=params.has('app')||params.has('workspace')?await import('/src/App.tsx'):{default:null};
+const {SelectionProvider}=App?await import('/src/contexts/SelectionContext.tsx'):{SelectionProvider:null};
+createRoot(document.getElementById('root')).render(App?React.createElement(SelectionProvider,null,React.createElement(App)):React.createElement('main',{'className':'app-shell app-shell--files','data-han-scope':true,'data-theme':'ink','data-luma-accent':'celadon'},
+  React.createElement('header',{className:'app-header'},'Luma · File manager regression'),
+  React.createElement('div',{className:'fm-tab-panel'},React.createElement(FileManagerView,{scanId:'test',rootPath}))));
+</script></body></html>

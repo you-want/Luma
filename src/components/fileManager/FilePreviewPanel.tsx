@@ -15,13 +15,18 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { FileEntry } from "../../types/scan";
+import { categoryLabelKey } from "../../lib/categories";
+import { errorMessage } from "../../lib/errors";
 import { formatBytes, formatDate } from "../../lib/format";
+import { PdfPreview } from "./PdfPreview";
+import { ButtonSpinner } from "../ButtonSpinner";
+import type { FileOperation } from "./useFileOps";
 
 // ── Preview strategies ─────────────────────────────────────────────────────────
 
 type PreviewKind = "image" | "text" | "pdf" | "none";
 
-const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "tiff"]);
+const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico", "tiff", "tif"]);
 const TEXT_EXTS  = new Set([
   "txt", "md", "markdown", "json", "yaml", "yml", "toml", "xml",
   "csv", "log", "env", "sh", "bash", "zsh", "fish",
@@ -34,30 +39,36 @@ function previewKindFor(file: FileEntry): PreviewKind {
   const ext = (file.extension ?? "").toLowerCase();
   if (IMAGE_EXTS.has(ext)) return "image";
   if (ext === "pdf") return "pdf";
-  if (TEXT_EXTS.has(ext) || file.category === "code" || file.category === "documents") {
+  if (TEXT_EXTS.has(ext) || file.category === "code") {
     return "text";
   }
   return "none";
 }
 
-// ── Image preview ──────────────────────────────────────────────────────────────
-
-function ImagePreview({ path }: { path: string }) {
-  // Use Tauri's asset protocol to serve local files safely.
-  // Convert the stored canonical path to an asset:// URL.
-  const assetUrl = `asset://localhost/${encodeURIComponent(path.replace(/^\//, ""))}`;
-  return (
-    <div className="fm-preview-image-wrap">
-      <img
-        src={assetUrl}
-        alt=""
-        className="fm-preview-image"
-        onError={(e) => {
-          (e.currentTarget as HTMLImageElement).style.display = "none";
-        }}
-      />
-    </div>
-  );
+// Local binary files are delivered explicitly over IPC, then rendered as
+// short-lived blob URLs. No file:// or unconfigured asset protocol is needed.
+type BinaryState = { status: "loading" } | { status: "ok"; url: string } | { status: "error"; message: string };
+function BinaryFilePreview({ file, scanId, kind }: { file: FileEntry; scanId: string; kind: "image" | "pdf" }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<BinaryState>({ status: "loading" });
+  useEffect(() => {
+    let disposed = false;
+    let url: string | undefined;
+    invoke<{ mimeType: string; data: string }>("read_binary_preview", { scanId, path: file.path }).then(result => {
+      if (disposed) return;
+      const bytes = Uint8Array.from(atob(result.data), character => character.charCodeAt(0));
+      url = URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+      setState({ status: "ok", url });
+    }).catch(error => {
+      if (!disposed) setState({ status: "error", message: errorMessage(error) });
+    });
+    return () => { disposed = true; if (url) URL.revokeObjectURL(url); };
+  }, [scanId, file.path]);
+  if (state.status === "loading") return <div className="fm-preview-loading">{t("fileManager.preview.loading")}</div>;
+  if (state.status === "error") return <div className="fm-preview-error" role="status">{state.message}</div>;
+  if (kind === "pdf") return <PdfPreview url={state.url} />;
+  return <div className="fm-preview-image-wrap"><img src={state.url} alt={file.name} className="fm-preview-image"
+    onError={() => setState({ status: "error", message: t("fileManager.preview.readError") })} /></div>;
 }
 
 // ── Text / code preview ────────────────────────────────────────────────────────
@@ -69,11 +80,13 @@ function TextPreview({ file }: { file: FileEntry }) {
   const [state, setState] = useState<TextState>({ status: "loading" });
 
   useEffect(() => {
+    let disposed = false;
     setState({ status: "loading" });
     // Rust command reads first 64 KB and returns a string.
     invoke<string>("read_text_preview", { path: file.path })
-      .then((text) => setState({ status: "ok", text }))
-      .catch(() => setState({ status: "error" }));
+      .then((text) => { if (!disposed) setState({ status: "ok", text }); })
+      .catch(() => { if (!disposed) setState({ status: "error" }); });
+    return () => { disposed = true; };
   }, [file.path]);
 
   if (state.status === "loading") {
@@ -86,21 +99,6 @@ function TextPreview({ file }: { file: FileEntry }) {
     <pre className="fm-preview-text">
       <code>{state.text}</code>
     </pre>
-  );
-}
-
-// ── PDF preview ────────────────────────────────────────────────────────────────
-
-function PdfPreview({ path }: { path: string }) {
-  const { t } = useTranslation();
-  // macOS WebKit renders PDFs natively inside an iframe with a file:// URL.
-  return (
-    <iframe
-      className="fm-preview-pdf"
-      src={`file://${path}`}
-      title={t("fileManager.preview.pdfTitle")}
-      sandbox=""
-    />
   );
 }
 
@@ -131,13 +129,15 @@ function CategoryIcon({ category }: { category: string }) {
 // ── Root export ────────────────────────────────────────────────────────────────
 
 type Props = {
+  pendingAction?: FileOperation | "open" | "reveal" | null;
+  scanId: string;
   file: FileEntry | null;
   onClose: () => void;
   onReveal: (path: string) => void;
   onOpen: (path: string) => void;
 };
 
-export function FilePreviewPanel({ file, onClose, onReveal, onOpen }: Props) {
+export function FilePreviewPanel({ scanId, file, onClose, onReveal, onOpen, pendingAction = null }: Props) {
   const { t } = useTranslation();
   if (!file) {
     return (
@@ -173,14 +173,14 @@ export function FilePreviewPanel({ file, onClose, onReveal, onOpen }: Props) {
       </div>
 
       {/* Inline preview */}
-      {kind === "image" && <ImagePreview path={file.path} />}
-      {kind === "text"  && <TextPreview file={file} />}
-      {kind === "pdf"   && <PdfPreview path={file.path} />}
+      {(kind === "image" || kind === "pdf") && <BinaryFilePreview key={file.path} file={file} scanId={scanId} kind={kind} />}
+      {kind === "text" && <TextPreview key={file.path} file={file} />}
+      {kind === "none" && <p className="fm-preview-error">{t("fileManager.preview.openHint")}</p>}
 
       {/* Metadata */}
       <dl className="fm-preview-meta">
         <MetaRow label={t("fileManager.preview.meta.path")} value={file.path} />
-        <MetaRow label={t("fileManager.preview.meta.category")} value={file.category} />
+        <MetaRow label={t("fileManager.preview.meta.category")} value={t(categoryLabelKey(file.category))} />
         <MetaRow label={t("fileManager.preview.meta.size")} value={formatBytes(file.sizeBytes)} />
         <MetaRow label={t("fileManager.preview.meta.modified")} value={formatDate(file.modifiedAt)} />
         {file.extension && <MetaRow label={t("fileManager.preview.meta.extension")} value={`.${file.extension}`} />}
@@ -195,14 +195,21 @@ export function FilePreviewPanel({ file, onClose, onReveal, onOpen }: Props) {
           type="button"
           className="button button-primary"
           onClick={() => onOpen(file.path)}
+          disabled={pendingAction !== null}
+          aria-busy={pendingAction === "open"}
         >
+          {pendingAction === "open" && <ButtonSpinner />}
           {t("fileManager.preview.open")}
         </button>
         <button
           type="button"
           className="button"
+          title={t("common.reveal")}
           onClick={() => onReveal(file.path)}
+          disabled={pendingAction !== null}
+          aria-busy={pendingAction === "reveal"}
         >
+          {pendingAction === "reveal" && <ButtonSpinner />}
           {t("fileManager.preview.reveal")}
         </button>
       </div>

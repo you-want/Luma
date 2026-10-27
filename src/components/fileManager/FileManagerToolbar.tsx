@@ -6,18 +6,20 @@ import {
   FolderInput,
   LayoutGrid,
   LayoutList,
-  RotateCcw,
+  Undo2,
   Trash2,
   Wand2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { DirFileSort, FileListView } from "../../types/fileManager";
+import type { FileOperation } from "./useFileOps";
+import { ButtonSpinner } from "../ButtonSpinner";
 
 type Props = {
+  pendingAction?: FileOperation | "open" | "reveal" | null;
   sort: DirFileSort;
   view: FileListView;
   includeHidden: boolean;
-  totalFiles: number;
   selectedFile: boolean;
   checkedCount: number;
   canUndo: boolean;
@@ -44,10 +46,10 @@ const SORT_OPTIONS: { value: DirFileSort; key: "fileManager.toolbar.sortOptions.
 ];
 
 export function FileManagerToolbar({
+  pendingAction = null,
   sort,
   view,
   includeHidden,
-  totalFiles,
   selectedFile,
   checkedCount,
   canUndo,
@@ -68,19 +70,43 @@ export function FileManagerToolbar({
 
   return (
     <div className="fm-toolbar">
-      {/* Left: file count or selection count */}
-      {hasBatchSelection ? (
-        <span className="fm-toolbar-selection-count">
-          {t("fileManager.toolbar.selectedCount", { count: checkedCount })}
-          <button type="button" className="fm-toolbar-clear-btn" onClick={onClearChecked}>
-            {t("fileManager.toolbar.clear")}
-          </button>
-        </span>
-      ) : (
-        <span className="fm-toolbar-count">{t("fileManager.toolbar.filesCount", { count: totalFiles })}</span>
-      )}
+      <div className="fm-toolbar-leading">
+        {/* Organize wizard trigger */}
+        <button
+          type="button"
+          className="fm-toolbar-btn fm-toolbar-btn--organize"
+          onClick={onOrganize}
+          title={t("fileManager.toolbar.organizeTitle")}
+        >
+          <Wand2 size={13} />
+          {t("fileManager.toolbar.organizeLabel")}
+        </button>
 
-      <div className="fm-toolbar-right">
+        {/* Undo */}
+        {canUndo && (
+          <button
+            type="button"
+            className="fm-toolbar-btn"
+            onClick={onUndo}
+            aria-busy={pendingAction === "undo"}
+            title={t("fileManager.toolbar.undoTitle")}
+            aria-label={t("fileManager.toolbar.undoAria")}
+          >
+            {pendingAction === "undo" ? <ButtonSpinner size={13} /> : <Undo2 size={13} />}
+            {t("fileManager.toolbar.undoAria")}
+          </button>
+        )}
+
+        {/* Selection stays beside the actions it applies to. */}
+        {hasBatchSelection && (
+          <span className="fm-toolbar-selection-count">
+            {t("fileManager.toolbar.selectedCount", { count: checkedCount })}
+            <button type="button" className="fm-toolbar-clear-btn" onClick={onClearChecked}>
+              {t("fileManager.toolbar.clear")}
+            </button>
+          </span>
+        )}
+
         {/* Batch operation buttons — shown when items are checked */}
         {hasBatchSelection && (
           <div className="fm-toolbar-batch-actions">
@@ -88,27 +114,30 @@ export function FileManagerToolbar({
               type="button"
               className="fm-toolbar-btn fm-toolbar-btn--danger"
               onClick={onTrashChecked}
+              aria-busy={pendingAction === "trash"}
               title={t("fileManager.toolbar.trashTitle")}
             >
-              <Trash2 size={13} />
+              {pendingAction === "trash" ? <ButtonSpinner size={13} /> : <Trash2 size={13} />}
               {t("fileManager.toolbar.trashLabel")}
             </button>
             <button
               type="button"
               className="fm-toolbar-btn"
               onClick={onMoveChecked}
+              aria-busy={pendingAction === "move"}
               title={t("fileManager.toolbar.moveTitle")}
             >
-              <FolderInput size={13} />
+              {pendingAction === "move" ? <ButtonSpinner size={13} /> : <FolderInput size={13} />}
               {t("fileManager.toolbar.moveLabel")}
             </button>
             <button
               type="button"
               className="fm-toolbar-btn"
               onClick={onCopyChecked}
+              aria-busy={pendingAction === "copy"}
               title={t("fileManager.toolbar.copyTitle")}
             >
-              <Copy size={13} />
+              {pendingAction === "copy" ? <ButtonSpinner size={13} /> : <Copy size={13} />}
               {t("fileManager.toolbar.copyLabel")}
             </button>
           </div>
@@ -121,45 +150,28 @@ export function FileManagerToolbar({
               type="button"
               className="fm-toolbar-btn"
               onClick={onOpenSelected}
+              aria-busy={pendingAction === "open"}
               title={t("fileManager.toolbar.openTitle")}
             >
+              {pendingAction === "open" && <ButtonSpinner size={13} />}
               {t("fileManager.toolbar.openLabel")}
             </button>
             <button
               type="button"
               className="fm-toolbar-btn"
               onClick={onRevealSelected}
+              aria-busy={pendingAction === "reveal"}
               title={t("common.reveal")}
             >
+              {pendingAction === "reveal" && <ButtonSpinner size={13} />}
               {t("common.reveal")}
             </button>
           </div>
         )}
 
-        {/* Undo */}
-        {canUndo && (
-          <button
-            type="button"
-            className="fm-toolbar-icon-btn"
-            onClick={onUndo}
-            title={t("fileManager.toolbar.undoTitle")}
-            aria-label={t("fileManager.toolbar.undoAria")}
-          >
-            <RotateCcw size={13} />
-          </button>
-        )}
+      </div>
 
-        {/* Organize wizard trigger */}
-        <button
-          type="button"
-          className="fm-toolbar-btn"
-          onClick={onOrganize}
-          title={t("fileManager.toolbar.organizeTitle")}
-        >
-          <Wand2 size={13} />
-          {t("fileManager.toolbar.organizeLabel")}
-        </button>
-
+      <div className="fm-toolbar-right">
         {/* Hidden files toggle */}
         <button
           type="button"

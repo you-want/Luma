@@ -73,6 +73,7 @@ export type OperationRecord = {
 // ── Phase 3: Smart organizer ───────────────────────────────────────────────────
 
 export type OrganizeRule =
+  | { kind: "byPurpose" }
   | { kind: "byCategory" }
   | { kind: "byYear" }
   | { kind: "byYearMonth" }
@@ -86,9 +87,21 @@ export type OrganizeMoveInput = {
 };
 
 export type OrganizeMove = OrganizeMoveInput & {
+  groupKey: string;
+  matchedKeyword?: string;
   fromName: string;
   subfolder: string;
   conflict: boolean;
+  renamed: boolean;
+};
+
+export type OrganizeOptions = {
+  recursive: boolean;
+  conflictStrategy: "skip" | "rename";
+  language: string;
+  folderNames: Record<string, string>;
+  fileFolders: Record<string, string>;
+  keywordRules: { keyword: string; folder: string }[];
 };
 
 export type OrganizePlan = {
@@ -98,6 +111,7 @@ export type OrganizePlan = {
   moves: OrganizeMove[];
   conflictCount: number;
   alreadyPlaced: number;
+  preservedFiles: number;
 };
 
 export type OrganizeProgress = {

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { DirNode } from "../../types/fileManager";
 import { formatBytes } from "../../lib/format";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
 
 type TreeNodeProps = {
   node: DirNode;
@@ -23,27 +24,25 @@ function TreeNode({
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<DirNode[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const action = useAsyncAction<"expand">();
+  const loading = action.pending !== null;
 
   const isActive = currentPath === node.path;
 
   async function handleExpand(e: React.MouseEvent) {
     e.stopPropagation();
     if (!node.hasChildren) return;
-    if (!expanded) {
-      if (children === null) {
-        setLoading(true);
-        try {
+    await action.run("expand", async () => {
+      if (!expanded) {
+        if (children === null) {
           const loaded = await onLoadChildren(node.path);
           setChildren(loaded);
-        } finally {
-          setLoading(false);
         }
+        setExpanded(true);
+      } else {
+        setExpanded(false);
       }
-      setExpanded(true);
-    } else {
-      setExpanded(false);
-    }
+    });
   }
 
   function handleClick() {
@@ -54,7 +53,7 @@ function TreeNode({
     <li>
       <div
         className={`fm-tree-node${isActive ? " fm-tree-node--active" : ""}`}
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
+        style={{ paddingLeft: `${4 + depth * 16}px` }}
       >
         {/* Expand/collapse toggle */}
         <button
@@ -62,7 +61,8 @@ function TreeNode({
           className="fm-tree-toggle"
           onClick={handleExpand}
           aria-label={expanded ? t("fileManager.treeToggle.expanded") : t("fileManager.treeToggle.collapsed")}
-          disabled={!node.hasChildren}
+          disabled={!node.hasChildren || loading}
+          aria-busy={loading}
           tabIndex={-1}
         >
           {node.hasChildren ? (

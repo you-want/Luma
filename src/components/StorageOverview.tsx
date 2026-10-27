@@ -15,7 +15,7 @@ export function StorageOverview({ summary }: { summary: ScanSummary }) {
   return (
     <section aria-labelledby="overview-title">
       <div className="section-heading result-heading">
-        <h2 id="overview-title">{summary.rootPath}</h2>
+        <h2 id="overview-title">{t("overview.title")}</h2>
         <span className="scan-time">{t("overview.finishedAt", { time: formatDate(summary.finishedAt) })}</span>
       </div>
       <div className="metric-grid">

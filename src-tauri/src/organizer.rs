@@ -7,11 +7,13 @@
 //      Tauri event after each file so the UI can show a live progress bar.
 //
 // Rules operate entirely on data already in the scan index (category,
-// modified_at, extension) — no extra filesystem reads during planning.
+// modified_at, extension). Planning checks destination metadata for conflicts
+// but never reads file contents or creates directories.
 
-use crate::{database, error::AppError, file_ops, models::FileEntry};
+use crate::{database, error::AppError, file_ops, file_ops::move_path, models::FileEntry};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 // ── Rule ──────────────────────────────────────────────────────────────────────
@@ -20,6 +22,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum OrganizeRule {
+    #[serde(rename = "byPurpose")]
+    Purpose,
     /// Group by Luma category  →  `Images/`, `Videos/`, `Documents/`, …
     #[serde(rename = "byCategory")]
     Category,
@@ -38,6 +42,7 @@ pub enum OrganizeRule {
 impl OrganizeRule {
     pub fn display_name(&self) -> &'static str {
         match self {
+            Self::Purpose => "桌面与下载整理",
             Self::Category => "按文件类型",
             Self::Year => "按年份",
             Self::YearMonth => "按年月",
@@ -48,6 +53,7 @@ impl OrganizeRule {
     /// Compute the destination subfolder name for a single file.
     fn subfolder_for(&self, file: &FileEntry) -> String {
         match self {
+            Self::Purpose => purpose_folder(file).to_owned(),
             Self::Category => category_display(&file.category).to_owned(),
 
             Self::Year => file
@@ -69,6 +75,134 @@ impl OrganizeRule {
                 .map(|e| e.to_ascii_lowercase())
                 .unwrap_or_else(|| "no-extension".to_owned()),
         }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OrganizeOptions {
+    pub recursive: bool,
+    pub conflict_strategy: ConflictStrategy,
+    pub language: String,
+    pub folder_names: BTreeMap<String, String>,
+    pub file_folders: BTreeMap<String, String>,
+    pub keyword_rules: Vec<KeywordRule>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConflictStrategy {
+    #[default]
+    Skip,
+    Rename,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeywordRule {
+    pub keyword: String,
+    pub folder: String,
+}
+
+fn purpose_folder(file: &FileEntry) -> &str {
+    let name = file.name.to_lowercase();
+    if file.category == "images"
+        && [
+            "screenshot",
+            "screen shot",
+            "screen capture",
+            "截图",
+            "截屏",
+            "屏幕快照",
+            "屏幕截图",
+        ]
+        .iter()
+        .any(|word| name.contains(word))
+    {
+        return "截图";
+    }
+    match file
+        .extension
+        .as_deref()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "xls" | "xlsx" | "xlsm" | "ods" | "csv" | "tsv" | "numbers" => "表格",
+        "ppt" | "pptx" | "odp" | "key" => "演示文稿",
+        "dmg" | "pkg" | "exe" | "msi" | "msix" | "appinstaller" => "安装包",
+        _ => category_display(&file.category),
+    }
+}
+
+fn localized_folder(folder: &str, language: &str) -> String {
+    if !language.starts_with("en") {
+        return folder.to_owned();
+    }
+    match folder {
+        "截图" => "Screenshots",
+        "表格" => "Spreadsheets",
+        "演示文稿" => "Presentations",
+        "安装包" => "Installers",
+        "图片" => "Images",
+        "视频" => "Videos",
+        "音频" => "Audio",
+        "文档" => "Documents",
+        "代码" => "Code",
+        "压缩包" => "Archives",
+        "应用与安装包" => "Applications and installers",
+        "其他" => "Other",
+        _ => folder,
+    }
+    .to_owned()
+}
+
+// A single portable directory name, never a path or a Windows device name.
+fn validate_folder_name(name: &str) -> Result<(), AppError> {
+    let device = name.split('.').next().unwrap_or("").to_ascii_uppercase();
+    if name.trim().is_empty()
+        || name == "."
+        || name == ".."
+        || name.ends_with([' ', '.'])
+        || name.len() > 200
+        || name
+            .chars()
+            .any(|c| c.is_control() || "\\/<>:\"|?*".contains(c))
+        || matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (device.len() == 4
+            && (device.starts_with("COM") || device.starts_with("LPT"))
+            && matches!(device.as_bytes()[3], b'1'..=b'9'))
+    {
+        return Err(AppError::new(
+            "INVALID_ORGANIZE_FOLDER",
+            "分类名称必须是有效的单层文件夹名称。",
+        ));
+    }
+    Ok(())
+}
+
+fn path_key(path: &str) -> String {
+    // Conservative on case-sensitive disks too: portable plans never rely on
+    // two destinations differing only in case.
+    path.to_lowercase()
+}
+
+fn occupied(path: &str, reserved: &HashSet<String>) -> bool {
+    reserved.contains(&path_key(path)) || std::fs::symlink_metadata(to_native(path)).is_ok()
+}
+
+fn numbered_path(dir: &str, name: &str, reserved: &HashSet<String>) -> String {
+    let path = Path::new(name);
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(name);
+    let ext = path.extension().and_then(|s| s.to_str());
+    let mut n = 2u64;
+    loop {
+        let suffix = ext.map(|e| format!(".{e}")).unwrap_or_default();
+        let candidate = format!("{dir}/{stem} ({n}){suffix}");
+        if !occupied(&candidate, reserved) {
+            return candidate;
+        }
+        n += 1;
     }
 }
 
@@ -110,6 +244,9 @@ fn chrono_year_month(ts: i64) -> Option<(i32, u32)> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OrganizeMove {
+    pub group_key: String,
+    /// The matching keyword, or None for metadata-based classification.
+    pub matched_keyword: Option<String>,
     /// Canonical (slash-separated) source path from the scan index.
     pub from: String,
     pub from_name: String,
@@ -117,8 +254,9 @@ pub struct OrganizeMove {
     pub to: String,
     /// Destination subfolder that will be created (relative to `dest_dir`).
     pub subfolder: String,
-    /// True if the destination file already exists on disk.
+    /// True if the target is occupied on disk or reserved by another move.
     pub conflict: bool,
+    pub renamed: bool,
     /// Snapshot values used to reject stale plans at execution time.
     pub expected_size_bytes: u64,
     pub expected_modified_at: Option<i64>,
@@ -134,19 +272,49 @@ pub struct OrganizePlan {
     pub conflict_count: u64,
     /// Files skipped because they are already in their target subfolder.
     pub already_placed: u64,
+    pub preserved_files: u64,
 }
 
-/// Dry-run: compute the full move plan without touching the filesystem.
-/// Queries all files recursively under `source_dir` from the scan index.
+/// Dry-run: compute a plan from the index and destination metadata without
+/// creating directories or reading file contents. Existing subfolders are
+/// preserved unless recursive organization was explicitly requested.
 pub fn plan_organize(
     db_path: &Path,
     scan_id: &str,
     source_dir: &str,
     dest_dir: &str,
     rule: &OrganizeRule,
+    options: &OrganizeOptions,
 ) -> Result<OrganizePlan, AppError> {
+    #[cfg(windows)]
+    let source_normalized = source_dir.replace('\\', "/");
+    #[cfg(windows)]
+    let dest_normalized = dest_dir.replace('\\', "/");
+    #[cfg(windows)]
+    let (source_dir, dest_dir) = (source_normalized.as_str(), dest_normalized.as_str());
+    let source_dir = source_dir.trim_end_matches('/');
+    let dest_dir = dest_dir.trim_end_matches('/');
     let native_source = file_ops::validate_write_path(source_dir)?;
-    file_ops::validate_write_path(dest_dir)?;
+    let native_dest = file_ops::validate_write_path(dest_dir)?;
+    if !native_source.is_dir() || (native_dest.exists() && !native_dest.is_dir()) {
+        return Err(AppError::invalid_path("请选择有效的源目录和目标目录。"));
+    }
+    for folder in options
+        .folder_names
+        .values()
+        .chain(options.file_folders.values())
+    {
+        validate_folder_name(folder)?;
+    }
+    for rule in &options.keyword_rules {
+        validate_folder_name(&rule.folder)?;
+        if rule.keyword.trim().is_empty() {
+            return Err(AppError::new(
+                "INVALID_ORGANIZE_KEYWORD",
+                "关键词不能为空。",
+            ));
+        }
+    }
     let connection = database::open(db_path)?;
     let root_path = connection
         .query_row(
@@ -168,7 +336,7 @@ pub fn plan_organize(
     let mut stmt = connection.prepare(
         "SELECT id, path, name, extension, category, size_bytes, modified_at, is_hidden, content_hash
          FROM files
-         WHERE scan_id = ?1 AND path LIKE ?2 ESCAPE '\\'",
+         WHERE scan_id = ?1 AND path LIKE ?2 ESCAPE '\\' ORDER BY path COLLATE BINARY",
     )?;
     let files: Vec<FileEntry> = stmt
         .query_map(params![scan_id, glob], |row| {
@@ -189,10 +357,51 @@ pub fn plan_organize(
     let mut moves = Vec::with_capacity(files.len());
     let mut conflict_count: u64 = 0;
     let mut already_placed: u64 = 0;
+    let mut preserved_files: u64 = 0;
+    let mut reserved = HashSet::new();
+    let source_prefix = format!("{source_dir}/");
+    let dest_prefix = format!("{dest_dir}/");
 
     for file in &files {
-        let subfolder = rule.subfolder_for(file);
-        let dest_path = format!("{dest_dir}/{subfolder}/{}", file.name);
+        // SQLite LIKE is case-insensitive for ASCII. Do not let a sibling
+        // whose name differs only by case leak into the selected source.
+        let Some(relative) = file.path.strip_prefix(&source_prefix) else {
+            continue;
+        };
+        if file.is_hidden
+            || (!options.recursive && relative.contains('/'))
+            || (dest_dir != source_dir && file.path.starts_with(&dest_prefix))
+        {
+            preserved_files += 1;
+            continue;
+        }
+        let matched = options.keyword_rules.iter().find(|r| {
+            file.name
+                .to_lowercase()
+                .contains(&r.keyword.trim().to_lowercase())
+        });
+        let group_key = matched
+            .map(|r| format!("keyword:{}", r.keyword))
+            .unwrap_or_else(|| rule.subfolder_for(file));
+        let default_folder = matched
+            .map(|r| r.folder.clone())
+            .unwrap_or_else(|| localized_folder(&group_key, &options.language));
+        let subfolder = options
+            .file_folders
+            .get(&file.path)
+            .or_else(|| options.folder_names.get(&group_key))
+            .cloned()
+            .unwrap_or(default_folder);
+        validate_folder_name(&subfolder)?;
+        let target_dir = format!("{dest_dir}/{subfolder}");
+        if to_native(&target_dir).exists() && !to_native(&target_dir).is_dir() {
+            return Err(AppError::new(
+                "INVALID_ORGANIZE_FOLDER",
+                "分类名称已被普通文件占用，请更换名称。",
+            ));
+        }
+        let mut dest_path = format!("{target_dir}/{}", file.name);
+        file_ops::validate_write_path(&dest_path)?;
 
         // Skip files already sitting in their target location
         if file.path == dest_path {
@@ -200,18 +409,27 @@ pub fn plan_organize(
             continue;
         }
 
-        let native_dest = PathBuf::from(dest_path.replace('/', std::path::MAIN_SEPARATOR_STR));
-        let conflict = native_dest.exists();
+        let mut conflict = occupied(&dest_path, &reserved);
+        let mut renamed = false;
+        if conflict && matches!(options.conflict_strategy, ConflictStrategy::Rename) {
+            dest_path = numbered_path(&target_dir, &file.name, &reserved);
+            conflict = false;
+            renamed = true;
+        }
         if conflict {
             conflict_count += 1;
         }
+        reserved.insert(path_key(&dest_path));
 
         moves.push(OrganizeMove {
+            group_key,
+            matched_keyword: matched.map(|r| r.keyword.clone()),
             from: file.path.clone(),
             from_name: file.name.clone(),
             to: dest_path,
             subfolder,
             conflict,
+            renamed,
             expected_size_bytes: file.size_bytes,
             expected_modified_at: file.modified_at,
         });
@@ -224,6 +442,7 @@ pub fn plan_organize(
         moves,
         conflict_count,
         already_placed,
+        preserved_files,
     })
 }
 
@@ -319,7 +538,7 @@ pub fn execute_organize_plan(
         }
 
         // Skip if destination already occupied (conflict was flagged in plan)
-        if native_dst.exists() {
+        if std::fs::symlink_metadata(&native_dst).is_ok() {
             failed.push(crate::file_ops::OpFailure {
                 path: m.from.clone(),
                 reason: format!("目标路径已存在：{}", m.to),
@@ -328,7 +547,8 @@ pub fn execute_organize_plan(
             continue;
         }
 
-        // Move: try rename first; fall back to rollback-safe copy+remove.
+        // Move without replacing an existing target, including a target that
+        // appeared after the check above.
         if let Err(reason) = move_path(&native_src, &native_dst) {
             failed.push(crate::file_ops::OpFailure {
                 path: m.from.clone(),
@@ -346,8 +566,9 @@ pub fn execute_organize_plan(
                 if let Err(error) =
                     file_ops::append_operation_move(db_path, &operation_id, &m.from, &m.to)
                 {
-                    let _ = update_db_path(db_path, scan_id, &m.to, &m.from);
-                    let _ = move_path(&native_dst, &native_src);
+                    if move_path(&native_dst, &native_src).is_ok() {
+                        let _ = update_db_path(db_path, scan_id, &m.to, &m.from);
+                    }
                     failed.push(crate::file_ops::OpFailure {
                         path: m.from.clone(),
                         reason: error.message,
@@ -397,10 +618,17 @@ fn update_db_path(
     new_path: &str,
 ) -> Result<(), AppError> {
     let conn = database::open(db_path)?;
+    let metadata = std::fs::metadata(to_native(new_path))
+        .map_err(|error| AppError::new("FILE_READ_ERROR", error.to_string()))?;
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|d| i64::try_from(d.as_secs()).ok());
     let new_name = new_path.rsplit('/').next().unwrap_or(new_path);
     conn.execute(
-        "UPDATE files SET path = ?3, name = ?4 WHERE scan_id = ?1 AND path = ?2",
-        params![scan_id, old_path, new_path, new_name],
+        "UPDATE files SET path = ?3, name = ?4, modified_at = ?5 WHERE scan_id = ?1 AND path = ?2",
+        params![scan_id, old_path, new_path, new_name, modified],
     )?;
     Ok(())
 }
@@ -409,28 +637,6 @@ fn update_db_path(
 
 fn to_native(canonical: &str) -> PathBuf {
     PathBuf::from(canonical.replace('/', std::path::MAIN_SEPARATOR_STR))
-}
-
-fn move_path(src: &Path, dst: &Path) -> Result<(), String> {
-    match std::fs::rename(src, dst) {
-        Ok(()) => Ok(()),
-        Err(rename_error) => {
-            std::fs::copy(src, dst)
-                .map_err(|copy_error| format!("{rename_error} / {copy_error}"))?;
-            if let Err(remove_error) = std::fs::remove_file(src) {
-                let cleanup_error = std::fs::remove_file(dst).err();
-                return Err(match cleanup_error {
-                    Some(cleanup) => format!(
-                        "{rename_error} / 删除源文件失败：{remove_error}；回滚副本失败：{cleanup}"
-                    ),
-                    None => {
-                        format!("{rename_error} / 删除源文件失败，已移除目标副本：{remove_error}")
-                    }
-                });
-            }
-            Ok(())
-        }
-    }
 }
 
 fn escape_like(value: &str) -> String {
@@ -458,6 +664,392 @@ mod tests {
     fn canonical(path: &Path) -> String {
         path.to_string_lossy()
             .replace(std::path::MAIN_SEPARATOR, "/")
+    }
+
+    struct Fixture {
+        root: PathBuf,
+        db: PathBuf,
+        source: PathBuf,
+        dest: PathBuf,
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    impl Fixture {
+        fn new(files: &[&str]) -> Self {
+            let root = std::env::current_dir()
+                .unwrap()
+                .join("target")
+                .join(format!("luma-organize-test-{}", Uuid::new_v4()));
+            let source = root.join("source");
+            let dest = root.join("destination");
+            fs::create_dir_all(&source).unwrap();
+            fs::create_dir_all(&dest).unwrap();
+            let db = root.join("test.sqlite3");
+            database::initialize(&db).unwrap();
+            database::create_scan_run(&db, "test", &canonical(&source), 1).unwrap();
+            let mut connection = database::open(&db).unwrap();
+            let entries: Vec<_> = files
+                .iter()
+                .map(|name| {
+                    let path = source.join(name);
+                    fs::create_dir_all(path.parent().unwrap()).unwrap();
+                    fs::write(&path, name.as_bytes()).unwrap();
+                    let metadata = fs::metadata(&path).unwrap();
+                    let extension = path.extension().map(|e| e.to_string_lossy().to_lowercase());
+                    FileEntry {
+                        id: 0,
+                        path: canonical(&path),
+                        name: path.file_name().unwrap().to_string_lossy().into_owned(),
+                        category: crate::scanner::classify_extension(extension.as_deref()).into(),
+                        extension,
+                        size_bytes: metadata.len(),
+                        modified_at: metadata
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs() as i64),
+                        is_hidden: path.file_name().unwrap().to_string_lossy().starts_with('.'),
+                        content_hash: None,
+                    }
+                })
+                .collect();
+            database::insert_file_batch(&mut connection, "test", &entries).unwrap();
+            Self {
+                root,
+                db,
+                source,
+                dest,
+            }
+        }
+
+        fn plan(&self, options: &super::OrganizeOptions) -> super::OrganizePlan {
+            plan_organize(
+                &self.db,
+                "test",
+                &canonical(&self.source),
+                &canonical(&self.dest),
+                &OrganizeRule::Purpose,
+                options,
+            )
+            .unwrap()
+        }
+
+        fn execute(&self, moves: &[super::OrganizeMove]) -> super::OrganizeResult {
+            let inputs: Vec<_> = moves
+                .iter()
+                .filter(|m| !m.conflict)
+                .map(|m| OrganizeMoveInput {
+                    from: m.from.clone(),
+                    to: m.to.clone(),
+                    expected_size_bytes: m.expected_size_bytes,
+                    expected_modified_at: m.expected_modified_at,
+                })
+                .collect();
+            execute_organize_plan(&self.db, "test", &inputs, |_| {}).unwrap()
+        }
+    }
+
+    #[test]
+    fn default_plan_preserves_existing_folders_and_hidden_files_without_writing() {
+        let f = Fixture::new(&["report.pdf", "project/budget.xlsx", ".secret.txt"]);
+        let plan = f.plan(&super::OrganizeOptions::default());
+        assert_eq!(plan.moves.len(), 1);
+        assert_eq!(plan.moves[0].from_name, "report.pdf");
+        assert_eq!(plan.preserved_files, 2);
+        assert_eq!(fs::read_dir(&f.dest).unwrap().count(), 0);
+        assert!(f.source.join("project/budget.xlsx").exists());
+        let recursive = f.plan(&super::OrganizeOptions {
+            recursive: true,
+            ..Default::default()
+        });
+        assert_eq!(recursive.moves.len(), 2);
+        assert_eq!(recursive.preserved_files, 1);
+    }
+
+    #[test]
+    fn purpose_groups_are_detailed_and_follow_the_selected_language() {
+        let f = Fixture::new(&[
+            "Screenshot 2026.png",
+            "预算.xlsx",
+            "slides.pptx",
+            "Luma.dmg",
+            "report.pdf",
+        ]);
+        let plan = f.plan(&super::OrganizeOptions {
+            language: "en-US".into(),
+            ..Default::default()
+        });
+        let folders: std::collections::HashSet<_> =
+            plan.moves.iter().map(|m| m.subfolder.as_str()).collect();
+        assert_eq!(
+            folders,
+            [
+                "Screenshots",
+                "Spreadsheets",
+                "Presentations",
+                "Installers",
+                "Documents"
+            ]
+            .into()
+        );
+    }
+
+    #[test]
+    fn keywords_take_priority_and_custom_file_destinations_override_group_names() {
+        let f = Fixture::new(&["CLIENT-a.pdf", "budget.xlsx"]);
+        let source = canonical(&f.source.join("budget.xlsx"));
+        let options = super::OrganizeOptions {
+            language: "en-US".into(),
+            keyword_rules: vec![
+                super::KeywordRule {
+                    keyword: "client".into(),
+                    folder: "客户资料".into(),
+                },
+                super::KeywordRule {
+                    keyword: "CLIENT-a".into(),
+                    folder: "Second".into(),
+                },
+            ],
+            folder_names: [("表格".into(), "财务".into())].into(),
+            file_folders: [(source, "待审核".into())].into(),
+            ..Default::default()
+        };
+        let plan = f.plan(&options);
+        assert_eq!(plan.moves[0].subfolder, "客户资料");
+        assert_eq!(plan.moves[0].matched_keyword.as_deref(), Some("client"));
+        assert_eq!(plan.moves[1].subfolder, "待审核");
+    }
+
+    #[test]
+    fn preview_detects_existing_and_batch_conflicts_and_renames_deterministically() {
+        let f = Fixture::new(&["a/report.pdf", "b/report.pdf", "c/REPORT.PDF"]);
+        fs::create_dir_all(f.dest.join("文档")).unwrap();
+        fs::write(f.dest.join("文档/report.pdf"), b"existing").unwrap();
+        let options = super::OrganizeOptions {
+            recursive: true,
+            ..Default::default()
+        };
+        assert_eq!(f.plan(&options).conflict_count, 3);
+        let options = super::OrganizeOptions {
+            conflict_strategy: super::ConflictStrategy::Rename,
+            ..options
+        };
+        let plan = f.plan(&options);
+        assert_eq!(plan.conflict_count, 0);
+        assert!(plan.moves.iter().all(|m| m.renamed));
+        assert!(plan.moves[0].to.ends_with("report (2).pdf"));
+        assert!(plan.moves[1].to.ends_with("report (3).pdf"));
+        assert!(plan.moves[2].to.ends_with("REPORT (4).PDF"));
+        assert_eq!(
+            plan.moves.iter().map(|m| &m.to).collect::<Vec<_>>(),
+            f.plan(&options)
+                .moves
+                .iter()
+                .map(|m| &m.to)
+                .collect::<Vec<_>>()
+        );
+        let outcome = f.execute(&plan.moves);
+        assert_eq!(outcome.succeeded, 3);
+        assert_eq!(
+            fs::read(f.dest.join("文档/report.pdf")).unwrap(),
+            b"existing"
+        );
+    }
+
+    #[test]
+    fn batch_conflict_is_visible_even_when_destination_does_not_exist() {
+        let f = Fixture::new(&["a/report.pdf", "b/report.pdf"]);
+        let plan = f.plan(&super::OrganizeOptions {
+            recursive: true,
+            ..Default::default()
+        });
+        assert_eq!(plan.conflict_count, 1);
+        assert!(!plan.moves[0].conflict);
+        assert!(plan.moves[1].conflict);
+    }
+
+    #[test]
+    fn selected_subset_is_moved_and_persisted_undo_restores_it() {
+        let f = Fixture::new(&["keep.pdf", "move.xlsx", "project/config.json"]);
+        let plan = f.plan(&super::OrganizeOptions::default());
+        let outcome = f.execute(&plan.moves[1..]);
+        assert_eq!(outcome.succeeded, 1);
+        assert!(f.source.join("keep.pdf").exists());
+        assert!(f.source.join("project/config.json").exists());
+        assert!(!f.source.join("move.xlsx").exists());
+        let operations = crate::file_ops::list_undoable_operations(&f.db, "test", 20).unwrap();
+        assert_eq!(operations.len(), 1);
+        let undo = crate::file_ops::undo_operation(&f.db, &operations[0].id, "test").unwrap();
+        assert!(undo.failed.is_empty());
+        assert_eq!(fs::read(f.source.join("move.xlsx")).unwrap(), b"move.xlsx");
+    }
+
+    #[test]
+    fn repeated_in_place_organization_leaves_organized_files_alone() {
+        let f = Fixture::new(&["report.pdf", "notes.txt"]);
+        let options = super::OrganizeOptions::default();
+        let plan = plan_organize(
+            &f.db,
+            "test",
+            &canonical(&f.source),
+            &canonical(&f.source),
+            &OrganizeRule::Purpose,
+            &options,
+        )
+        .unwrap();
+        assert_eq!(f.execute(&plan.moves).succeeded, 2);
+        let repeated = plan_organize(
+            &f.db,
+            "test",
+            &canonical(&f.source),
+            &canonical(&f.source),
+            &OrganizeRule::Purpose,
+            &options,
+        )
+        .unwrap();
+        assert!(repeated.moves.is_empty());
+        let recursive = super::OrganizeOptions {
+            recursive: true,
+            ..options
+        };
+        let repeated = plan_organize(
+            &f.db,
+            "test",
+            &canonical(&f.source),
+            &canonical(&f.source),
+            &OrganizeRule::Purpose,
+            &recursive,
+        )
+        .unwrap();
+        assert!(repeated.moves.is_empty());
+        assert_eq!(repeated.already_placed, 2);
+    }
+
+    #[test]
+    fn custom_folders_cannot_escape_destination_or_use_reserved_names() {
+        let f = Fixture::new(&["report.pdf"]);
+        for invalid in [
+            "../escape",
+            "nested/folder",
+            "",
+            ".",
+            "..",
+            "NUL.txt",
+            "COM1",
+            "trailing.",
+            "bad\\name",
+        ] {
+            let options = super::OrganizeOptions {
+                folder_names: [("文档".into(), invalid.into())].into(),
+                ..Default::default()
+            };
+            let error = plan_organize(
+                &f.db,
+                "test",
+                &canonical(&f.source),
+                &canonical(&f.dest),
+                &OrganizeRule::Purpose,
+                &options,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "INVALID_ORGANIZE_FOLDER");
+        }
+        assert!(f.source.join("report.pdf").exists());
+    }
+
+    #[test]
+    fn file_created_after_preview_is_not_overwritten_and_safe_move_is_atomic() {
+        let f = Fixture::new(&["report.pdf"]);
+        let plan = f.plan(&super::OrganizeOptions::default());
+        let target = super::to_native(&plan.moves[0].to);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(&target, b"do not overwrite").unwrap();
+        assert_eq!(f.execute(&plan.moves).succeeded, 0);
+        assert!(super::move_path(&f.source.join("report.pdf"), &target).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"do not overwrite");
+        assert_eq!(
+            fs::read(f.source.join("report.pdf")).unwrap(),
+            b"report.pdf"
+        );
+    }
+
+    #[test]
+    fn failed_log_write_rolls_back_the_file_and_its_index() {
+        let f = Fixture::new(&["report.pdf"]);
+        let plan = f.plan(&super::OrganizeOptions::default());
+        database::open(&f.db)
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER fail_organize_log BEFORE UPDATE OF undo_json ON file_operations
+             BEGIN SELECT RAISE(ABORT, 'simulated log failure'); END;",
+            )
+            .unwrap();
+        let outcome = f.execute(&plan.moves);
+        assert_eq!(outcome.succeeded, 0);
+        assert_eq!(outcome.failed.len(), 1);
+        assert_eq!(
+            fs::read(f.source.join("report.pdf")).unwrap(),
+            b"report.pdf"
+        );
+        assert!(!super::to_native(&plan.moves[0].to).exists());
+        crate::file_ops::validate_indexed_file(&f.db, "test", &plan.moves[0].from)
+            .expect("rolled-back file must still match its index");
+    }
+
+    #[test]
+    fn undo_preserves_a_new_file_at_the_original_location() {
+        let f = Fixture::new(&["report.pdf"]);
+        let plan = f.plan(&super::OrganizeOptions::default());
+        let outcome = f.execute(&plan.moves);
+        fs::write(f.source.join("report.pdf"), b"new file").unwrap();
+        let result =
+            crate::file_ops::undo_operation(&f.db, &outcome.operation_id.unwrap(), "test").unwrap();
+        assert!(result.succeeded.is_empty());
+        assert_eq!(result.failed.len(), 1);
+        assert_eq!(fs::read(f.source.join("report.pdf")).unwrap(), b"new file");
+        assert_eq!(
+            fs::read(super::to_native(&plan.moves[0].to)).unwrap(),
+            b"report.pdf"
+        );
+    }
+
+    #[test]
+    fn nested_destination_files_are_not_reorganized() {
+        let f = Fixture::new(&["report.pdf", "organized/keep.xlsx"]);
+        let plan = plan_organize(
+            &f.db,
+            "test",
+            &canonical(&f.source),
+            &canonical(&f.source.join("organized")),
+            &OrganizeRule::Purpose,
+            &super::OrganizeOptions {
+                recursive: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(plan.moves.len(), 1);
+        assert_eq!(plan.preserved_files, 1);
+    }
+
+    #[test]
+    fn case_insensitive_sql_match_does_not_include_a_different_source_prefix() {
+        let f = Fixture::new(&["report.pdf"]);
+        let connection = database::open(&f.db).unwrap();
+        connection.execute(
+            "INSERT INTO files (scan_id, path, name, extension, category, size_bytes, modified_at, is_hidden)
+             SELECT scan_id, ?1, 'sibling.pdf', extension, category, size_bytes, modified_at, is_hidden
+             FROM files WHERE scan_id = 'test' LIMIT 1",
+            [canonical(&f.source).replace("/source", "/SOURCE") + "/sibling.pdf"],
+        ).unwrap();
+        let plan = f.plan(&super::OrganizeOptions::default());
+        assert_eq!(plan.moves.len(), 1);
+        assert_eq!(plan.moves[0].from_name, "report.pdf");
     }
 
     #[test]
@@ -508,6 +1100,7 @@ mod tests {
             &canonical(&source_dir),
             &canonical(&destination_dir),
             &OrganizeRule::Category,
+            &super::OrganizeOptions::default(),
         )
         .expect("build organize plan");
         assert_eq!(plan.moves.len(), 1);

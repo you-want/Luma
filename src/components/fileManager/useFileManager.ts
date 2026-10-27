@@ -1,7 +1,7 @@
 // All state and data-fetching logic for the file manager view.
 // Components stay presentation-only; this hook owns the domain.
 
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import type {
   BreadcrumbSegment,
   DirFileSort,
@@ -19,6 +19,7 @@ type Status = "idle" | "loading" | "ready" | "error";
 
 type State = {
   status: Status;
+  loading: boolean;
   error?: string;
   currentPath: string;
   rootPath: string;
@@ -45,6 +46,7 @@ type Action =
       listing: DirectoryListing;
       path: string;
       breadcrumbs: BreadcrumbSegment[];
+      page: number;
     }
   | { type: "ERROR"; error: string }
   | { type: "SELECT_FILE"; file: FileEntry | null }
@@ -56,12 +58,13 @@ type Action =
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "LOADING":
-      return { ...state, status: "loading", error: undefined };
+      return { ...state, status: state.status === "ready" ? "ready" : "loading", loading: true, error: undefined };
 
     case "LOADED":
       return {
         ...state,
         status: "ready",
+        loading: false,
         error: undefined,
         currentPath: action.path,
         breadcrumbs: action.breadcrumbs,
@@ -69,11 +72,11 @@ function reducer(state: State, action: Action): State {
         files: action.listing.files,
         totalFiles: action.listing.totalFiles,
         selected: null,
-        page: 0,
+        page: action.page,
       };
 
     case "ERROR":
-      return { ...state, status: "error", error: action.error };
+      return { ...state, status: "error", loading: false, error: action.error };
 
     case "SELECT_FILE":
       return { ...state, selected: action.file };
@@ -129,8 +132,11 @@ function buildBreadcrumbs(
 const PAGE_SIZE = 100;
 
 export function useFileManager(scanId: string, rootPath: string) {
+  const requestSequence = useRef(0);
+  const pendingRequest = useRef<string | null>(null);
   const [state, dispatch] = useReducer(reducer, {
     status: "idle",
+    loading: false,
     currentPath: rootPath,
     rootPath,
     breadcrumbs: buildBreadcrumbs(rootPath, rootPath),
@@ -148,20 +154,35 @@ export function useFileManager(scanId: string, rootPath: string) {
   // Load a directory. Memoised so callers can put it in deps safely.
   const loadDirectory = useCallback(
     async (path: string, page = 0, overrides?: Partial<State>) => {
+      const sort = overrides?.sort ?? state.sort;
+      const hidden = overrides?.includeHidden ?? state.includeHidden;
+      const key = JSON.stringify([scanId, path, page, sort, hidden]);
+      if (pendingRequest.current === key) return;
+      pendingRequest.current = key;
+      const request = ++requestSequence.current;
       dispatch({ type: "LOADING" });
       try {
-        const sort = overrides?.sort ?? state.sort;
-        const hidden = overrides?.includeHidden ?? state.includeHidden;
-        const listing = await listDirectoryFiles(scanId, path, {
+        let listing = await listDirectoryFiles(scanId, path, {
           sort,
           includeHidden: hidden,
           limit: PAGE_SIZE,
           offset: page * PAGE_SIZE,
         });
+        if (request !== requestSequence.current) return;
+        const lastPage = Math.max(0, Math.ceil(listing.totalFiles / PAGE_SIZE) - 1);
+        const actualPage = Math.min(page, lastPage);
+        if (actualPage !== page) {
+          listing = await listDirectoryFiles(scanId, path, {
+            sort, includeHidden: hidden, limit: PAGE_SIZE, offset: actualPage * PAGE_SIZE,
+          });
+        }
+        if (request !== requestSequence.current) return;
         const breadcrumbs = buildBreadcrumbs(rootPath, path);
-        dispatch({ type: "LOADED", listing, path, breadcrumbs });
+        dispatch({ type: "LOADED", listing, path, breadcrumbs, page: actualPage });
       } catch (err) {
-        dispatch({ type: "ERROR", error: errorMessage(err) });
+        if (request === requestSequence.current) dispatch({ type: "ERROR", error: errorMessage(err) });
+      } finally {
+        if (request === requestSequence.current) pendingRequest.current = null;
       }
     },
     [scanId, rootPath, state.sort, state.includeHidden],
@@ -170,6 +191,7 @@ export function useFileManager(scanId: string, rootPath: string) {
   // Load root on mount
   useEffect(() => {
     void loadDirectory(rootPath);
+    return () => { requestSequence.current += 1; pendingRequest.current = null; };
     // intentionally only on mount / scanId / rootPath changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanId, rootPath]);
@@ -216,13 +238,11 @@ export function useFileManager(scanId: string, rootPath: string) {
   );
 
   const handleReveal = useCallback((path: string) => {
-    void revealPath(path).catch(() => {
-      // Non-fatal: file may have moved since scan
-    });
+    return revealPath(path);
   }, []);
 
   const handleOpen = useCallback((path: string) => {
-    void openPath(path).catch(() => {});
+    return openPath(path);
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(state.totalFiles / PAGE_SIZE));

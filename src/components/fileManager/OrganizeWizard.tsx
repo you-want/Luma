@@ -1,210 +1,34 @@
-// Smart Organizer Wizard — 4-step modal.
-//
-// Step 0: Choose rule (byCategory / byYear / byYearMonth / byExtension)
-// Step 1: Choose source dir + destination dir
-// Step 2: Preview diff table (from → to), with conflict warnings
-// Step 3: Executing with live progress bar → done summary
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import {
-  ArrowRight,
-  CheckCircle,
-  ChevronLeft,
-  FolderOpen,
-  Layers,
-  Calendar,
-  Tag,
-  X,
-  AlertTriangle,
-  TriangleAlert,
-} from "lucide-react";
-import { chooseDirectory, planOrganize, executeOrganizePlan } from "../../lib/tauri";
-import { errorMessage } from "../../lib/errors";
+import { AlertTriangle, Calendar, CheckCircle, ChevronLeft, FolderOpen, Layers, Sparkles, Tag, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type {
-  OrganizeMove,
-  OrganizePlan,
-  OrganizeProgress,
-  OrganizeRule,
-} from "../../types/fileManager";
+import { chooseDirectory, executeOrganizePlan, planOrganize } from "../../lib/tauri";
+import { errorMessage } from "../../lib/errors";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { ButtonSpinner } from "../ButtonSpinner";
+import type { OrganizeMove, OrganizeOptions, OrganizePlan, OrganizeProgress, OrganizeResult, OrganizeRule } from "../../types/fileManager";
 
-// ── Rule definitions ──────────────────────────────────────────────────────────
+type Props = {
+  open: boolean;
+  scanId: string;
+  defaultSourceDir: string;
+  onClose: () => void;
+  onDone: (operationId?: string) => void;
+};
+type WizardStep = "rule" | "dirs" | "preview" | "executing";
+const STEPS: WizardStep[] = ["rule", "dirs", "preview", "executing"];
+const RULES = [
+  { kind: "byPurpose", Icon: Sparkles },
+  { kind: "byCategory", Icon: Layers },
+  { kind: "byYear", Icon: Calendar },
+  { kind: "byYearMonth", Icon: Calendar },
+  { kind: "byExtension", Icon: Tag },
+] as const;
+const initialOptions = (language: string): OrganizeOptions => ({
+  recursive: false, conflictStrategy: "skip", language,
+  folderNames: {}, fileFolders: {}, keywordRules: [],
+});
 
-const RULE_DEFS: { rule: OrganizeRule; key: "byCategory" | "byYear" | "byYearMonth" | "byExtension"; Icon: React.FC<{ size?: number }> }[] = [
-  { rule: { kind: "byCategory" }, key: "byCategory", Icon: Layers },
-  { rule: { kind: "byYear" }, key: "byYear", Icon: Calendar },
-  { rule: { kind: "byYearMonth" }, key: "byYearMonth", Icon: Calendar },
-  { rule: { kind: "byExtension" }, key: "byExtension", Icon: Tag },
-];
-
-// ── Step components ───────────────────────────────────────────────────────────
-
-// Step 0: Pick a rule
-function StepRule({
-  selected,
-  onSelect,
-}: {
-  selected: OrganizeRule | null;
-  onSelect: (r: OrganizeRule) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="org-step">
-      <p className="org-step-hint">{t("fileManager.organize.ruleHint")}</p>
-      <div className="org-rule-grid">
-        {RULE_DEFS.map((meta) => {
-          const active = selected?.kind === meta.rule.kind;
-          const rule = {
-            label: t(`fileManager.organize.rules.${meta.key}.label`),
-            description: t(`fileManager.organize.rules.${meta.key}.description`),
-            example: t(`fileManager.organize.rules.${meta.key}.example`),
-          };
-          return (
-            <button
-              key={meta.rule.kind}
-              type="button"
-              className={`org-rule-card${active ? " org-rule-card--active" : ""}`}
-              onClick={() => onSelect(meta.rule)}
-            >
-              <meta.Icon size={20} />
-              <strong>{rule.label}</strong>
-              <span>{rule.description}</span>
-              <code>{rule.example}</code>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// Step 1: Pick source + destination directories
-function StepDirs({
-  sourceDir,
-  destDir,
-  onSourceChange,
-  onDestChange,
-}: {
-  sourceDir: string;
-  destDir: string;
-  onSourceChange: (p: string) => void;
-  onDestChange: (p: string) => void;
-}) {
-  const { t } = useTranslation();
-  async function pickSource() {
-    const p = await chooseDirectory();
-    if (p) onSourceChange(p);
-  }
-  async function pickDest() {
-    const p = await chooseDirectory();
-    if (p) onDestChange(p);
-  }
-
-  return (
-    <div className="org-step">
-      <p className="org-step-hint">{t("fileManager.organize.dirsHint")}</p>
-
-      <label className="org-dir-label">
-        <span>{t("fileManager.organize.sourceDir")}</span>
-        <div className="org-dir-row">
-          <span className="org-dir-path" title={sourceDir}>{sourceDir || t("fileManager.organize.notSelected")}</span>
-          <button type="button" className="button button-primary org-dir-btn" onClick={pickSource}>
-            <FolderOpen size={13} /> {t("fileManager.organize.choose")}
-          </button>
-        </div>
-      </label>
-
-      <label className="org-dir-label">
-        <span>{t("fileManager.organize.destDir")}</span>
-        <div className="org-dir-row">
-          <span className="org-dir-path" title={destDir}>{destDir || t("fileManager.organize.notSelected")}</span>
-          <button type="button" className="button org-dir-btn" onClick={pickDest}>
-            <FolderOpen size={13} /> {t("fileManager.organize.choose")}
-          </button>
-        </div>
-        <span className="org-dir-hint">{t("fileManager.organize.destSameHint")}</span>
-      </label>
-    </div>
-  );
-}
-
-// Step 2: Preview plan
-const PREVIEW_PAGE = 200;
-
-function StepPreview({ plan }: { plan: OrganizePlan }) {
-  const { t } = useTranslation();
-  const [page, setPage] = useState(0);
-  const totalPages = Math.ceil(plan.moves.length / PREVIEW_PAGE);
-  const slice = plan.moves.slice(page * PREVIEW_PAGE, (page + 1) * PREVIEW_PAGE);
-
-  return (
-    <div className="org-step org-step--preview">
-      <div className="org-preview-summary">
-        <span><strong>{t("fileManager.organize.previewSummary.moves", { count: plan.moves.length })}</strong></span>
-        {plan.alreadyPlaced > 0 && (
-          <span className="org-preview-placed">{t("fileManager.organize.previewSummary.alreadyPlaced", { count: plan.alreadyPlaced })}</span>
-        )}
-        {plan.conflictCount > 0 && (
-          <span className="org-preview-conflict">
-            <AlertTriangle size={13} /> {t("fileManager.organize.previewSummary.conflicts", { count: plan.conflictCount })}
-          </span>
-        )}
-      </div>
-
-      {plan.moves.length === 0 ? (
-        <div className="org-preview-empty">
-          <CheckCircle size={24} />
-          <p>{t("fileManager.organize.empty")}</p>
-        </div>
-      ) : (
-        <>
-          <div className="org-preview-table" role="table">
-            <div className="org-preview-head" role="row">
-              <span>{t("fileManager.organize.table.name")}</span>
-              <span>{t("fileManager.organize.table.target")}</span>
-              <span />
-            </div>
-            {slice.map((m) => (
-              <MoveRow key={m.from} move={m} />
-            ))}
-          </div>
-          {totalPages > 1 && (
-            <div className="fm-pagination">
-              <button type="button" className="button" disabled={page === 0} onClick={() => setPage(page - 1)}>{t("fileManager.pagination.previous")}</button>
-              <span className="fm-pagination-info">{t("fileManager.pagination.info", { current: page + 1, total: totalPages })}</span>
-              <button type="button" className="button" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>{t("fileManager.pagination.next")}</button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function MoveRow({ move }: { move: OrganizeMove }) {
-  const { t } = useTranslation();
-  return (
-    <div
-      className={`org-preview-row${move.conflict ? " org-preview-row--conflict" : ""}`}
-      role="row"
-      title={move.conflict ? t("fileManager.organize.conflictHint") : undefined}
-    >
-      <span className="org-preview-name" title={move.from}>{move.fromName}</span>
-      <span className="org-preview-arrow">
-        <ArrowRight size={12} />
-        <code>{move.subfolder}/</code>
-      </span>
-      {move.conflict && (
-        <span className="org-preview-conflict-badge" aria-label={t("fileManager.organize.conflictAria")}>
-          <TriangleAlert size={12} />
-        </span>
-      )}
-    </div>
-  );
-}
-
-// Step 3: Executing + done
 function StepExecuting({
   progress,
   result,
@@ -266,259 +90,322 @@ function StepExecuting({
   );
 }
 
-// ── Wizard root ────────────────────────────────────────────────────────────────
 
-type Props = {
-  open: boolean;
-  scanId: string;
-  defaultSourceDir: string;
-  onClose: () => void;
-  onDone: (operationId?: string) => void; // refresh list + persisted undo state
-};
-
-type WizardStep = "rule" | "dirs" | "preview" | "executing";
+// Pagination is per group; selecting a group always applies to all its files.
+function PreviewGroup({ moves, folderName, options, excluded, busy, onRename, onOptions, onExcluded }: {
+  moves: OrganizeMove[];
+  folderName: string;
+  options: OrganizeOptions;
+  excluded: Set<string>;
+  busy: boolean;
+  onRename: (name: string) => void;
+  onOptions: (next: OrganizeOptions) => void;
+  onExcluded: (paths: string[], exclude: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const [page, setPage] = useState(0);
+  const checkbox = useRef<HTMLInputElement>(null);
+  const eligible = moves.filter(m => !m.conflict);
+  const selected = eligible.filter(m => !excluded.has(m.from)).length;
+  useEffect(() => {
+    if (checkbox.current) checkbox.current.indeterminate = selected > 0 && selected < eligible.length;
+  }, [selected, eligible.length]);
+  const first = moves[0];
+  const pages = Math.max(1, Math.ceil(moves.length / 50));
+  const currentPage = Math.min(page, pages - 1);
+  return <section className="org-folder-group">
+    <div className="org-folder-heading">
+      <input ref={checkbox} type="checkbox" checked={selected > 0 && selected === eligible.length}
+        disabled={busy || eligible.length === 0}
+        aria-label={t("fileManager.organize.selectGroup", { folder: first.subfolder })}
+        onChange={e => onExcluded(eligible.map(m => m.from), !e.target.checked)} />
+      <FolderOpen size={17} aria-hidden="true" />
+      <input className="org-folder-input" aria-label={t("fileManager.organize.folderName", { folder: first.subfolder })}
+        value={folderName} disabled={busy}
+        onChange={e => onRename(e.target.value)} />
+      <span className="org-folder-count">{t("fileManager.organize.groupCount", { selected, count: moves.length })}</span>
+    </div>
+    {moves.slice(currentPage * 50, (currentPage + 1) * 50).map(m => <div key={m.from}
+      className={`org-file-row${m.conflict || excluded.has(m.from) ? " org-file-row--skipped" : ""}`}>
+      <input type="checkbox" checked={!m.conflict && !excluded.has(m.from)} disabled={busy || m.conflict}
+        aria-label={t("fileManager.organize.selectFile", { name: m.fromName })}
+        onChange={e => onExcluded([m.from], !e.target.checked)} />
+      <div className="org-file-info">
+        <strong title={m.from}>{m.fromName}</strong>
+        <span title={m.from}>{m.from}</span>
+        <span title={m.to}>→ {m.to}</span>
+        <span>{m.matchedKeyword
+          ? t("fileManager.organize.keywordReason", { keyword: m.matchedKeyword })
+          : t("fileManager.organize.metadataReason")}</span>
+        {m.conflict && <span className="org-preview-conflict">{t("fileManager.organize.conflictHint")}</span>}
+        {m.renamed && <span>{t("fileManager.organize.renamed")}</span>}
+      </div>
+      <label className="org-file-destination">
+        <span>{t("fileManager.organize.table.target")}</span>
+        <input value={options.fileFolders[m.from] ?? m.subfolder} disabled={busy}
+          aria-label={t("fileManager.organize.fileFolder", { name: m.fromName })}
+          onChange={e => onOptions({ ...options, fileFolders: { ...options.fileFolders, [m.from]: e.target.value } })} />
+      </label>
+    </div>)}
+    {pages > 1 && <div className="fm-pagination">
+      <button type="button" className="button" disabled={busy || currentPage === 0} onClick={() => setPage(currentPage - 1)}>{t("fileManager.pagination.previous")}</button>
+      <span>{t("fileManager.pagination.info", { current: currentPage + 1, total: pages })}</span>
+      <button type="button" className="button" disabled={busy || currentPage === pages - 1} onClick={() => setPage(currentPage + 1)}>{t("fileManager.pagination.next")}</button>
+    </div>}
+  </section>;
+}
 
 export function OrganizeWizard({ open, scanId, defaultSourceDir, onClose, onDone }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [step, setStep] = useState<WizardStep>("rule");
-  const [selectedRule, setSelectedRule] = useState<OrganizeRule | null>(null);
+  const [rule, setRule] = useState<OrganizeRule>({ kind: "byPurpose" });
   const [sourceDir, setSourceDir] = useState(defaultSourceDir);
   const [destDir, setDestDir] = useState(defaultSourceDir);
+  const [options, setOptions] = useState(() => initialOptions(i18n.language));
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [folderDrafts, setFolderDrafts] = useState<Record<string, string>>({});
+  const [dirty, setDirty] = useState(false);
   const [planning, setPlanning] = useState(false);
-  const [planError, setPlanError] = useState<string | null>(null);
   const [plan, setPlan] = useState<OrganizePlan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [progress, setProgress] = useState<OrganizeProgress | null>(null);
-  const [result, setResult] = useState<{ succeeded: number; failed: { path: string; reason: string }[] } | null>(null);
+  const [result, setResult] = useState<OrganizeResult | null>(null);
   const [execError, setExecError] = useState<string | null>(null);
-  const unlistenRef = useRef<(() => void) | null>(null);
+  const requestId = useRef(0);
+  const executing = useRef(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const action = useAsyncAction<"source" | "dest" | "preview">();
+  const busy = planning || action.pending !== null;
 
-  // Reset when opened
   useEffect(() => {
-    if (open) {
-      setStep("rule");
-      setSelectedRule(null);
-      setSourceDir(defaultSourceDir);
-      setDestDir(defaultSourceDir);
-      setPlan(null);
-      setPlanError(null);
-      setProgress(null);
-      setResult(null);
-      setExecError(null);
+    requestId.current += 1;
+    if (!open) return;
+    setStep("rule");
+    setRule({ kind: "byPurpose" });
+    setSourceDir(defaultSourceDir);
+    setDestDir(defaultSourceDir);
+    setOptions(initialOptions(i18n.language));
+    setExcluded(new Set());
+    setFolderDrafts({});
+    setDirty(false);
+    setPlanning(false);
+    setPlan(null);
+    setPlanError(null);
+    setProgress(null);
+    setResult(null);
+    setExecError(null);
+    executing.current = false;
+    const previous = document.activeElement as HTMLElement | null;
+    dialog.current?.showModal();
+    dialog.current?.querySelector<HTMLElement>("h2")?.focus();
+    return () => {
+      requestId.current += 1;
+      dialog.current?.close();
+      previous?.focus();
+    };
+    // Language changes apply to the next generated plan without resetting work.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultSourceDir, scanId]);
+
+  const groups = useMemo(() => {
+    const map = new Map<string, OrganizeMove[]>();
+    for (const move of plan?.moves ?? []) {
+      const group = map.get(move.subfolder) ?? [];
+      group.push(move);
+      map.set(move.subfolder, group);
     }
-  }, [open, defaultSourceDir]);
+    return [...map.entries()];
+  }, [plan]);
+  const selected = plan?.moves.filter(m => !m.conflict && !excluded.has(m.from)) ?? [];
+  const isDone = result !== null || execError !== null;
+  const canClose = step !== "executing" || isDone;
 
-  // Clean up event listener on unmount
-  useEffect(() => {
-    return () => { unlistenRef.current?.(); };
-  }, []);
-
-  // Trap Escape key
   useEffect(() => {
     if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && step !== "executing") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, step, onClose]);
+    dialog.current?.querySelector<HTMLElement>(".org-wizard-body")?.scrollTo({ top: 0 });
+    dialog.current?.querySelector<HTMLElement>("h2")?.focus();
+  }, [step, open]);
 
   if (!open) return null;
 
-  // ── Navigation ──────────────────────────────────────────────────────────────
-
-  async function goToPreview() {
-    if (!selectedRule) return;
-    const src = sourceDir;
-    const dst = destDir || sourceDir;
-    setPlanning(true);
-    setPlanError(null);
-    try {
-      const p = await planOrganize(scanId, src, dst, selectedRule);
-      setPlan(p);
-      setStep("preview");
-    } catch (err) {
-      setPlanError(errorMessage(err));
-    } finally {
-      setPlanning(false);
-    }
+  function close() {
+    if (!canClose) return;
+    if (step === "executing") onDone(result?.operationId);
+    onClose();
   }
-
-  async function execute() {
-    if (!plan || plan.moves.length === 0) {
-      onDone();
-      onClose();
-      return;
-    }
-    setStep("executing");
-
-    // Subscribe to progress events
-    const unlisten = await listen<OrganizeProgress>("organize-progress", (ev) => {
-      setProgress(ev.payload);
+  function changeOptions(next: OrganizeOptions) {
+    setOptions(next);
+    setDirty(true);
+  }
+  function exclude(paths: string[], value: boolean) {
+    setExcluded(previous => {
+      const next = new Set(previous);
+      for (const path of paths) { if (value) next.add(path); else next.delete(path); }
+      return next;
     });
-    unlistenRef.current = unlisten;
-
-    // Only send non-conflict moves
-    const toMove = plan.moves
-      .filter((m) => !m.conflict)
-      .map((m) => ({
-        from: m.from,
-        to: m.to,
-        expectedSizeBytes: m.expectedSizeBytes,
-        expectedModifiedAt: m.expectedModifiedAt,
-      }));
-
+  }
+  async function pick(which: "source" | "dest") {
+    await action.run(which, async () => {
+      const id = requestId.current;
+      try {
+        const path = await chooseDirectory();
+        if (!path || id !== requestId.current) return;
+        if (which === "source") {
+          setSourceDir(path);
+          if (destDir === sourceDir) setDestDir(path);
+          setOptions(previous => ({ ...previous, folderNames: {}, fileFolders: {} }));
+          setExcluded(new Set());
+        } else setDestDir(path);
+        setDirty(true);
+        setPlanError(null);
+      } catch (error) {
+        if (id === requestId.current) setPlanError(errorMessage(error));
+      }
+    });
+  }
+  async function preview() {
+    await action.run("preview", async () => {
+      const id = ++requestId.current;
+      setPlanning(true);
+      setPlanError(null);
+      try {
+        const next = await planOrganize(scanId, sourceDir, destDir || sourceDir, rule, { ...options, language: i18n.language });
+        if (id !== requestId.current) return;
+        setPlan(next);
+        setFolderDrafts({});
+        setDirty(false);
+        setStep("preview");
+      } catch (error) {
+        if (id === requestId.current) setPlanError(errorMessage(error));
+      } finally {
+        if (id === requestId.current) setPlanning(false);
+      }
+    });
+  }
+  async function execute() {
+    if (executing.current || busy || dirty || selected.length === 0) return;
+    executing.current = true;
+    setStep("executing");
+    let unlisten: (() => void) | undefined;
     try {
-      const r = await executeOrganizePlan(scanId, toMove);
-      setResult(r);
-      onDone(r.operationId); // refresh file list + undo state
-    } catch (err) {
-      setExecError(errorMessage(err));
-    } finally {
-      unlisten();
-      unlistenRef.current = null;
-    }
+      unlisten = await listen<OrganizeProgress>("organize-progress", event => setProgress(event.payload));
+      const outcome = await executeOrganizePlan(scanId, selected.map(m => ({
+        from: m.from, to: m.to, expectedSizeBytes: m.expectedSizeBytes, expectedModifiedAt: m.expectedModifiedAt,
+      })));
+      setResult(outcome);
+    } catch (error) { setExecError(errorMessage(error)); }
+    finally { unlisten?.(); }
   }
 
-  // ── Step titles & actions ───────────────────────────────────────────────────
-
-  const stepTitles: Record<WizardStep, string> = {
-    rule: t("fileManager.steps.rule"),
-    dirs: t("fileManager.steps.dirs"),
-    preview: t("fileManager.steps.preview"),
-    executing: t("fileManager.steps.executing"),
-  };
-
-  const isDone = result !== null || execError !== null;
-
-  function renderFooter() {
-    if (step === "executing") {
-      return isDone ? (
-        <button type="button" className="button button-primary" onClick={onClose}>
-          {t("fileManager.footer.done")}
-        </button>
-      ) : null;
-    }
-
-    return (
-      <>
-        {step !== "rule" && (
-          <button
-            type="button"
-            className="button"
-            onClick={() => {
-              if (step === "dirs") setStep("rule");
-              else if (step === "preview") setStep("dirs");
-            }}
-          >
-            <ChevronLeft size={14} /> {t("fileManager.footer.back")}
-          </button>
-        )}
-        <div style={{ flex: 1 }} />
-        {step === "rule" && (
-          <button
-            type="button"
-            className="button button-primary"
-            disabled={!selectedRule}
-            onClick={() => setStep("dirs")}
-          >
-            {t("fileManager.footer.next")}
-          </button>
-        )}
-        {step === "dirs" && (
-          <button
-            type="button"
-            className="button button-primary"
-            disabled={!sourceDir || planning}
-            onClick={goToPreview}
-          >
-            {planning ? t("fileManager.footer.generating") : t("fileManager.footer.generate")}
-          </button>
-        )}
-        {step === "preview" && (
-          <button
-            type="button"
-            className="button button-primary"
-            disabled={plan?.moves.length === 0}
-            onClick={execute}
-          >
-            {t("fileManager.footer.execute")}
-          </button>
-        )}
-      </>
-    );
-  }
-
-  return (
-    <div
-      className="fm-dialog-backdrop"
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && step !== "executing") onClose();
-      }}
-    >
-      <dialog className="org-wizard" open aria-modal aria-labelledby="org-wizard-title">
-        {/* Header */}
-        <div className="org-wizard-header">
-          <h2 id="org-wizard-title" className="org-wizard-title">
-            {stepTitles[step]}
-          </h2>
-          {step !== "executing" && (
-            <button
-              type="button"
-              className="icon-button org-wizard-close"
-              onClick={onClose}
-              aria-label={t("fileManager.dialog.close")}
-            >
-              <X size={15} />
-            </button>
-          )}
-        </div>
-
-        {/* Step indicator */}
-        <div className="org-steps-bar">
-          {(["rule", "dirs", "preview", "executing"] as WizardStep[]).map((s, i) => (
-            <span
-              key={s}
-              className={`org-step-dot${s === step ? " org-step-dot--active" : ""}${
-                ["rule", "dirs", "preview", "executing"].indexOf(step) > i
-                  ? " org-step-dot--done"
-                  : ""
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* Body */}
-        <div className="org-wizard-body">
-          {step === "rule" && (
-            <StepRule selected={selectedRule} onSelect={setSelectedRule} />
-          )}
-          {step === "dirs" && (
-            <>
-              <StepDirs
-                sourceDir={sourceDir}
-                destDir={destDir}
-                onSourceChange={setSourceDir}
-                onDestChange={setDestDir}
-              />
-              {planError && (
-                <p className="org-error">
-                  <AlertTriangle size={13} /> {planError}
-                </p>
-              )}
-            </>
-          )}
-          {step === "preview" && plan && (
-            <StepPreview plan={plan} />
-          )}
-          {step === "executing" && (
-            <StepExecuting progress={progress} result={result} error={execError} />
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="org-wizard-footer">{renderFooter()}</div>
-      </dialog>
+  return <dialog ref={dialog} className="org-wizard" data-step={step} aria-labelledby="org-wizard-title"
+    onCancel={e => { e.preventDefault(); close(); }}
+    onClick={e => { if (e.target === e.currentTarget) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) close();
+    } }}>
+    <div className="org-wizard-header">
+      <div>
+        <p className="org-wizard-eyebrow">{t("fileManager.organize.title")}</p>
+        <h2 id="org-wizard-title" className="org-wizard-title" tabIndex={-1}>{t(
+          result ? "fileManager.organize.done.title" : execError ? "fileManager.organize.failedTitle" : `fileManager.steps.${step}`,
+        )}</h2>
+      </div>
+      {canClose && <button type="button" className="icon-button org-wizard-close" onClick={close} aria-label={t("fileManager.dialog.close")}><X size={18} /></button>}
     </div>
-  );
+    <ol className="org-steps-bar" aria-label={t("fileManager.organize.stepsLabel")}>{STEPS.map((s, i) => <li key={s}
+      aria-current={s === step ? "step" : undefined}
+      className={`org-step-marker${s === step ? " org-step-marker--active" : ""}${STEPS.indexOf(step) > i ? " org-step-marker--done" : ""}`}>
+      <span className="org-step-number" aria-hidden="true">{STEPS.indexOf(step) > i ? <CheckCircle size={15} /> : i + 1}</span>
+      <span>{t(`fileManager.organize.stepLabels.${s}`)}</span>
+    </li>)}</ol>
+    <div className="org-wizard-body">
+      {step === "rule" && <div className="org-step">
+        <p className="org-step-hint">{t("fileManager.organize.ruleHint")}</p>
+        <div className="org-rule-grid">{RULES.map(({ kind, Icon }) => <button key={kind} type="button"
+          className={`org-rule-card${kind === rule.kind ? " org-rule-card--active" : ""}`}
+          aria-pressed={kind === rule.kind}
+          onClick={() => { setRule({ kind }); setOptions(previous => ({ ...previous, folderNames: {}, fileFolders: {} })); setDirty(true); }}>
+          <span className="org-rule-icon"><Icon size={20} /></span>
+          <span className="org-rule-copy">
+            <strong>{t(`fileManager.organize.rules.${kind}.label`)}</strong>
+            <span>{t(`fileManager.organize.rules.${kind}.description`)}</span>
+            <code>{t(`fileManager.organize.rules.${kind}.example`)}</code>
+          </span>
+          <span className="org-rule-selected" aria-hidden="true">{kind === rule.kind && <CheckCircle size={17} />}</span>
+        </button>)}</div>
+      </div>}
+      {step === "dirs" && <div className="org-step">
+        <p className="org-step-hint">{t("fileManager.organize.dirsHint")}</p>
+        <fieldset disabled={busy} className="org-settings">
+          {(["source", "dest"] as const).map(which => <div key={which} className="org-dir-label">
+            <span>{t(which === "source" ? "fileManager.organize.sourceDir" : "fileManager.organize.destDir")}</span>
+            <div className="org-dir-row"><span className="org-dir-path" title={which === "source" ? sourceDir : destDir}>
+              {(which === "source" ? sourceDir : destDir) || t("fileManager.organize.destSameHint")}</span>
+              <button type="button" className="button org-dir-btn" aria-busy={action.pending === which} onClick={() => void pick(which)}>
+                {action.pending === which ? <ButtonSpinner /> : <FolderOpen size={14} />}{t("fileManager.organize.choose")}</button>
+            </div>
+          </div>)}
+          <label className="org-check"><input type="checkbox" checked={options.recursive}
+            onChange={e => changeOptions({ ...options, recursive: e.target.checked })} />{t("fileManager.organize.recursive")}</label>
+          <p className={options.recursive ? "org-recursive-warning" : "org-step-hint"}>{t(options.recursive ? "fileManager.organize.recursiveWarning" : "fileManager.organize.preserveHint")}</p>
+          <div className="org-keyword-header"><strong>{t("fileManager.organize.keywordRules")}</strong>
+            <button type="button" className="button" onClick={() => changeOptions({ ...options, keywordRules: [...options.keywordRules, { keyword: "", folder: "" }] })}>{t("fileManager.organize.addRule")}</button></div>
+          <p className="org-step-hint">{t("fileManager.organize.keywordHint")}</p>
+          {options.keywordRules.map((entry, i) => <div className="org-keyword-row" key={i}>
+            <input aria-label={t("fileManager.organize.keyword")} placeholder={t("fileManager.organize.keyword")}
+              value={entry.keyword} onChange={e => changeOptions({ ...options, keywordRules: options.keywordRules.map((r, j) => j === i ? { ...r, keyword: e.target.value } : r) })} />
+            <span aria-hidden="true">→</span>
+            <input aria-label={t("fileManager.organize.table.target")} placeholder={t("fileManager.organize.table.target")}
+              value={entry.folder} onChange={e => changeOptions({ ...options, keywordRules: options.keywordRules.map((r, j) => j === i ? { ...r, folder: e.target.value } : r) })} />
+            <button type="button" className="icon-button" aria-label={t("fileManager.organize.removeRule")}
+              onClick={() => changeOptions({ ...options, keywordRules: options.keywordRules.filter((_, j) => j !== i) })}><X size={14} /></button>
+          </div>)}
+        </fieldset>
+      </div>}
+      {step === "preview" && plan && <div className="org-step org-step--preview">
+        <div className="org-preview-summary" aria-live="polite">
+          <strong>{t("fileManager.organize.previewSummary.moves", { count: selected.length })}</strong>
+          <span>{t("fileManager.organize.keepCount", { count: plan.moves.length - selected.length + plan.preservedFiles + plan.alreadyPlaced })}</span>
+          {plan.conflictCount > 0 && <span className="org-preview-conflict">{t("fileManager.organize.previewSummary.conflicts", { count: plan.conflictCount })}</span>}
+        </div>
+        <p className="org-step-hint">{t("fileManager.organize.previewHint")}</p>
+        <label className="org-conflict-control">{t("fileManager.organize.conflictStrategy")}
+          <select value={options.conflictStrategy} disabled={busy} onChange={e => changeOptions({ ...options, conflictStrategy: e.target.value as "skip" | "rename" })}>
+            <option value="skip">{t("fileManager.organize.skipConflicts")}</option>
+            <option value="rename">{t("fileManager.organize.renameConflicts")}</option>
+          </select>
+        </label>
+        <div className="org-preview-actions">
+          <button type="button" className="button" disabled={busy} onClick={() => exclude(plan.moves.map(m => m.from), false)}>{t("fileManager.organize.selectAll")}</button>
+          <button type="button" className="button" disabled={busy} onClick={() => exclude(plan.moves.map(m => m.from), true)}>{t("fileManager.organize.keepAll")}</button>
+        </div>
+        {dirty && <div className="org-dirty-notice" role="status"><span>{t("fileManager.organize.previewChanged")}</span>
+          <button type="button" className="button button-primary" disabled={busy} aria-busy={planning} onClick={() => void preview()}>{planning && <ButtonSpinner />}{t(planning ? "fileManager.footer.generating" : "fileManager.organize.updatePreview")}</button></div>}
+        {plan.moves.length === 0 && <div className="org-preview-empty"><CheckCircle size={24} /><p>{t("fileManager.organize.empty")}</p></div>}
+        {groups.map(([key, moves]) => <PreviewGroup key={key} moves={moves} folderName={folderDrafts[key] ?? key}
+          options={options} excluded={excluded} busy={busy} onOptions={changeOptions} onExcluded={exclude}
+          onRename={name => {
+            setFolderDrafts(previous => ({ ...previous, [key]: name }));
+            const fileFolders = { ...options.fileFolders };
+            for (const move of moves) fileFolders[move.from] = name;
+            changeOptions({ ...options, fileFolders });
+          }} />)}
+      </div>}
+      {planError && <p className="org-error" role="alert"><AlertTriangle size={14} />{planError}</p>}
+      {step === "executing" && <>
+        <StepExecuting progress={progress} result={result} error={execError} />
+        {result && <p className="org-result-hint">{t("fileManager.organize.undoHint")}</p>}
+      </>}
+    </div>
+    <div className="org-wizard-footer">
+      {step !== "rule" && step !== "executing" && <button type="button" className="button" disabled={busy}
+        onClick={() => { setPlanError(null); setStep(step === "preview" ? "dirs" : "rule"); }}><ChevronLeft size={14} />{t("fileManager.footer.back")}</button>}
+      <span className="org-footer-hint">{step !== "executing" && t("fileManager.organize.preserveFooter")}</span>
+      {step === "rule" && <button type="button" className="button button-primary" onClick={() => setStep("dirs")}>{t("fileManager.footer.next")}</button>}
+      {step === "dirs" && <button type="button" className="button button-primary" disabled={busy || !sourceDir} aria-busy={planning} onClick={() => void preview()}>{planning && <ButtonSpinner />}{t(planning ? "fileManager.footer.generating" : "fileManager.footer.generate")}</button>}
+      {step === "preview" && <button type="button" className="button button-primary" disabled={busy || dirty || selected.length === 0}
+        onClick={() => void execute()}>{t("fileManager.organize.executeCount", { count: selected.length })}</button>}
+      {step === "executing" && isDone && <button type="button" className="button button-primary" onClick={close}>{t("fileManager.footer.done")}</button>}
+    </div>
+  </dialog>;
 }

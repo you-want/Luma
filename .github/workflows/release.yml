@@ -182,6 +182,9 @@ jobs:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+
       - name: Download platform artifacts
         uses: actions/download-artifact@v4
         with:
@@ -222,9 +225,15 @@ jobs:
             signature: signature(sigFile),
           });
 
+          const notesPath = `docs/releases/${tag}.md`;
+          const notes = fs.existsSync(notesPath)
+            ? fs.readFileSync(notesPath, 'utf8').trim()
+            : `Luma ${tag}\n\n提供 macOS universal 与 Windows x64 安装包，以及签名 updater 产物。`;
+          fs.writeFileSync(`${process.env.RUNNER_TEMP}/luma-release-notes.md`, `${notes}\n`);
+
           const manifest = {
             version,
-            notes: `Luma ${tag} 更新，包含搜索、批量选择、国际化和跨平台修复。`,
+            notes,
             pub_date: new Date().toISOString(),
             platforms: {
               'darwin-aarch64': platform(files.mac, files.macSig),
@@ -247,11 +256,4 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
           files: release-artifacts/*
-          body: |
-            Luma ${{ github.ref_name }}
-
-            本版提供 macOS universal 与 Windows x64 构建：
-            - macOS：`.dmg` 安装包与签名 updater `.app.tar.gz`
-            - Windows：`.msi` 安装包、NSIS `.exe` 安装包与签名 updater 产物
-
-            updater 使用签名清单和签名安装包；本构建尚未启用 Apple/Windows 代码签名或公证，首次安装时系统可能需要手动确认运行来源。
+          body_path: ${{ runner.temp }}/luma-release-notes.md

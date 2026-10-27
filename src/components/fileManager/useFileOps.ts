@@ -1,7 +1,7 @@
 // useFileOps — all file operation logic (trash, rename, move, copy) plus
 // the persisted SQLite-backed undo stack.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   trashFiles,
@@ -23,6 +23,8 @@ export type OpsState = {
   renamingPath: string | null;
 };
 
+export type FileOperation = "undo" | "trash" | "rename" | "move" | "copy";
+
 export type FileOpsHook = ReturnType<typeof useFileOps>;
 
 type PushToast = (opts: {
@@ -36,11 +38,19 @@ export function useFileOps(
   scanId: string,
   onRefresh: () => void,
   pushToast: PushToast,
+  selectionScope = scanId,
 ) {
   const { t } = useTranslation();
+  const busyRef = useRef(false);
+  const [pendingOperation, setPendingOperation] = useState<FileOperation | null>(null);
+  const busy = pendingOperation !== null;
   const [checkedPaths, setCheckedPaths] = useState<Set<string>>(new Set());
   const [undoStack, setUndoStack] = useState<OperationRecord[]>([]);
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  useEffect(() => {
+    setCheckedPaths(new Set());
+    setRenamingPath(null);
+  }, [selectionScope]);
 
   // ── Checkbox selection ─────────────────────────────────────────────────────
 
@@ -77,6 +87,9 @@ export function useFileOps(
 
   const undoById = useCallback(
     async (operationId: string, label: string) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setPendingOperation("undo");
       try {
         const result = await undoFileOperation(operationId, scanId);
         onRefresh();
@@ -92,6 +105,9 @@ export function useFileOps(
       } catch (err) {
         pushToast({ kind: "error", message: t("fileManager.ops.undoFailed", { reason: errorMessage(err) }) });
         await refreshUndoable();
+      } finally {
+        busyRef.current = false;
+        setPendingOperation(null);
       }
     },
     [onRefresh, pushToast, refreshUndoable, scanId, t],
@@ -101,6 +117,9 @@ export function useFileOps(
 
   const trash = useCallback(
     async (paths: string[]) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setPendingOperation("trash");
       try {
         const result = await trashFiles(scanId, paths);
         const n = result.succeeded.length;
@@ -117,6 +136,9 @@ export function useFileOps(
         }
       } catch (err) {
         pushToast({ kind: "error", message: errorMessage(err) });
+      } finally {
+        busyRef.current = false;
+        setPendingOperation(null);
       }
     },
     [scanId, onRefresh, clearChecked, pushToast, t],
@@ -134,9 +156,13 @@ export function useFileOps(
 
   const commitRename = useCallback(
     async (oldPath: string, newName: string) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setPendingOperation("rename");
       setRenamingPath(null);
       try {
         const result = await renameFile(scanId, oldPath, newName);
+        clearChecked();
         onRefresh();
         await refreshUndoable();
         pushToast({
@@ -147,15 +173,21 @@ export function useFileOps(
         });
       } catch (err) {
         pushToast({ kind: "error", message: t("fileManager.ops.renameFailed", { reason: errorMessage(err) }) });
+      } finally {
+        busyRef.current = false;
+        setPendingOperation(null);
       }
     },
-    [scanId, onRefresh, pushToast, refreshUndoable, undoById, t],
+    [scanId, onRefresh, pushToast, refreshUndoable, undoById, clearChecked, t],
   );
 
   // ── Move ───────────────────────────────────────────────────────────────────
 
   const move = useCallback(
     async (paths: string[], destDir: string) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setPendingOperation("move");
       try {
         const result = await moveFiles(scanId, paths, destDir);
         const n = result.succeeded.length;
@@ -177,6 +209,9 @@ export function useFileOps(
         }
       } catch (err) {
         pushToast({ kind: "error", message: errorMessage(err) });
+      } finally {
+        busyRef.current = false;
+        setPendingOperation(null);
       }
     },
     [scanId, onRefresh, clearChecked, pushToast, refreshUndoable, undoById, t],
@@ -186,6 +221,9 @@ export function useFileOps(
 
   const copy = useCallback(
     async (paths: string[], destDir: string) => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      setPendingOperation("copy");
       try {
         const result = await copyFiles(scanId, paths, destDir);
         const n = result.succeeded.length;
@@ -199,6 +237,9 @@ export function useFileOps(
         }
       } catch (err) {
         pushToast({ kind: "error", message: errorMessage(err) });
+      } finally {
+        busyRef.current = false;
+        setPendingOperation(null);
       }
     },
     [scanId, onRefresh, clearChecked, pushToast, t],
@@ -213,6 +254,8 @@ export function useFileOps(
   }, [undoStack, undoById]);
 
   return {
+    busy,
+    pendingOperation,
     checkedPaths,
     undoStack,
     renamingPath,

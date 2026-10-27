@@ -1,7 +1,86 @@
 use crate::{database, error::AppError, models::FileEntry};
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use serde::Serialize;
 use std::path::Path;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BinaryPreview {
+    pub mime_type: &'static str,
+    pub data: String,
+}
+
+/// Explicit previews are bounded and restricted to files in the chosen scan.
+/// A data payload avoids depending on an unconfigured asset:// protocol or
+/// attempting to load file:// resources inside a Tauri webview.
+pub fn read_binary_preview(
+    db_path: &Path,
+    scan_id: &str,
+    path: &str,
+) -> Result<BinaryPreview, AppError> {
+    use base64::Engine;
+    use std::io::Read;
+    const LIMIT: u64 = 20 * 1024 * 1024;
+    let indexed = database::open(db_path)?
+        .query_row(
+            "SELECT 1 FROM files WHERE scan_id = ?1 AND path = ?2 LIMIT 1",
+            params![scan_id, path],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some();
+    if !indexed {
+        return Err(AppError::new("STALE_INDEX", "文件不在当前扫描索引中。"));
+    }
+    let native = std::path::PathBuf::from(path.replace('/', std::path::MAIN_SEPARATOR_STR));
+    let ext = native
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mime_type = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "tiff" | "tif" => "image/tiff",
+        "pdf" => "application/pdf",
+        _ => {
+            return Err(AppError::new(
+                "PREVIEW_UNSUPPORTED",
+                "此格式不支持内嵌预览。",
+            ))
+        }
+    };
+    let file = std::fs::File::open(&native)
+        .map_err(|e| AppError::new("FILE_READ_ERROR", e.to_string()))?;
+    let metadata = file
+        .metadata()
+        .map_err(|e| AppError::new("FILE_READ_ERROR", e.to_string()))?;
+    if !metadata.is_file() {
+        return Err(AppError::new("FILE_READ_ERROR", "只能预览普通文件。"));
+    }
+    if metadata.len() > LIMIT {
+        return Err(AppError::new(
+            "PREVIEW_TOO_LARGE",
+            "预览最多支持 20 MB 文件，请在默认应用中打开。",
+        ));
+    }
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| AppError::new("FILE_READ_ERROR", e.to_string()))?;
+    if bytes.len() as u64 > LIMIT {
+        return Err(AppError::new("PREVIEW_TOO_LARGE", "文件超过预览大小限制。"));
+    }
+    Ok(BinaryPreview {
+        mime_type,
+        data: base64::engine::general_purpose::STANDARD.encode(bytes),
+    })
+}
 
 /// A directory node derived from the scan index path data.
 /// Counts are aggregated over all descendant files (not just direct children).
@@ -187,6 +266,70 @@ mod tests {
     use crate::database::{create_scan_run, initialize, insert_file_batch, open};
     use std::fs;
     use uuid::Uuid;
+
+    #[test]
+    fn binary_preview_requires_index_membership_and_enforces_a_read_limit() {
+        use base64::Engine;
+        let root = std::env::temp_dir().join(format!("luma-preview-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let db = root.join("test.db");
+        initialize(&db).unwrap();
+        create_scan_run(&db, "preview", &root.to_string_lossy(), 0).unwrap();
+        let path = root.join("sample.png");
+        fs::write(&path, b"sample image bytes").unwrap();
+        let stored = path
+            .to_string_lossy()
+            .replace(std::path::MAIN_SEPARATOR, "/");
+        assert_eq!(
+            read_binary_preview(&db, "preview", &stored)
+                .unwrap_err()
+                .code,
+            "STALE_INDEX"
+        );
+        insert_file_batch(
+            &mut open(&db).unwrap(),
+            "preview",
+            &[FileEntry {
+                id: 0,
+                path: stored.clone(),
+                name: "sample.png".into(),
+                extension: Some("png".into()),
+                category: "images".into(),
+                size_bytes: 18,
+                modified_at: None,
+                is_hidden: false,
+                content_hash: None,
+            }],
+        )
+        .unwrap();
+        let preview = read_binary_preview(&db, "preview", &stored).unwrap();
+        assert_eq!(preview.mime_type, "image/png");
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD
+                .decode(preview.data)
+                .unwrap(),
+            b"sample image bytes"
+        );
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(20 * 1024 * 1024 + 1)
+            .unwrap();
+        assert_eq!(
+            read_binary_preview(&db, "preview", &stored)
+                .unwrap_err()
+                .code,
+            "PREVIEW_TOO_LARGE"
+        );
+        assert_eq!(
+            read_binary_preview(&db, "another-scan", &stored)
+                .unwrap_err()
+                .code,
+            "STALE_INDEX"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 
     /// Regression test: multi-byte (UTF-8) directory names must not break the
     /// byte-vs-char slice arithmetic in `get_directory_nodes` /

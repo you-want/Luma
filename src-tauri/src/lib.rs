@@ -83,6 +83,7 @@ pub fn run() {
             commands::list_directory_files,
             commands::open_path,
             commands::read_text_preview,
+            commands::read_binary_preview,
             commands::trash_files,
             commands::rename_file,
             commands::move_files,

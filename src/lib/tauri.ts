@@ -185,8 +185,9 @@ export function planOrganize(
   sourceDir: string,
   destDir: string,
   rule: import("../types/fileManager").OrganizeRule,
+  options: import("../types/fileManager").OrganizeOptions,
 ): Promise<import("../types/fileManager").OrganizePlan> {
-  return invoke("plan_organize", { scanId, sourceDir, destDir, rule });
+  return invoke("plan_organize", { scanId, sourceDir, destDir, rule, options });
 }
 
 export function executeOrganizePlan(
