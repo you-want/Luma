@@ -802,6 +802,21 @@
     }
     .lm-final p { color: var(--lm-muted); font-size: var(--han-fs-md); line-height: var(--han-lh-relaxed); margin: 0 0 2rem; }
     .lm-final__actions { display: flex; justify-content: center; gap: var(--han-space-5); flex-wrap: wrap; }
+    .lm-final__note {
+      margin: 2.25rem auto 0;
+      max-width: 40rem;
+      text-align: left;
+      background: color-mix(in srgb, var(--han-color-paper-50) 82%, transparent);
+      border: 1px solid var(--lm-line);
+      border-radius: var(--han-radius-lg);
+      padding: 1.25rem 1.5rem;
+      color: var(--lm-muted);
+      font-size: var(--han-fs-sm, 0.875rem);
+      line-height: var(--han-lh-relaxed);
+    }
+    .lm-final__note strong { color: var(--lm-ink); }
+    .lm-final__note ul { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+    .lm-final__note li + li { margin-top: 0.5rem; }
 
     /* ============================ 页脚 ============================ */
     .lm-footer { background: var(--lm-dark); color: var(--han-color-paper-50); padding: var(--han-space-10) 0 var(--han-space-6); }
@@ -1200,11 +1215,18 @@
       <div class="lm-container lm-final__inner">
         <span class="lm-kicker" style="justify-content:center;">给你的电脑一张地图</span>
         <h2 id="final-title">让计算，<br>回归从容。</h2>
-        <p>Luma 0.4.1 提供 macOS 通用版（Apple Silicon 与 Intel）和 Windows x64 安装包。已有版本可通过应用内检查更新；v0.3.2 → v0.4.0 已有用户升级成功。安装包尚未启用 Apple/Windows 平台代码签名或公证，Windows 真机验收仍待补齐。</p>
+        <p>Luma 0.4.1 提供 macOS 通用版（Apple Silicon 与 Intel）和 Windows x64 安装包。已有版本可通过应用内检查更新；v0.3.2 → v0.4.0 已有用户升级成功。安装包尚未启用 Apple/Windows 平台代码签名或公证，Windows 真机验收仍待补齐；首次打开的放行步骤见下方说明。</p>
         <div class="lm-final__actions">
           <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.4.1/Luma_0.4.1_universal.dmg" rel="noopener noreferrer">下载 macOS 通用版</a>
           <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.4.1/Luma-0.4.1-windows-x64-setup.exe" rel="noopener noreferrer">下载 Windows 安装包</a>
           <a class="lm-text-link" href="https://github.com/you-want/Luma/releases/tag/v0.4.1" rel="noopener noreferrer">全部安装包与更新说明</a>
+        </div>
+        <div class="lm-final__note" role="note" aria-label="首次安装说明">
+          <strong>首次安装会看到系统安全提示，放行一次即可</strong>
+          <ul>
+            <li><strong>macOS</strong>：拖入「应用程序」后首次启动，若提示「无法验证开发者」，先点「完成」，再打开 系统设置 → 隐私与安全性，在「安全性」区域点「仍要打开」并验证密码。之后可正常启动。</li>
+            <li><strong>Windows</strong>：安装时若 SmartScreen 提示「Windows 已保护你的电脑」，点「更多信息」→「仍要运行」；浏览器提示下载风险时选择保留文件。</li>
+          </ul>
         </div>
       </div>
     </section>
