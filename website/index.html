@@ -804,19 +804,68 @@
     .lm-final__actions { display: flex; justify-content: center; gap: var(--han-space-5); flex-wrap: wrap; }
     .lm-final__note {
       margin: 2.25rem auto 0;
-      max-width: 40rem;
+      max-width: 46rem;
       text-align: left;
-      background: color-mix(in srgb, var(--han-color-paper-50) 82%, transparent);
-      border: 1px solid var(--lm-line);
+      background: color-mix(in srgb, #FFFFFF 72%, var(--han-color-paper-50));
+      border: 1px solid color-mix(in srgb, var(--han-color-vermilion-500) 26%, var(--lm-line));
       border-radius: var(--han-radius-lg);
-      padding: 1.25rem 1.5rem;
+      padding: 1.5rem 1.75rem 1.35rem;
       color: var(--lm-muted);
       font-size: var(--han-fs-sm, 0.875rem);
       line-height: var(--han-lh-relaxed);
+      transition: transform .4s var(--han-ease-out), box-shadow .4s var(--han-ease-out);
     }
-    .lm-final__note strong { color: var(--lm-ink); }
-    .lm-final__note ul { margin: 0.5rem 0 0; padding-left: 1.25rem; }
-    .lm-final__note li + li { margin-top: 0.5rem; }
+    .lm-final__note:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 14px 34px color-mix(in srgb, var(--han-color-ink-900) 10%, transparent);
+    }
+    .lm-final__note-head {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: 1rem;
+      color: var(--lm-ink);
+      font-size: 1.02rem;
+      font-weight: 600;
+    }
+    .lm-final__note-seal {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: .45rem;
+      background: var(--han-color-vermilion-500);
+      color: #fff;
+      font-family: var(--han-font-kai);
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .lm-final__note-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem 2rem;
+    }
+    .lm-final__note-platform h3 {
+      margin: 0 0 .45rem;
+      font-size: .95rem;
+      color: var(--lm-ink);
+    }
+    .lm-final__note-platform ol { margin: 0; padding-left: 1.35rem; }
+    .lm-final__note-platform li + li { margin-top: .4rem; }
+    .lm-final__note-platform li::marker { color: var(--han-color-vermilion-500); font-weight: 700; }
+    .lm-final__note-platform strong { color: var(--lm-ink); }
+    .lm-final__note-foot {
+      margin: 1.1rem 0 0;
+      padding-top: .9rem;
+      border-top: 1px dashed var(--lm-line);
+      color: var(--lm-faint);
+    }
+    @media (max-width: 720px) {
+      .lm-final__note { padding: 1.25rem 1.25rem 1.1rem; }
+      .lm-final__note-grid { grid-template-columns: 1fr; }
+    }
 
     /* ============================ 页脚 ============================ */
     .lm-footer { background: var(--lm-dark); color: var(--han-color-paper-50); padding: var(--han-space-10) 0 var(--han-space-6); }
@@ -1221,12 +1270,30 @@
           <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.4.1/Luma-0.4.1-windows-x64-setup.exe" rel="noopener noreferrer">下载 Windows 安装包</a>
           <a class="lm-text-link" href="https://github.com/you-want/Luma/releases/tag/v0.4.1" rel="noopener noreferrer">全部安装包与更新说明</a>
         </div>
-        <div class="lm-final__note" role="note" aria-label="首次安装说明">
-          <strong>首次安装会看到系统安全提示，放行一次即可</strong>
-          <ul>
-            <li><strong>macOS</strong>：拖入「应用程序」后首次启动，若提示「无法验证开发者」，先点「完成」，再打开 系统设置 → 隐私与安全性，在「安全性」区域点「仍要打开」并验证密码。之后可正常启动。</li>
-            <li><strong>Windows</strong>：安装时若 SmartScreen 提示「Windows 已保护你的电脑」，点「更多信息」→「仍要运行」；浏览器提示下载风险时选择保留文件。</li>
-          </ul>
+        <div class="lm-final__note lm-reveal" role="note" aria-label="首次安装说明">
+          <div class="lm-final__note-head">
+            <span class="lm-final__note-seal" aria-hidden="true">!</span>
+            <strong>首次安装会看到系统安全提示，放行一次即可</strong>
+          </div>
+          <div class="lm-final__note-grid">
+            <section class="lm-final__note-platform">
+              <h3>macOS</h3>
+              <ol>
+                <li>拖入「应用程序」后首次启动，若提示「无法验证开发者」，先点<strong>「完成」</strong>。</li>
+                <li>打开<strong>系统设置 → 隐私与安全性</strong>，在「安全性」区域点<strong>「仍要打开」</strong>并验证密码。</li>
+                <li>之后可正常启动，不会重复拦截。</li>
+              </ol>
+            </section>
+            <section class="lm-final__note-platform">
+              <h3>Windows</h3>
+              <ol>
+                <li>安装时若 SmartScreen 提示<strong>「Windows 已保护你的电脑」</strong>，点<strong>「更多信息」</strong>。</li>
+                <li>点<strong>「仍要运行」</strong>继续完成安装。</li>
+                <li>浏览器提示下载风险时，选择保留文件。</li>
+              </ol>
+            </section>
+          </div>
+          <p class="lm-final__note-foot">放行一次后即可正常使用；macOS 13 及更早版本也可在应用图标上右键选「打开」。</p>
         </div>
       </div>
     </section>
