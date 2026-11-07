@@ -100,6 +100,7 @@ fn macos_battery() -> Option<BatteryStatus> {
 }
 
 /// "CPU usage: 7.50% user, 4.16% sys, 88.33% idle" → user + sys.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn parse_top_cpu(text: &str) -> Option<f32> {
     for line in text.lines() {
         let Some(rest) = line.trim().strip_prefix("CPU usage:") else {
@@ -128,6 +129,7 @@ fn parse_top_cpu(text: &str) -> Option<f32> {
 }
 
 /// Size suffix (K/M/G/T, case-insensitive) → bytes.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn parse_size_with_suffix(text: &str) -> Option<u64> {
     let text = text.trim();
     let split_at = text
@@ -148,6 +150,7 @@ fn parse_size_with_suffix(text: &str) -> Option<u64> {
 
 /// "PhysMem: 12G used (3G wired, 0K purgeable), 5G unused." → (total, used)
 /// where total = used + unused.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn parse_top_memory(text: &str) -> Option<(u64, Option<u64>)> {
     let line = text
         .lines()
@@ -166,6 +169,7 @@ fn parse_top_memory(text: &str) -> Option<(u64, Option<u64>)> {
 /// pmset lines like:
 /// "-InternalBattery-0 (id=…)  98%; discharging; 0:00 remaining present: true"
 /// "Now drawing from 'AC Power'" + "100%; charged; …"
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn parse_pmset_battery(text: &str) -> Option<BatteryStatus> {
     let mut percent = None;
     let mut charging = false;

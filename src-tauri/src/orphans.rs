@@ -207,6 +207,7 @@ pub fn discover_orphans(db_path: &Path) -> Result<AppDataReport, AppError> {
 /// Library-root-injected discovery core, shared with tests. Computes the
 /// installed-bundle-id set from the given app roots (macOS `plutil`), then
 /// delegates to `discover_with_installed`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn discover_in(
     library_root: &Path,
     app_roots: &[PathBuf],
@@ -677,6 +678,8 @@ mod tests {
     // ── Discovery ────────────────────────────────────────────────────────────
 
     #[test]
+    // Reads real Info.plists via `plutil`, which only exists on macOS.
+    #[cfg(target_os = "macos")]
     fn orphan_discovery_excludes_installed_apps() {
         let dir = temp_root("discover");
         let library = dir.join("Library");

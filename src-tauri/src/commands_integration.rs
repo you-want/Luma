@@ -382,6 +382,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn maintenance_quicklook_cache_refresh_succeeds_on_macos() {
         // `qlmanage` is always present on macOS and needs no privileges.
         // This actually refreshes the QuickLook cache on the test machine,

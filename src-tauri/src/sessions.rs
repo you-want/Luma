@@ -1401,10 +1401,9 @@ mod tests {
         fs::write(home.join(".claude/todos/other.json"), "{}").unwrap();
 
         let sidecars = sidecar_paths("claude", &transcript, &home);
-        let names: Vec<String> = sidecars
-            .iter()
-            .map(|path| path.to_string_lossy().to_string())
-            .collect();
+        // Store-style text (`/` separators) so the assertions hold on both
+        // POSIX and Windows paths.
+        let names: Vec<String> = sidecars.iter().map(|path| to_store_path(path)).collect();
         assert_eq!(names.len(), 4, "got {names:?}");
         assert!(names.iter().any(|n| n.ends_with("/p/sid-1")));
         assert!(names.iter().any(|n| n.contains("file-history/sid-1")));
@@ -1562,11 +1561,12 @@ mod tests {
         assert!(report.failed.is_empty());
         // Transcript + sidecar dir + file-history dir, in that order.
         let trashed = trashed.into_inner();
-        assert!(trashed[0].ends_with("sid-1.jsonl"));
-        assert!(trashed.iter().any(|p| p.ends_with("sid-1")));
-        assert!(trashed
+        let trashed_store: Vec<String> = trashed.iter().map(|p| to_store_path(p)).collect();
+        assert!(trashed_store[0].ends_with("sid-1.jsonl"));
+        assert!(trashed_store.iter().any(|p| p.ends_with("/sid-1")));
+        assert!(trashed_store
             .iter()
-            .any(|p| p.to_string_lossy().contains("file-history/sid-1")));
+            .any(|p| p.contains("file-history/sid-1")));
     }
 
     #[test]

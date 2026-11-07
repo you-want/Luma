@@ -23,6 +23,7 @@ use crate::{
 };
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "macos")]
 use std::process::Command;
 use std::{
     collections::{HashMap, HashSet},
@@ -436,7 +437,9 @@ fn normalize_input_path(raw: &str) -> Result<String, AppError> {
         return Err(AppError::invalid_path("路径不能包含上级目录跳转。"));
     }
     let stored = match native.canonicalize() {
-        Ok(resolved) => to_store_path(&resolved),
+        // Strip Windows verbatim prefixes, or the stored form can never match
+        // the plain paths later sent back for deletion.
+        Ok(resolved) => to_store_path(&file_ops::strip_windows_verbatim_prefix(resolved)),
         Err(_) => {
             let trimmed_stored = candidate.trim_end_matches('/');
             if trimmed_stored.is_empty() {
@@ -1110,6 +1113,7 @@ fn query_volumes() -> Vec<VolumeInfo> {
 
 /// Parse `df -k` output (1 KiB blocks) into local volumes: the root volume
 /// and `/Volumes/*` mounts, excluding Time Machine snapshots.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn parse_df_output(text: &str) -> Vec<VolumeInfo> {
     let mut volumes = Vec::new();
     let mut seen = HashSet::new();
@@ -1126,6 +1130,7 @@ fn parse_df_output(text: &str) -> Vec<VolumeInfo> {
     volumes
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn parse_df_line(line: &str) -> Option<VolumeInfo> {
     let fields: Vec<&str> = line.split_whitespace().collect();
     if fields.len() < 9 {
@@ -1252,10 +1257,12 @@ mod tests {
                         assert!(root.is_absolute(), "{} root must be absolute", def.kind);
                     }
                 }
-                // Acceptable platform gaps: the Recycle Bin and simulator
-                // devices (an Xcode concept) on Windows.
+                // Acceptable platform gaps on Windows: the Recycle Bin (needs
+                // elevated access) and Xcode concepts (simulators, build
+                // artifacts like DerivedData).
                 None => assert!(
-                    cfg!(target_os = "windows") && matches!(def.kind, "trash" | "simDevices"),
+                    cfg!(target_os = "windows")
+                        && matches!(def.kind, "trash" | "simDevices" | "devDerived"),
                     "{} must resolve roots on this platform",
                     def.kind
                 ),
@@ -1325,23 +1332,23 @@ mod tests {
     #[test]
     fn whitelist_crud_round_trip() {
         let db = whitelist_db();
-        let entries = add_whitelist_entry(&db, "/Users/me/Keep Me/").unwrap();
-        assert!(entries
-            .iter()
-            .any(|entry| entry.path == "/Users/me/Keep Me"));
+        // A native absolute path (not a hardcoded POSIX one): the store form
+        // is platform-specific, so assert against what normalize returns.
+        let keep = to_store_path(&temp_dir("crud").join("Keep Me"));
+        let expected = keep.trim_end_matches('/').to_string();
+        let entries = add_whitelist_entry(&db, &format!("{keep}/")).unwrap();
+        assert!(entries.iter().any(|entry| entry.path == expected));
         // Duplicate insert is ignored, not an error.
-        let entries = add_whitelist_entry(&db, "/Users/me/Keep Me").unwrap();
+        let entries = add_whitelist_entry(&db, &keep).unwrap();
         assert_eq!(
             entries
                 .iter()
-                .filter(|entry| entry.path == "/Users/me/Keep Me")
+                .filter(|entry| entry.path == expected)
                 .count(),
             1
         );
-        let entries = remove_whitelist_entry(&db, "/Users/me/Keep Me").unwrap();
-        assert!(!entries
-            .iter()
-            .any(|entry| entry.path == "/Users/me/Keep Me"));
+        let entries = remove_whitelist_entry(&db, &expected).unwrap();
+        assert!(!entries.iter().any(|entry| entry.path == expected));
     }
 
     #[test]
