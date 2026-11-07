@@ -4,6 +4,7 @@ import {
   formatBytes,
   formatDate,
   formatNumber,
+  formatRelativeTime,
   setFormatLocale,
 } from "./format";
 
@@ -31,6 +32,16 @@ describe("localized values", () => {
     expect(formatNumber(12345).replace(/\D/g, "")).toBe("12345");
     expect(formatDate()).toBe("--");
     expect(formatDate(0)).toBe("--");
+    expect(formatRelativeTime()).toBe("--");
+    expect(formatRelativeTime(null)).toBe("--");
+  });
+
+  it("formats relative times with units", () => {
+    const now = Date.now() / 1000;
+    expect(formatRelativeTime(now - 30)).toMatch(/second/);
+    expect(formatRelativeTime(now - 5 * 60)).toMatch(/minute/);
+    expect(formatRelativeTime(now - 3 * 3600)).toMatch(/hour/);
+    expect(formatRelativeTime(now - 2 * 86_400)).toMatch(/day/);
   });
 });
 

@@ -1,9 +1,9 @@
 # Luma 产品与工程路线图
 
-> 当前正式版本：v0.4.1
-> v0.4.1 新增本地存储管理、普通移动确认与 macOS 安装界面，见 [本地存储管理](local-storage.md)。
+> 当前正式版本：v0.5.0（2026-11-07 代码封板，发布验收进行中）；磁盘管家 I~V 与 Agent 会话均已开发完成
+> v0.5.0 新增磁盘管家（清理中心、项目瘦身、应用残留、模拟器设备、二进制瘦身、维护与状态卡）与 Agent 会话管理，见 [磁盘管家工作包](disk-cleaner.md) 与 [Agent 会话工作包](agent-sessions.md)。
 > 路线图基线：工作区当前实现（2026-08-17）
-> 最后更新：2026-10-27
+> 最后更新：2026-11-07
 > 维护方式：实现、验收或范围发生变化时，同步更新“总览”“工作包”和“进度记录”。
 
 ## 1. 状态约定
@@ -19,11 +19,13 @@
 
 > 关于签名与自动更新（工作包 F）：Tauri updater 的独立签名链路已恢复实施；Apple Developer ID、Windows 代码签名和公证仍标记为 `SHELVED`。发布构建从 GitHub Actions Secret 读取 updater 私钥，受限权限的本机备份见发布手册；仓库和客户端只保存公钥。
 
+> 产品立场（2026-11-04 修订）：Luma 的定位由“只读观察者”演进为“**保守写**”——普通扫描仍然只读；所有文件写入（移动、重命名、整理、磁盘管家清理）必须由用户显式触发，且统一遵守四条红线：**只经系统废纸篓、从不永久删除、执行前复核（路径 / 大小 / 白名单 / 保护范围）、全程留操作日志**。磁盘管家（工作包 G）在此立场下实现系统级清理能力，但比同类 CLI 工具（永久删除、需要管理员权限）更保守。对外文案（README、官网、发布说明）须与此口径一致。
+
 完成状态不能只凭“代码已写”更新。至少需要测试通过，并满足该工作包的验收标准。
 
 ## 2. 当前基线
 
-当前工作区已具备目录扫描、进度与取消、本地 SQLite 索引、空间分类、最大文件、透明发现、重复文件候选、开发项目识别、扫描历史对比、搜索、批量选择、文件浏览/预览/操作、规则整理和中英文界面。文件写入已收敛为显式确认、受保护路径、执行前复核、操作日志与持久化撤销；v0.4.1 已公开发布，macOS/Windows 构建通过；完整 Windows 真机验收仍未完成。
+当前工作区已具备目录扫描、进度与取消、本地 SQLite 索引、空间分类、最大文件、透明发现、重复文件候选、开发项目识别、扫描历史对比、搜索、批量选择、文件浏览/预览/操作、规则整理和中英文界面。文件写入已收敛为显式确认、受保护路径、执行前复核、操作日志与持久化撤销；v0.4.1 已公开发布，macOS/Windows 构建通过；完整 Windows 真机验收仍未完成。磁盘管家 I~V（固定位置清理中心、白名单、磁盘容量总览、项目瘦身、应用残留清理、模拟器设备清理、二进制瘦身、系统维护、系统状态卡片）与 Agent 会话管理（Claude Code / Codex / Gemini CLI 本地会话的查看、筛选与整组废纸篓清理）已在 v0.5.0 分支开发完成（2026-11-03~07），方案与平台边界见 [磁盘管家工作包](disk-cleaner.md) 与 [Agent 会话工作包](agent-sessions.md)。
 | 基线能力 | 状态 | 证据 |
 |---|---|---|
 | macOS universal 安装包 | `DONE` | Tauri universal `.app`/`.dmg` bundle 通过；发布版本 v0.4.1 |
@@ -79,7 +81,7 @@ updater 签名密钥 ───────────────────�
 | v0.3.0–v0.3.2 | 文件操作可靠性、Windows 适配与正式 updater 密钥 | `DONE`（已发布） | 旧规划中的官网英文入口和 Windows 真机验收未随版本完成，继续保留待办 |
 | v0.4.0 | 文件夹整理、统一目录工作区、操作反馈与预览布局 | `DONE`（已发布） | 双平台 CI 和安装包发布成功，Chrome/WebKit 中英文交互回归通过；已确认一次 v0.3.2 → v0.4.0 升级，完整平台验收另行跟踪 |
 | v0.4.1 | 本地索引空间管理、移动确认与新版 macOS 安装盘 | `DONE`（已发布） | 前端 6、Rust 63 项测试及静态检查通过；安装界面经用户确认；macOS universal / Windows x64 构建和发布成功 |
-| v0.5.0 | 后续本地理解能力 | `TODO` | 依赖当前版本反馈和产品决策 |
+| v0.5.0 | 磁盘管家 I~V：固定位置清理中心、白名单保护、磁盘容量总览、项目瘦身（含 git 感知）、应用残留清理、模拟器设备清理、二进制瘦身、系统维护与状态卡片、清理历史；Agent 会话：Claude Code / Codex / Gemini CLI 本地会话查看、项目/时间/应用筛选、整组选择与废纸篓清理 | `IN PROGRESS`（开发完成，代码封板，待发布验收） | 按“保守写”立场实现：只经废纸篓、执行前复核、白名单 fail closed；范围与平台边界见 [磁盘管家工作包](disk-cleaner.md) 与 [Agent 会话工作包](agent-sessions.md)；Windows 端仅 I（清理中心）为双平台，II~V 中应用残留 Windows 版（CLN-203）仍阻塞于真机，其余 macOS 专属；Agent 会话三端格式均经本机实测验证 |
 | v0.6.0 | macOS/Windows 代码签名、公证与自动更新完善 | `IN PROGRESS` | updater 签名链路已实现；代码签名、公证仍待证书，全部设备升级和失败场景验收仍待完成 |
 
 updater 产物签名已纳入近期发布链路；Apple Developer ID、Windows 代码签名和公证仍未启用，不得以未签名安装包替代更新签名验收。
@@ -270,6 +272,40 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 - 断网、下载中断、磁盘不足和安装失败不会破坏当前可运行版本。
 - 更新检查产生的联网行为在 README、官网和应用隐私说明中明确披露。
 
+### G. 磁盘管家（`IN PROGRESS`）
+
+> 详细范围与安全红线见 [磁盘管家工作包](disk-cleaner.md)。核心承诺：只移至废纸篓、绝不永久删除、只处理注册表中的固定位置、白名单 fail closed。
+
+| ID | 任务 | 状态 | 说明 |
+|---|---|---|---|
+| CLN-001 | 位置注册表与统计（时间预算 / partial 标记） | `DONE` | `cleaner.rs` 固定位置注册表，8 类，macOS/Windows 各自根路径；2 秒预算超时标记部分结果 |
+| CLN-002 | 白名单存储 + CRUD + fail closed | `DONE` | schema v6 `cleaner_whitelist`；列表与执行双层过滤，双向重叠即跳过；加载失败拒绝清理与总览 |
+| CLN-003 | 清理执行：边界复核 / 范围校验 / 废纸篓路由 / 操作日志 | `DONE` | 复用 `validate_write_path` + `trash_one`；注册范围外路径、大小漂移、白名单路径全部拒绝；`file_operations` 记录（`scan_id='cleaner'`） |
+| CLN-004 | 磁盘容量总览 | `DONE` | macOS 解析 `df -k`、Windows 解析 `Get-PSDrive`；尽力而为，失败时前端隐藏区块 |
+| CLN-005 | 前端磁盘管家页签 + 白名单 UI | `DONE` | 第三个工作区页签，无需先扫描；容量条、类别卡片、勾选清理、执行结果反馈、白名单管理 |
+| CLN-006 | 中英文文案与错误码 | `DONE` | `cleaner.*` 命名空间 + 4 个新错误码，键集合一致性测试通过 |
+| CLN-007 | 质量门禁 | `DONE` | 前端 6 项测试 + 生产构建；Rust 86 项测试（新增 23 项）+ fmt + Clippy（见进度记录） |
+| CLN-101 | 项目瘦身：按项目分组、7 天活跃保护、git 感知 | `DONE` | 磁盘管家 II：`purge.rs` 标志文件守门（package.json→node_modules、Cargo.toml→target 等），活跃项目锁定，执行前重发现复核；设计见 [磁盘管家工作包](disk-cleaner.md) |
+| CLN-102 | git 感知：被跟踪产物跳过 | `DONE` | 项目根有 .git 时逐产物 `git ls-files` 检查，跟踪产物 UI 锁定 + 执行拒绝（`GIT_TRACKED`），git 不可用时 fail closed |
+| CLN-201 | 应用残留清理：孤儿残留发现、风险分级、个人数据默认保留 | `DONE` | 磁盘管家 III（macOS）：`orphans.rs` 只列已卸载应用的残留（反查已装 bundle id），bundle-id 样式标识零误报优先 |
+| CLN-202 | 孤儿残留增强：LaunchAgents + Group Containers（macOS） | `DONE` | 启动代理需 bundle-id 命名 + 内容复核（引用仍存在的 .app 则跳过）；`group.<bundle-id>` 归属判定；系统 launchd 配置永不触碰 |
+| CLN-203 | 应用残留清理 Windows 版 | `TODO` | 依赖注册表卸载模型，且无 Windows 真机可验收（与 WIN-009 同因阻塞） |
+| CLN-301 | 失效模拟器设备清理 + iOS DeviceSupport | `DONE` | `simctl list devices -j` 只取明确不可用的设备（`KindDef::reverify` 执行前重扫描复核，valid 设备永不出现在候选）；devDerived 补入 iOS DeviceSupport |
+| CLN-302 | 通用二进制瘦身（mo slim 对应） | `DONE` | `slim.rs`：副本上 ditto → lipo 瘦身 → 临时重签 → codesign 校验 → 原子换入 → 原件进废纸篓；App Store / Apple 应用排除；用户已确认采纳 |
+| CLN-303 | 清理历史视图 | `DONE` | `list_cleaner_operations` 只读查询 `scan_id='cleaner'` 记录，前端「清理历史」折叠区 |
+| CLN-304 | 磁盘健康摘要 | `DONE` | 总览聚合行「可回收约 X GB · N 个位置」，纯前端 |
+| CLN-401 | 系统维护（mo optimize 对应） | `DONE` | QuickLook 缓存刷新（免授权）+ DNS 缓存刷新（osascript 系统授权窗口，触控 ID 自动支持）；封闭任务枚举；记入清理历史 |
+| CLN-402 | 系统状态卡片（mo status 对应） | `DONE` | CPU / 内存 / 电池快照卡，8 秒间隔 + 手动刷新，无后台 watch，零新依赖，解析器纯函数测试 |
+| CLN-202b | 孤儿残留增强：LaunchAgents + Group Containers（macOS） | `DONE` | 2026-11-04 补记：启动代理内容复核 + `group.<bundle-id>` 归属判定已完成（见进度记录 2026-11-04 CLN-102/CLN-202 条目） |
+
+验收标准：
+
+- 清理只走系统废纸篓；不存在任何永久删除路径；废纸篓本身只统计不清空。
+- 注册范围之外的路径在任何入口都不可清理（有测试）。
+- 白名单加载失败时总览、明细、执行全部拒绝（fail closed，有测试）。
+- 执行前复核路径、类型、大小与时间条件；失败逐项报告且不中断批次。
+- 中英文键集合一致；Windows 与 macOS 的位置注册表分别可解析。
+
 ## 7. 每次开发的更新规则
 
 每次开始工作：
@@ -327,6 +363,14 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 | 2026-10-27 | v0.4.0 / UPDATE-002,005,007 | `已发布；正常升级部分验证` | 发布提交 `e13e37f`；macOS universal / Windows x64 构建和发布成功；前端 6、Rust 59 项测试通过（另 1 项性能基线忽略），Chrome/WebKit 中英文工作区与文件管理回归通过；用户确认 v0.3.2 → v0.4.0 升级成功 | 完整设备升级矩阵、Windows 真机和 UPDATE-008 失败场景；官网英文入口仍待办 |
 
 | 2026-10-27 | v0.4.1 | `已发布` | 发布提交 `f9e3b1b`；本地索引空间管理、移动前确认与新版 macOS 安装界面；前端 6、Rust 63 项测试通过，rustfmt、Clippy 与生产构建通过；双平台发布流水线成功 | v0.4.0 → v0.4.1 真机升级、完整 Windows 与异常场景验收仍待补 |
+| 2026-11-03 | 工作包 G（CLN-001~007） | `TODO → IN PROGRESS → 开发完成` | 磁盘管家 I：`cleaner.rs` 位置注册表（8 类固定位置、风险分级、2 秒预算）、schema v6 白名单（fail closed）、清理执行（范围校验 / 边界复核 / 废纸篓路由 / 操作日志）、磁盘容量总览（`df` / `Get-PSDrive`）、第三个工作区页签（无需先扫描）+ 白名单 UI、中英文文案。按 Luma 既有红线的白名单 / 预览 / 边界复核 / fail-safe 实现。验证：前端 6 项测试 + 生产构建通过；Rust 86 项测试（新增 23 项）通过 | cargo fmt / Clippy 复核；桌面端中英文人工回归；CLN-101/201 排入后续里程碑 |
+| 2026-11-04 | 工作包 G（CLN-101） | `TODO → DONE（开发完成）` | 磁盘管家 II 项目瘦身：`purge.rs` 按项目分组发现构建产物，标志文件守门（package.json→node_modules/.next/dist/build、Cargo.toml→target、pom.xml→target、build.gradle→build/.gradle、pyproject/requirements/setup→.venv/venv），固定开发目录 + 深度限制（项目 3 层 / 产物 2 层）+ 10 秒预算，7 天活跃保护（活跃判定只取文件 mtime），执行前重发现复核（大小漂移 / 活跃 / 白名单 / 保护路径全拒绝）；前端「开发项目瘦身」区块挂入磁盘管家页，产物组勾选 + 重建提示 + 确认执行；中英文 `purger.*` 文案。验证：Rust 100 项测试（新增 14 项）+ fmt + Clippy 零警告通过；前端 6 项测试 + 生产构建通过 | 桌面端中英文人工回归；git-tracked 产物检测（CLN-102）与应用残留清理（CLN-201）待后续 |
+| 2026-11-04 | 工作包 G（CLN-201） | `TODO → DONE（开发完成）` | 磁盘管家 III 孤儿应用残留清理（macOS）：`orphans.rs` 只列已卸载应用的残留——扫描 /Applications、~/Applications、/System/Applications 的 Info.plist（plutil）构建已装集合，bundle-id 样式标识零误报优先，`group.*` 共享容器跳过；Caches/状态类 safe 默认勾选，Application Support/Preferences/Containers/Logs review 默认不勾选；执行前重发现复核 + 白名单 + 保护路径 + 废纸篓路由；前端「应用残留清理」区块 + 中英文 `orphans.*` 文案；Windows 报告 `platformSupported: false`。验证：Rust 110 项测试（新增 10 项）+ fmt + Clippy 零警告通过；前端 6 项测试 + 生产构建通过 | 桌面端人工回归；Windows 版（CLN-203）与 Group Containers/LaunchAgents 增强待后续 |
+| 2026-11-04 | 工作包 G（CLN-102 / CLN-202） | `TODO → DONE（开发完成）` | 磁盘管家增强：① git 感知——项目根有 .git 时逐产物 `git ls-files` 检查，被跟踪产物 UI 锁定 + 执行拒绝（`GIT_TRACKED`），git 不可用 fail closed；② LaunchAgents 清理——`~/Library/LaunchAgents` 中 bundle-id 命名且 id 已卸载、内容复核（plutil 规范化 + 引用仍存在的 .app 则跳过）通过的 plist 列为 review 候选，系统 launchd 配置永不触碰；③ Group Containers 归属——`group.<bundle-id>` 按去前缀 bundle id 反查，`TEAMID.group.…` 跳过。测试重构：discover/execute 拆出注入式核心（`discover_with_installed` / `execute_orphan_clean_with_installed`），跨平台可测；真实 plutil 链路保留 macOS 专项测试。验证：Rust 113 项测试（新增 3 项）+ fmt + Clippy 零警告通过；前端 6 项测试 + 生产构建通过 | 磁盘管家规划内可开发项全部完成；剩余 CLN-203（Windows 版）阻塞于无真机；桌面端人工回归与提交待用户确认 |
+| 2026-11-07 | 工作包 H（SESS-001~003） | `TODO → DONE（开发完成，代码封板）` | Agent 会话管理：`sessions.rs` provider 注册表（Claude Code / Codex / Gemini CLI，新增 Agent 仅加一个条目），head/tail 窗口读取（前 12 行 + 末 40 行 / 尾部 256 KiB）+ mtime 缓存，标题提取链（custom/ai-title、Codex `session_index.jsonl`、首条非注入用户消息），子代理转录与孪生文件跳过；删除走废纸篓并清理附属数据（Claude sidecar/file-history/session-env/todos、Codex `.zst` 孪生、Gemini 旧扩展名孪生），白名单 fail closed、执行前重发现复核、`file_operations` 审计；前端「会话」页签免扫描可用：Agent 下拉（含计数）、标题/目录/首末消息/会话 ID 搜索、按项目/按时间分组、全局与**按项目整组全选**（含半选态）、批量/单条删除确认、复制恢复命令；中英文 `sessions.*` 文案。验证：Rust 162 项测试（新增 22 项）+ 前端 7 项测试 + Playwright e2e 28 项（新增 8 项）+ 生产构建通过；真实数据探针实测 Claude 26 / Codex 73 / Gemini 14，与 cc-switch 计数一致（探针即用即删） | 发布验收与真机回归；会话正文预览、更多 Agent（Kimi/Qwen/iFlow 等）留待后续版本 |
+| 2026-11-04 | 工作包 G（CLN-301 / CLN-303 / CLN-304） | `TODO → DONE（开发完成）` | 磁盘管家 IV：① 失效模拟器设备清理——新增 `simDevices` 类别，候选来自 `xcrun simctl list devices -j`（只取明确 `isAvailable: false` 的设备，dataPath 反推删除单元），`KindDef::reverify` 执行前重跑 simctl 要求路径 + 大寸一致，valid 设备永不出现在候选，devDerived 补入 iOS DeviceSupport；② 清理历史——`list_cleaner_operations` 只读查询 + 前端折叠区（状态点 + 摘要 + 时间）；③ 健康摘要——总览聚合行。中英文文案同步。验证：Rust 114 项测试（新增 1 项 simctl 解析测试）+ fmt + Clippy 零警告通过；前端 6 项测试 + 生产构建通过 | CLN-302（二进制瘦身）方案已定标 HOLD 待产品确认；桌面端人工回归与提交待用户确认 |
+| 2026-11-04 | 工作包 G（CLN-302 / CLN-401 / CLN-402） | `TODO/HOLD → DONE（开发完成）` | 磁盘管家 V（用户确认采纳「刻意不搬」清单）：① 应用瘦身——`slim.rs` 在副本上 ditto → 逐文件 lipo -thin arm64 → codesign 临时重签 → verify 通过后原子换入，原件进废纸篓；候选排除 App Store（_MASReceipt）与 com.apple.*；预计可省 = x86_64 切片之和（lipo -detailed_info 解析）；② 系统维护——`maintenance.rs` 封闭任务表：QuickLook 缓存刷新（qlmanage -r cache）与 DNS 刷新（osascript 管理员授权窗口），记录 kind='maintenance'；③ 系统状态——`system_info.rs` 解析 top -l 1 / pmset -g batt（macOS）与 PowerShell CIM（Windows），纯函数解析器 5 项新测试；TUI 与 Touch ID sudo 的对应说明写入文档（前者为终端范式无字面移植，后者由系统授权弹窗覆盖）。验证：Rust 124 项测试（新增 10 项）+ fmt + Clippy 零警告通过；前端 6 项测试 + 生产构建通过 | 磁盘管家各工作包至此全部开发完成（除 Windows 版 CLN-203 阻塞于真机）；桌面端人工回归与提交待用户确认 |
+| 2026-11-05 | 工作包 H（CLN-403） | `TODO → DONE（开发完成）` | 托盘性能显示 + 开关：托盘菜单新增性能行与勾选开关（默认关闭，持久化 `app_settings.json`，损坏 fail-safe 回退默认）；`tray_monitor.rs` 采样线程复用 `system_info::system_status()`（macOS 10s / Windows 20s 间隔，间隔外只轮询标志零开销），更新菜单文本与托盘 tooltip；应用内系统状态卡加同步开关（`tray-monitor-changed` 事件双向同步）；`AppState` 增加 `app_data_dir`。中英文托盘文案经 `i18n.rs` 扩展。验证：Rust 140 项测试（新增 16 项：settings 往返/损坏回退、托盘文案格式）+ fmt + Clippy 零警告通过；前端 6 项测试 + 生产构建通过 | 桌面端托盘中英文人工回归待做 |
 
 ## 10. 决策记录
 

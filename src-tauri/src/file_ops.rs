@@ -135,7 +135,9 @@ pub fn trash_files(db_path: &Path, scan_id: &str, paths: &[String]) -> Result<Op
     })
 }
 
-fn trash_one(native: &Path) -> Result<(), String> {
+/// Move one native path to the OS trash. Shared with the disk cleaner
+/// (`cleaner.rs`), which routes every deletion through this function.
+pub(crate) fn trash_one(native: &Path) -> Result<(), String> {
     // Use the `trash` crate once it's in Cargo.toml; for now fall back to a
     // platform-specific shell command so the feature works without the crate.
     #[cfg(target_os = "macos")]
@@ -1181,10 +1183,30 @@ fn resolve_for_protection(path: &Path) -> PathBuf {
         existing = parent;
     }
     let mut resolved = std::fs::canonicalize(existing).unwrap_or_else(|_| existing.to_path_buf());
+    resolved = strip_windows_verbatim_prefix(resolved);
     for segment in suffix.iter().rev() {
         resolved.push(segment);
     }
     resolved
+}
+
+/// `fs::canonicalize` returns Windows verbatim paths (`\\?\C:\...`, UNC shares
+/// as `\\?\UNC\server\share`). Stripping the prefix keeps canonical results
+/// comparable with plain user-provided paths — verbatim forms never equal
+/// their ordinary spelling, which silently defeated whitelist prefix checks.
+pub(crate) fn strip_windows_verbatim_prefix(path: PathBuf) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        let text = path.to_string_lossy();
+        if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{rest}"));
+        }
+        PathBuf::from(text.trim_start_matches(r"\\?\"))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        path
+    }
 }
 
 pub(crate) fn move_path(src: &Path, dst: &Path) -> Result<(), String> {

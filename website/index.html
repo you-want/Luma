@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Luma · 照见你的数字世界</title>
   <meta name="luma-version" content="0.4.1">
-  <meta name="luma-content-revision" content="2026-10-27-docs-sync">
+  <meta name="luma-content-revision" content="2026-11-04-disk-cleaner">
   <link rel="canonical" href="https://luma.raingpt.top/">
-  <meta name="description" content="Luma v0.4.1 已发布：新增本地索引空间管理、移动前确认与新版 macOS 安装界面。分析空间、预览整理并支持撤销，文件和索引留在本机。">
+  <meta name="description" content="Luma v0.5.0：磁盘管家（缓存清理、项目瘦身、应用残留清理）与 Agent 会话管理封板。分析空间、预览整理、安全清理，文件和索引留在本机。">
   <meta name="theme-color" content="#17211f">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -913,13 +913,14 @@
           <li><a href="#insights">发现</a></li>
           <li><a href="#search">检索</a></li>
           <li><a href="#organize">整理</a></li>
+          <li><a href="#cleaner">磁盘管家</a></li>
           <li><a href="#flow">使用流程</a></li>
           <li><a href="#privacy">隐私</a></li>
           <li><a href="#tech">技术</a></li>
           <li><a href="#roadmap">路线图</a></li>
         </ul>
       </nav>
-      <a class="lm-nav__cta lm-nav__cta--top" href="#download">下载 v0.4.1</a>
+      <a class="lm-nav__cta lm-nav__cta--top" href="#download">下载 v0.5.0</a>
       <button class="lm-nav__toggle" type="button" aria-expanded="false" aria-controls="lm-menu" aria-label="打开导航菜单">
         <span></span><span></span><span></span>
       </button>
@@ -932,10 +933,10 @@
       <div class="lm-hero__seal-col" aria-hidden="true">观其形 · 知其里 · 各归其位</div>
       <div class="lm-container lm-hero__grid">
         <div class="lm-hero__copy">
-          <span class="lm-kicker">v0.4.1 已发布 · MACOS + WINDOWS</span>
+          <span class="lm-kicker">v0.5.0 封板 · 磁盘管家 + Agent 会话</span>
           <h1 class="lm-hero__title" id="hero-title">看得见的，<em>才谈得上理解。</em></h1>
           <p class="lm-hero__en">Luma — Local insight for your digital world.</p>
-          <p class="lm-hero__lead">从桌面、下载目录或任意文件夹开始。Luma 扫描不改原文件，再让你在同一目录下分析空间、预览和管理文件。面对堆积的资料，先看整理清单、调整分类，确认后再移动。文件、索引和操作日志都留在这台电脑。</p>
+          <p class="lm-hero__lead">从桌面、下载目录或任意文件夹开始。Luma 扫描不改原文件，再让你在同一目录下分析空间、预览和管理文件。面对堆积的资料，先看整理清单、调整分类，确认后再移动。文件、索引和操作日志都留在这台电脑。<strong>磁盘管家与 Agent 会话（v0.5.0）</strong>把「看清 → 找到可删 → 安全清理」扩展为整台电脑的视角——清理缓存、开发产物与已卸载应用残留，全程只经系统废纸篓，可解释、可追溯。</p>
           <div class="lm-hero__actions">
             <a class="lm-btn-primary" href="#download">下载 Luma 0.4.1</a>
             <a class="lm-text-link" href="#capabilities">看看它怎么工作</a>
@@ -943,6 +944,7 @@
           <div class="lm-hero__meta">
             <div><strong>不改原文件</strong><span>Scan without changing files</span></div>
             <div><strong>本机</strong><span>On-device</span></div>
+            <div><strong>只经废纸篓</strong><span>Never permanently delete</span></div>
             <div><strong>可解释</strong><span>Explainable</span></div>
           </div>
         </div>
@@ -1084,7 +1086,7 @@
       <div class="lm-container">
         <div class="lm-heading lm-reveal">
           <div>
-            <span class="lm-kicker">v0.4.1 · 从看清到归位</span>
+            <span class="lm-kicker">v0.5.0 · 从看清到归位</span>
             <h2 id="organize-title">桌面再乱，<br>也能有序归位。</h2>
           </div>
           <p>先选目录，再扫描。空间分析与文件管理共用顶部目录栏，切换视图保留位置；更换目录后重新扫描，让你始终知道正在处理哪一批文件。</p>
@@ -1103,6 +1105,51 @@
             <p class="lm-eye__en">Browse, preview and manage</p>
             <p>图片、文本和 PDF 首页可在本地预览。文件管理支持重命名、移动、复制和移至废纸篓；耗时操作显示等待状态并禁止重复提交。重命名、移动和整理记录可跨重启撤销，复制和废纸篓操作暂不提供应用内撤销。</p>
             <span class="lm-eye__tag">本地预览 · 明确反馈 · 持久化撤销</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 磁盘管家（v0.5.0 开发中） ==================== -->
+    <section class="lm-section lm-insights" id="cleaner" aria-labelledby="cleaner-title">
+      <div class="lm-container">
+        <div class="lm-heading lm-reveal">
+          <div>
+            <span class="lm-kicker">v0.5.0 · 磁盘管家</span>
+            <h2 id="cleaner-title">电脑莫名其妙满了？<br>让它告诉你哪些可以删。</h2>
+          </div>
+          <p>「磁盘管家」页签无需先扫描目录，直接统计这台电脑上常见的可清理位置，勾选确认，全部移入系统废纸篓——绝不永久删除。白名单中的位置，永远不会出现在清理建议里。</p>
+        </div>
+        <div class="lm-insight-grid">
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">清</div>
+            <h3>基础清理中心</h3>
+            <p>系统与应用缓存、日志、浏览器缓存、npm/pnpm/pip 包管理器缓存、桌面与下载里的安装镜像、超期未动的下载文件。每个类别标注风险等级与判定依据。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">项</div>
+            <h3>项目瘦身</h3>
+            <p>按项目识别可重建的开发产物（node_modules、target、dist 等）。7 天内活跃的项目自动保护；被 git 跟踪的产物一律不碰。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">残</div>
+            <h3>应用残留清理 <small style="font-weight:400;color:var(--lm-faint);font-size:0.7rem;">macOS</small></h3>
+            <p>找出已卸载应用留下的数据残留。按 bundle identifier 反查在用应用，共享容器与个人数据默认保留；启动代理与 Group Containers 按内容复核归属。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">瘦</div>
+            <h3>通用二进制瘦身 <small style="font-weight:400;color:var(--lm-faint);font-size:0.7rem;">macOS / Apple Silicon</small></h3>
+            <p>为通用版应用剥离无用的 Intel 切片（通常占体积一半）。全程在副本上操作，原应用毫发无损；App Store 应用与 Apple 应用自动排除。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">仿</div>
+            <h3>模拟器设备清理 <small style="font-weight:400;color:var(--lm-faint);font-size:0.7rem;">macOS</small></h3>
+            <p>识别 Xcode 中系统明确标记为不可用的模拟器设备。在用中的设备永远不会成为候选；执行前重新验证设备状态，路径与大小必须完全一致才放行。</p>
+          </article>
+          <article class="lm-insight lm-reveal">
+            <div class="lm-insight__mark" aria-hidden="true">守</div>
+            <h3>白名单与操作日志</h3>
+            <p>「受保护路径」白名单在列表与执行两个层面过滤，加载失败时全部功能拒绝运行（fail closed）。每次清理操作记入本地历史，可追溯、可回看。</p>
           </article>
         </div>
       </div>
@@ -1152,7 +1199,7 @@
           <ul class="lm-pledge">
             <li>
               <span class="lm-pledge__seal" aria-hidden="true">读</span>
-              <div><strong>扫描不改原文件，整理前预览确认</strong><span>普通扫描读取路径和元数据，并保存本地索引。移动前核对文件数量与目标，规则整理先预览再确认；查重、预览、重命名、复制和撤销均由你主动触发，系统目录受保护。</span></div>
+              <div><strong>扫描不改原文件，整理与清理前预览确认</strong><span>普通扫描读取路径和元数据，并保存本地索引。移动前核对文件数量与目标，规则整理与磁盘管家清理均先预览再确认；清理全程只经系统废纸篓，白名单中的位置永不参与；查重、预览、重命名、复制和撤销均由你主动触发，系统目录受保护。</span></div>
             </li>
             <li>
               <span class="lm-pledge__seal" aria-hidden="true">本</span>
@@ -1210,7 +1257,7 @@
             <span class="lm-kicker">诚实的进度</span>
             <h2 id="road-title">一步一步，<br>把地基打牢。</h2>
           </div>
-          <p>v0.4.1 在「看见、复查、整理」之上，补齐本地索引空间管理、移动确认与 macOS 安装引导。我们继续完善平台验收，再探索更深的本地理解能力。</p>
+          <p>磁盘管家 I~V 与 Agent 会话已在 v0.5.0 开发完成并封板（2026-11-07）。在「看见、复查、整理」之上，补齐基础清理中心、项目瘦身、应用残留清理、二进制瘦身、模拟器设备清理、系统维护与状态卡片，以及本机 AI Agent 会话的查看与清理。</p>
         </div>
         <ol class="lm-road">
           <li class="lm-reveal">
@@ -1249,6 +1296,19 @@
             </div>
           </li>
           <li class="lm-reveal">
+            <div class="lm-road__phase">磁盘管家<small>Milestone 6</small></div>
+            <div class="lm-road__body">
+              <h3>看清占用 → 找到可删 → 安全清理 <span class="lm-road__now">v0.5.0</span></h3>
+              <p>基础清理中心（缓存、日志、包管理器、安装镜像）、项目瘦身（git 感知 + 7 天活跃保护）、应用残留清理（macOS）、通用二进制瘦身（Apple Silicon）、模拟器设备清理、系统维护与状态卡片。全程只经系统废纸篓，白名单 fail closed，操作可追溯。</p>
+          </li>
+          <li class="lm-reveal">
+            <div class="lm-road__phase">Agent 会话<small>Milestone 7</small></div>
+            <div class="lm-road__body">
+              <h3>看清本机 AI Agent 的会话 <span class="lm-road__now">v0.5.0</span></h3>
+              <p>自动发现 Claude Code、Codex 与 Gemini CLI 的本地会话，按项目或时间分组，按应用筛选、按标题与首末消息搜索；支持按项目整组全选，确认后与会话附属数据一起移入系统废纸篓，可随时找回。只读元数据，不解析正文入库。</p>
+            </div>
+          </li>
+          <li class="lm-reveal">
             <div class="lm-road__phase">远景<small>Beyond</small></div>
             <div class="lm-road__body">
               <h3>语义层与本地 AI 助手</h3>
@@ -1266,9 +1326,9 @@
         <h2 id="final-title">让计算，<br>回归从容。</h2>
         <p>Luma 0.4.1 提供 macOS 通用版（Apple Silicon 与 Intel）和 Windows x64 安装包。已有版本可通过应用内检查更新；v0.3.2 → v0.4.0 已有用户升级成功。安装包尚未启用 Apple/Windows 平台代码签名或公证，Windows 真机验收仍待补齐；首次打开的放行步骤见下方说明。</p>
         <div class="lm-final__actions">
-          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.4.1/Luma_0.4.1_universal.dmg" rel="noopener noreferrer">下载 macOS 通用版</a>
-          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.4.1/Luma-0.4.1-windows-x64-setup.exe" rel="noopener noreferrer">下载 Windows 安装包</a>
-          <a class="lm-text-link" href="https://github.com/you-want/Luma/releases/tag/v0.4.1" rel="noopener noreferrer">全部安装包与更新说明</a>
+          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.5.0/Luma_0.5.0_universal.dmg" rel="noopener noreferrer">下载 macOS 通用版</a>
+          <a class="lm-btn-primary" href="https://github.com/you-want/Luma/releases/download/v0.5.0/Luma-0.5.0-windows-x64-setup.exe" rel="noopener noreferrer">下载 Windows 安装包</a>
+          <a class="lm-text-link" href="https://github.com/you-want/Luma/releases/tag/v0.5.0" rel="noopener noreferrer">全部安装包与更新说明</a>
         </div>
         <div class="lm-final__note lm-reveal" role="note" aria-label="首次安装说明">
           <div class="lm-final__note-head">
@@ -1309,8 +1369,8 @@
         <p class="lm-footer__tag">Luma 是一款面向 macOS 与 Windows 的本地文件理解工具。看见你的数字空间，理解它，并始终把决定权交还给你。</p>
       </div>
       <div class="lm-footer__bottom">
-        <span>© 2026 Luma · v0.4.1</span>
-        <span>扫描不改原文件 · 整理前预览确认 · 本地优先</span>
+        <span>© 2026 Luma · v0.5.0 · 磁盘管家 + Agent 会话</span>
+        <span>扫描不改原文件 · 清理只经废纸篓 · 整理前预览确认 · 本地优先</span>
       </div>
     </div>
   </footer>

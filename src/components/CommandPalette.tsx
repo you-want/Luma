@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, Zap, Layers, ArchiveRestore, FileText } from "lucide-react";
+import { Search, Zap, Layers, ArchiveRestore, FileText, History } from "lucide-react";
 import type { FileEntry } from "../types/scan";
 import { searchFiles, revealPath } from "../lib/tauri";
 import { formatBytes } from "../lib/format";
@@ -17,9 +17,9 @@ type Action = {
 type FileItem = { kind: "file"; entry: FileEntry };
 type Item = Action | FileItem;
 
-type Props = { scanId: string | null; onNewScan: () => void };
+type Props = { scanId: string | null; onNewScan: () => void; onOpenSessions?: () => void };
 
-export default function CommandPalette({ scanId, onNewScan }: Props) {
+export default function CommandPalette({ scanId, onNewScan, onOpenSessions }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -48,6 +48,15 @@ export default function CommandPalette({ scanId, onNewScan }: Props) {
       icon: <Zap size={14} />,
       onSelect: () => { close(); onNewScan(); },
     }];
+    if (onOpenSessions) {
+      base.push({
+        kind: "action", id: "sessions",
+        label: t("palette.action.goSessions"),
+        kw: ["session", "会话", "agent", "claude", "codex", "gemini"],
+        icon: <History size={14} />,
+        onSelect: () => { close(); onOpenSessions(); },
+      });
+    }
     if (!scanId) return base;
     return [...base,
       { kind: "action", id: "search", label: t("palette.action.goSearch"), kw: ["search", "搜索", "find", "查找"], icon: <Search size={14} />, onSelect: () => { close(); goto(".search-panel"); } },
@@ -55,7 +64,7 @@ export default function CommandPalette({ scanId, onNewScan }: Props) {
       { kind: "action", id: "clean", label: t("palette.action.goCleanup"), kw: ["clean", "清理", "cleanup", "释放"], icon: <ArchiveRestore size={14} />, onSelect: () => { close(); goto(".cleanup-section"); } },
       { kind: "action", id: "large", label: t("palette.action.goLargeFiles"), kw: ["large", "大文件", "biggest", "最大"], icon: <FileText size={14} />, onSelect: () => { close(); goto(".large-files-section"); } },
     ];
-  }, [t, scanId, close, onNewScan]);
+  }, [t, scanId, close, onNewScan, onOpenSessions]);
 
   // ⌘K / Ctrl+K global shortcut
   useEffect(() => {
