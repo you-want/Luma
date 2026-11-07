@@ -35,6 +35,20 @@ export function formatDate(timestamp?: number): string {
   }).format(new Date(timestamp * 1000));
 }
 
+/** "1 分钟前" / "1 minute ago" style, following the UI language. */
+export function formatRelativeTime(timestamp?: number | null): string {
+  if (!timestamp) return "--";
+  const seconds = Math.round(Date.now() / 1000 - timestamp);
+  const formatter = new Intl.RelativeTimeFormat(currentLocale, { numeric: "always" });
+  if (seconds < 60) return formatter.format(-Math.max(seconds, 0), "second");
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return formatter.format(-minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return formatter.format(-hours, "hour");
+  const days = Math.round(hours / 24);
+  return formatter.format(-days, "day");
+}
+
 export function basename(path: string): string {
   // Trim a trailing separator, then take the last path segment. Handles both
   // POSIX (/) and Windows (\) separators so it works cross-platform.

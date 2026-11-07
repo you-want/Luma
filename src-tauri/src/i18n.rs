@@ -38,23 +38,59 @@ impl Language {
 }
 
 /// Tray/system strings for a given language.
+#[derive(Clone)]
 pub struct TrayStrings {
+    pub language: Language,
     pub show: &'static str,
     pub quit: &'static str,
     pub tooltip: &'static str,
+    /// Toggle label for tray performance monitoring (CLN-403).
+    pub monitor_toggle: &'static str,
+    /// Placeholder text for the performance line while monitoring is off.
+    pub performance_off: &'static str,
+    /// Placeholder shown briefly right after enabling, before the first
+    /// sample lands.
+    pub sampling: &'static str,
+}
+
+impl TrayStrings {
+    /// Menu line showing the latest CPU/memory sample, e.g.
+    /// "CPU 12% · 内存 62%".
+    pub fn performance_text(&self, cpu: f32, memory_percent: f32) -> String {
+        match self.language {
+            Language::ZhCn => format!("CPU {:.0}% · 内存 {:.0}%", cpu, memory_percent),
+            Language::EnUs => format!("CPU {:.0}% · MEM {:.0}%", cpu, memory_percent),
+        }
+    }
+
+    /// Tooltip while monitoring is on.
+    pub fn performance_tooltip(&self, cpu: f32, memory_percent: f32) -> String {
+        match self.language {
+            Language::ZhCn => format!("Luma · CPU {:.0}% · 内存 {:.0}%", cpu, memory_percent),
+            Language::EnUs => format!("Luma · CPU {:.0}% · MEM {:.0}%", cpu, memory_percent),
+        }
+    }
 }
 
 pub fn tray_strings(language: Language) -> TrayStrings {
     match language {
         Language::ZhCn => TrayStrings {
+            language,
             show: "显示 Luma",
             quit: "退出 Luma",
             tooltip: "Luma · 本地空间观察",
+            monitor_toggle: "在托盘显示系统性能",
+            performance_off: "性能监测已关闭",
+            sampling: "正在采样…",
         },
         Language::EnUs => TrayStrings {
+            language,
             show: "Show Luma",
             quit: "Quit Luma",
             tooltip: "Luma · Local Space Insight",
+            monitor_toggle: "Show system performance in tray",
+            performance_off: "Performance monitoring off",
+            sampling: "Sampling…",
         },
     }
 }

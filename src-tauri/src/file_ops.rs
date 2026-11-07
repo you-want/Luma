@@ -135,7 +135,9 @@ pub fn trash_files(db_path: &Path, scan_id: &str, paths: &[String]) -> Result<Op
     })
 }
 
-fn trash_one(native: &Path) -> Result<(), String> {
+/// Move one native path to the OS trash. Shared with the disk cleaner
+/// (`cleaner.rs`), which routes every deletion through this function.
+pub(crate) fn trash_one(native: &Path) -> Result<(), String> {
     // Use the `trash` crate once it's in Cargo.toml; for now fall back to a
     // platform-specific shell command so the feature works without the crate.
     #[cfg(target_os = "macos")]

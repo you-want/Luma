@@ -13,7 +13,7 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
     let connection = open(path)?;
     let schema_version =
         connection.query_row("PRAGMA user_version", [], |row| row.get::<_, u32>(0))?;
-    if schema_version > 5 {
+    if schema_version > 6 {
         return Err(AppError::new(
             "DATABASE_ERROR",
             format!("数据库版本 {schema_version} 高于当前应用支持的版本。"),
@@ -99,6 +99,11 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
 
         CREATE INDEX IF NOT EXISTS idx_file_operations_scan_created
           ON file_operations(scan_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS cleaner_whitelist (
+          path TEXT PRIMARY KEY,
+          created_at INTEGER NOT NULL
+        );
 ",
     )?;
 
@@ -160,7 +165,7 @@ pub fn initialize(path: &Path) -> Result<(), AppError> {
     if schema_version < 4 {
         connection.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')", [])?;
     }
-    connection.execute("PRAGMA user_version = 5", [])?;
+    connection.execute("PRAGMA user_version = 6", [])?;
     Ok(())
 }
 
@@ -1337,7 +1342,7 @@ mod tests {
             .expect("query schema version");
 
         assert_eq!(status, "failed");
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
         drop(connection);
         fs::remove_file(database_path).expect("remove fixture database");
     }
@@ -1405,7 +1410,7 @@ mod tests {
             )
             .expect("query retained file");
 
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
         assert!(columns.iter().any(|column| column == "content_hash"));
         let operation_table: String = connection
             .query_row(

@@ -1,18 +1,37 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type {
+  AppDataReport,
+  CleanerFile,
+  CleanerOperation,
+  CleanerOverview,
+  CleanerWhitelistEntry,
+  CleanOutcome,
+  CleanRequestItem,
   CleanupSummary,
   DuplicateGroup,
   FileEntry,
   InsightKind,
   InsightSummary,
+  MaintenanceOutcome,
+  MaintenanceReport,
   ProjectCandidate,
+  PurgeReport,
   ScanComparison,
   ScanSummary,
   SearchRequest,
   SearchResponse,
+  SlimOutcome,
+  SlimReport,
+  SlimRequestItem,
   StartScanRequest,
+  SystemStatus,
 } from "../types/scan";
+import type {
+  AgentSessionDeleteItem,
+  AgentSessionsReport,
+  AgentSessionsTrashOutcome,
+} from "../types/sessions";
 
 export async function chooseDirectory(): Promise<string | null> {
   const selected = await open({ directory: true, multiple: false });
@@ -215,6 +234,91 @@ export function listCleanupFiles(
   return invoke("list_cleanup_files", { scanId, kind, limit, oldDownloadsDays });
 }
 
+// ── Disk cleaner (磁盘管家) ────────────────────────────────────────────────────
+
+export function getCleanerOverview(): Promise<CleanerOverview> {
+  return invoke("get_cleaner_overview");
+}
+
+export function listCleanerFiles(kind: string, limit = 20): Promise<CleanerFile[]> {
+  return invoke("list_cleaner_files", { kind, limit });
+}
+
+export function executeCleaner(
+  kind: string,
+  items: CleanRequestItem[],
+): Promise<CleanOutcome> {
+  return invoke("execute_cleaner", { kind, items });
+}
+
+export function getCleanerWhitelist(): Promise<CleanerWhitelistEntry[]> {
+  return invoke("get_cleaner_whitelist");
+}
+
+export function listCleanerOperations(limit = 20): Promise<CleanerOperation[]> {
+  return invoke("list_cleaner_operations", { limit });
+}
+
+// ── App slimming (应用瘦身) ────────────────────────────────────────────────────
+
+export function discoverSlimCandidates(): Promise<SlimReport> {
+  return invoke("discover_slim_candidates");
+}
+
+export function executeSlim(items: SlimRequestItem[]): Promise<SlimOutcome> {
+  return invoke("execute_slim", { items });
+}
+
+// ── System maintenance & status (系统维护 / 系统状态) ──────────────────────────
+
+export function getMaintenanceTasks(): Promise<MaintenanceReport> {
+  return invoke("get_maintenance_tasks");
+}
+
+export function runMaintenanceTask(task: string): Promise<MaintenanceOutcome> {
+  return invoke("run_maintenance_task", { task });
+}
+
+export function getSystemStatus(): Promise<SystemStatus> {
+  return invoke("get_system_status");
+}
+
+export function getTrayMonitorEnabled(): Promise<boolean> {
+  return invoke("get_tray_monitor_enabled");
+}
+
+export function setTrayMonitorEnabled(enabled: boolean): Promise<void> {
+  return invoke("set_tray_monitor_enabled", { enabled });
+}
+
+export function addCleanerWhitelist(path: string): Promise<CleanerWhitelistEntry[]> {
+  return invoke("add_cleaner_whitelist", { path });
+}
+
+export function removeCleanerWhitelist(path: string): Promise<CleanerWhitelistEntry[]> {
+  return invoke("remove_cleaner_whitelist", { path });
+}
+
+// ── Project slimming (项目瘦身) ────────────────────────────────────────────────
+
+export function discoverPurgeProjects(): Promise<PurgeReport> {
+  return invoke("discover_purge_projects");
+}
+
+export function executePurge(items: CleanRequestItem[]): Promise<CleanOutcome> {
+  return invoke("execute_purge", { items });
+}
+
+// ── Orphaned app data (应用残留清理) ───────────────────────────────────────────
+
+export function discoverOrphanAppData(): Promise<AppDataReport> {
+  return invoke("discover_orphan_app_data");
+}
+
+export function executeOrphanClean(items: CleanRequestItem[]): Promise<CleanOutcome> {
+  return invoke("execute_orphan_clean", { items });
+}
+
 export type IndexStorageUsage = {
   databaseBytes: number;
   journalBytes: number;
@@ -234,4 +338,16 @@ export function compactIndexStorage(): Promise<IndexStorageUsage> {
 }
 export function clearScanIndex(): Promise<IndexStorageUsage> {
   return invoke("clear_scan_index");
+}
+
+// ── Agent sessions (Agent 会话) ────────────────────────────────────────────────
+
+export function discoverAgentSessions(): Promise<AgentSessionsReport> {
+  return invoke("discover_agent_sessions");
+}
+
+export function trashAgentSessions(
+  items: AgentSessionDeleteItem[],
+): Promise<AgentSessionsTrashOutcome> {
+  return invoke("trash_agent_sessions", { items });
 }

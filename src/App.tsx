@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { desktopDir, downloadDir } from "@tauri-apps/api/path";
-import { BarChart2, Database, FolderOpen, ShieldCheck, TriangleAlert } from "lucide-react";
+import { BarChart2, Database, FolderOpen, HardDrive, History, ShieldCheck, TriangleAlert } from "lucide-react";
 import { FileManagerView } from "./components/fileManager";
+import { CleanerCenter } from "./components/cleaner/CleanerCenter";
+import { SessionsPanel } from "./components/sessions/SessionsPanel";
 import { appStore, useAppStore } from "./app/store";
 import { CategoryList } from "./components/CategoryList";
 import { CleanupPanel } from "./components/CleanupPanel";
@@ -35,7 +37,12 @@ import {
 import type { ScanFinished, ScanProgress as ScanProgressType } from "./types/scan";
 import "./App.css";
 
-type AppTab = "analysis" | "files";
+type AppTab = "analysis" | "files" | "sessions" | "cleaner";
+
+const APP_TABS: readonly AppTab[] = ["analysis", "files", "sessions", "cleaner"];
+
+/** Tabs that work without a directory scan (like the cleaner). */
+const SCAN_FREE_TABS: readonly AppTab[] = ["sessions", "cleaner"];
 
 function App() {
   const { t } = useTranslation();
@@ -196,7 +203,8 @@ function App() {
 
   return (
     <main className="app-shell app-shell--workspace" data-han-scope data-theme="ink" data-luma-accent="celadon">
-      <CommandPalette scanId={currentResult?.scanId ?? null} onNewScan={handleChoose} />
+      <CommandPalette scanId={currentResult?.scanId ?? null} onNewScan={handleChoose}
+        onOpenSessions={() => setActiveTab("sessions")} />
       <header className="app-header">
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
         <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
@@ -226,28 +234,60 @@ function App() {
       >
         <nav className="app-tab-bar" role="tablist" aria-label={t("workspace.views")}
           onKeyDown={event => {
-            if (viewsDisabled || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
             event.preventDefault();
-            const next = event.key === "Home" ? "analysis" : event.key === "End" ? "files"
-              : activeTab === "analysis" ? "files" : "analysis";
+            // The sessions and cleaner tabs work without a scan; the others stay gated.
+            const enabled = APP_TABS.filter(tab => SCAN_FREE_TABS.includes(tab) || !viewsDisabled);
+            if (enabled.length === 0) return;
+            const current = enabled.includes(activeTab) ? enabled.indexOf(activeTab) : 0;
+            const next = event.key === "Home" ? enabled[0]
+              : event.key === "End" ? enabled[enabled.length - 1]
+              : enabled[(current + (event.key === "ArrowRight" ? 1 : enabled.length - 1)) % enabled.length];
             setActiveTab(next);
             document.getElementById(`workspace-tab-${next}`)?.focus();
           }}>
-          {(["analysis", "files"] as const).map(tab => (
-            <button key={tab} id={`workspace-tab-${tab}`} type="button" role="tab"
-              aria-selected={activeTab === tab} aria-controls={`workspace-panel-${tab}`}
-              tabIndex={activeTab === tab ? 0 : -1} disabled={viewsDisabled}
-              className={`app-tab${activeTab === tab ? " app-tab--active" : ""}`}
-              title={viewsDisabled ? t("workspace.scanFirst") : undefined}
-              onClick={() => setActiveTab(tab)}>
-              {tab === "analysis" ? <BarChart2 size={15} /> : <FolderOpen size={15} />}
-              {t(tab === "analysis" ? "workspace.analysis" : "workspace.files")}
-            </button>
-          ))}
+          {APP_TABS.map(tab => {
+            const disabled = !SCAN_FREE_TABS.includes(tab) && viewsDisabled;
+            const label = tab === "analysis" ? t("workspace.analysis")
+              : tab === "files" ? t("workspace.files")
+              : tab === "sessions" ? t("workspace.sessions") : t("workspace.cleaner");
+            return (
+              <button key={tab} id={`workspace-tab-${tab}`} type="button" role="tab"
+                aria-selected={activeTab === tab} aria-controls={`workspace-panel-${tab}`}
+                tabIndex={activeTab === tab ? 0 : -1} disabled={disabled}
+                className={`app-tab${activeTab === tab ? " app-tab--active" : ""}`}
+                title={disabled ? t("workspace.scanFirst") : undefined}
+                onClick={() => setActiveTab(tab)}>
+                {tab === "analysis" ? <BarChart2 size={15} />
+                  : tab === "files" ? <FolderOpen size={15} />
+                  : tab === "sessions" ? <History size={15} /> : <HardDrive size={15} />}
+                {label}
+              </button>
+            );
+          })}
         </nav>
       </ScanControls>
 
       <div className="workspace-content">
+        {activeTab === "cleaner" ? (
+          <section id="workspace-panel-cleaner" className="analysis-tab-panel" role="tabpanel"
+            aria-labelledby="workspace-tab-cleaner">
+            <div className="content">
+              <div className="results">
+                <CleanerCenter />
+              </div>
+            </div>
+          </section>
+        ) : activeTab === "sessions" ? (
+          <section id="workspace-panel-sessions" className="analysis-tab-panel" role="tabpanel"
+            aria-labelledby="workspace-tab-sessions">
+            <div className="content">
+              <div className="results">
+                <SessionsPanel />
+              </div>
+            </div>
+          </section>
+        ) : <>
         {!currentResult && <div className="workspace-status-panel"><div className="content">
           {app.phase === "running" && <ScanProgress progress={app.progress} />}
           {app.phase === "failed" && <section className="status-message status-error" role="alert">
@@ -304,6 +344,7 @@ function App() {
             <FileManagerView key={currentResult.scanId} scanId={currentResult.scanId} rootPath={currentResult.rootPath}
               onWorkingChange={setFileOperationPending} />
           </section>
+        </>}
         </>}
       </div>
     </main>
