@@ -547,6 +547,68 @@ pub fn list_undoable_operations(
         .collect())
 }
 
+/// One row of the cross-scan operation log shown in the unified history view.
+///
+/// Unlike [`OperationRecord`] this is a read-only journal entry: it keeps the
+/// owning `scan_id`/`root_path` so the frontend can decide whether the undo
+/// command would be accepted for the currently displayed scan, and exposes
+/// `finished_at` for completed rows that can never be undone in-app (trash,
+/// copy, and the cleaner/sessions family).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationLogEntry {
+    pub id: String,
+    pub scan_id: String,
+    pub root_path: String,
+    pub kind: String,
+    pub label: String,
+    pub status: String,
+    pub created_at: i64,
+    pub finished_at: Option<i64>,
+    pub can_undo: bool,
+}
+
+const UNDOABLE_STATUSES: [&str; 4] = ["completed", "partial", "interrupted", "undo_failed"];
+
+/// List recent write operations across all scans, newest first.
+///
+/// Read-only journal query backing the unified 操作记录 view. In-flight rows
+/// (`running` / `undoing`) are hidden: they belong to the operation UI that
+/// started them and would only confuse the log.
+pub fn list_recent_operations(
+    db_path: &Path,
+    limit: u32,
+) -> Result<Vec<OperationLogEntry>, AppError> {
+    let connection = database::open(db_path)?;
+    let mut statement = connection.prepare(
+        "SELECT id, scan_id, root_path, kind, label, status, created_at, finished_at, undo_json
+         FROM file_operations
+         WHERE status != 'running' AND status != 'undoing'
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?1",
+    )?;
+    let rows = statement.query_map(params![i64::from(limit.clamp(1, 200))], |row| {
+        let status: String = row.get(5)?;
+        let undo_json: Option<String> = row.get(8)?;
+        let has_payload = undo_json
+            .and_then(|json| serde_json::from_str::<UndoPayload>(&json).ok())
+            .map(|payload| !payload.moves.is_empty())
+            .unwrap_or(false);
+        Ok(OperationLogEntry {
+            id: row.get(0)?,
+            scan_id: row.get(1)?,
+            root_path: row.get(2)?,
+            kind: row.get(3)?,
+            label: row.get(4)?,
+            can_undo: has_payload && UNDOABLE_STATUSES.contains(&status.as_str()),
+            status,
+            created_at: row.get(6)?,
+            finished_at: row.get(7)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
 /// Repair in-flight operations left behind by a crashed or killed app session.
 ///
 /// While an operation is executing its status is `running`, and while it is
@@ -1270,9 +1332,9 @@ fn copy_then_remove(src: &Path, dst: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        list_undoable_operations, move_files, reconcile_interrupted_operations, rename_file,
-        system_time_seconds, to_canonical, undo_operation, undo_operation_with_crash_hook,
-        validate_write_path,
+        list_recent_operations, list_undoable_operations, move_files,
+        reconcile_interrupted_operations, rename_file, system_time_seconds, to_canonical,
+        undo_operation, undo_operation_with_crash_hook, validate_write_path,
     };
     // Only used by the Windows-gated drive-agnostic test below; allow unused on
     // other platforms so `-D warnings` stays clean in a cross-target build.
@@ -1336,6 +1398,49 @@ mod tests {
             source_path,
             destination_dir,
         }
+    }
+
+    #[test]
+    fn recent_operations_log_lists_rows_across_scans_and_hides_in_flight() {
+        let fixture = fixture();
+        let source = to_canonical(&fixture.source_path);
+        let destination = to_canonical(&fixture.destination_dir);
+
+        // One completed, undoable move owned by the current scan…
+        let moved = move_files(
+            &fixture.database_path,
+            "scan-1",
+            std::slice::from_ref(&source),
+            &destination,
+        )
+        .expect("move file");
+
+        // …plus a cleaner-family audit row (never undoable in-app) and an
+        // in-flight row that must stay hidden from the journal.
+        let connection = database::open(&fixture.database_path).expect("open database");
+        connection
+            .execute(
+                "INSERT INTO file_operations
+                   (id, scan_id, root_path, kind, label, status, undo_json, created_at)
+                 VALUES
+                   ('cleaner-op', 'cleaner', '', 'trash', '清理缓存', 'completed', NULL, 1),
+                   ('in-flight', 'scan-1', ?1, 'rename', 'renamed', 'running', NULL, 2)",
+                params![to_canonical(&fixture.root)],
+            )
+            .expect("insert journal rows");
+        drop(connection);
+
+        let entries =
+            list_recent_operations(&fixture.database_path, 100).expect("list recent operations");
+        assert_eq!(entries.len(), 2, "in-flight rows must be hidden");
+        assert_eq!(entries[0].id, moved.operation_id.expect("operation id"));
+        assert!(entries[0].can_undo);
+        assert_eq!(entries[0].root_path, to_canonical(&fixture.root));
+        assert!(entries[0].finished_at.is_some());
+        assert_eq!(entries[1].id, "cleaner-op");
+        assert_eq!(entries[1].scan_id, "cleaner");
+        assert_eq!(entries[1].kind, "trash");
+        assert!(!entries[1].can_undo);
     }
 
     #[test]

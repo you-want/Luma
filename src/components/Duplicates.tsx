@@ -1,49 +1,82 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, ChevronRight, AlertCircle } from "lucide-react";
-import { findDuplicates, revealPath } from "../lib/tauri";
+import { Copy, ChevronRight, AlertCircle, Trash2 } from "lucide-react";
+import { findDuplicates, revealPath, trashFiles } from "../lib/tauri";
+import { appStore, useAppStore } from "../app/store";
+import { useToast } from "../contexts/ToastContext";
+import { useAsyncAction } from "../hooks/useAsyncAction";
 import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
 import { errorMessage } from "../lib/errors";
+import { ConfirmDialog } from "./fileManager/ConfirmDialog";
 import type { DuplicateGroup, FileEntry } from "../types/scan";
 
 type DuplicatesProps = {
   scanId: string;
 };
 
-type DuplicateState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; groups: DuplicateGroup[] };
-
 export function Duplicates({ scanId }: DuplicatesProps) {
   const { t } = useTranslation();
-  const [state, setState] = useState<DuplicateState>({ status: "idle" });
-  const [expandedHash, setExpandedHash] = useState<string | null>(null);
+  const toast = useToast();
+  const app = useAppStore();
   const [minSize, setMinSize] = useState(1024 * 1024); // default 1MB
-
-  useEffect(() => {
-    setState({ status: "idle" });
-    setExpandedHash(null);
-  }, [scanId]);
+  const [expandedHash, setExpandedHash] = useState<string | null>(null);
+  const [trashPending, setTrashPending] = useState<{ paths: string[]; keepName: string; count: number; size: number } | null>(null);
+  const action = useAsyncAction<"trash">();
 
   async function handleFind() {
-    setState({ status: "loading" });
+    appStore.setDuplicates({ status: "loading" });
     try {
       const groups = await findDuplicates(scanId, minSize);
-      setState({ status: "ready", groups });
+      appStore.setDuplicates({ status: "ready", groups });
     } catch (error) {
-      setState({
+      appStore.setDuplicates({
         status: "error",
         message: errorMessage(error, t("duplicates.findError")),
       });
     }
   }
 
+  // A duplicate group is resolved by keeping its newest copy and trashing the
+  // rest. Ties keep the first file in backend order (stable).
+  function keepNewest(group: DuplicateGroup): { keep: FileEntry; rest: FileEntry[] } {
+    const sorted = [...group.files].sort(
+      (a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0),
+    );
+    const [keep, ...rest] = sorted;
+    return { keep, rest };
+  }
+
   function toggleGroup(hash: string) {
     setExpandedHash(expandedHash === hash ? null : hash);
   }
+
+  async function confirmTrash() {
+    if (!trashPending) return;
+    const request = trashPending;
+    setTrashPending(null);
+    await action.run("trash", async () => {
+      try {
+        const result = await trashFiles(scanId, request.paths);
+        appStore.bumpDataRevision();
+        if (result.succeeded.length > 0) {
+          toast.push({
+            kind: "success",
+            message: t("duplicates.trashDone", { count: result.succeeded.length }),
+          });
+        }
+        for (const failure of result.failed) {
+          toast.push({ kind: "error", message: t("fileManager.ops.trashItemFailed", { reason: failure.reason }) });
+        }
+        // Refresh the groups from the index so resolved groups disappear.
+        await handleFind();
+      } catch (error) {
+        toast.push({ kind: "error", message: errorMessage(error) });
+      }
+    });
+  }
+
+  const state = app.duplicates;
 
   return (
     <section className="result-section duplicates-section" aria-labelledby="duplicates-title">
@@ -101,6 +134,7 @@ export function Duplicates({ scanId }: DuplicatesProps) {
             <div className="duplicate-list">
               {state.groups.map((group) => {
                 const expanded = expandedHash === group.contentHash;
+                const { keep, rest } = keepNewest(group);
                 return (
                   <div className="duplicate-group" key={group.contentHash}>
                     <button
@@ -131,9 +165,31 @@ export function Duplicates({ scanId }: DuplicatesProps) {
                     </button>
                     {expanded && (
                       <div className="duplicate-files">
+                        <div className="duplicate-group-actions">
+                          <p>{t("duplicates.keepNewestHint", {
+                            name: keep.name,
+                            count: rest.length,
+                            size: formatBytes(rest.reduce((sum, f) => sum + f.sizeBytes, 0)),
+                          })}</p>
+                          <button
+                            type="button"
+                            className="button button-danger duplicates-trash-button"
+                            disabled={action.pending !== null}
+                            aria-busy={action.pending === "trash"}
+                            onClick={() => setTrashPending({
+                              paths: rest.map((f) => f.path),
+                              keepName: keep.name,
+                              count: rest.length,
+                              size: rest.reduce((sum, f) => sum + f.sizeBytes, 0),
+                            })}
+                          >
+                            {action.pending === "trash" ? null : <Trash2 size={14} aria-hidden="true" />}
+                            {t("duplicates.keepNewestAction", { count: rest.length })}
+                          </button>
+                        </div>
                         <div className="file-list">
                           {group.files.map((file) => (
-                            <DuplicateFileRow key={file.path} file={file} />
+                            <DuplicateFileRow key={file.path} file={file} isNewest={file.path === keep.path} />
                           ))}
                         </div>
                       </div>
@@ -147,12 +203,28 @@ export function Duplicates({ scanId }: DuplicatesProps) {
           <p className="empty-inline">{t("duplicates.notFound")}</p>
         ))}
 
+      <ConfirmDialog
+        open={trashPending !== null}
+        title={t("duplicates.trashConfirmTitle")}
+        confirmLabel={t("duplicates.trashConfirmConfirm")}
+        variant="danger"
+        message={trashPending && <>
+          <p>{t("duplicates.trashConfirmBody", {
+            count: trashPending.count,
+            size: formatBytes(trashPending.size),
+          })}</p>
+          <p>{t("duplicates.trashConfirmKeep", { name: trashPending.keepName })}</p>
+        </>}
+        onConfirm={() => void confirmTrash()}
+        onCancel={() => setTrashPending(null)}
+      />
+
       <p className="insight-note">{t("duplicates.note")}</p>
     </section>
   );
 }
 
-function DuplicateFileRow({ file }: { file: FileEntry }) {
+function DuplicateFileRow({ file, isNewest }: { file: FileEntry; isNewest: boolean }) {
   const { t } = useTranslation();
   const FileIcon = categoryIcon(file.category);
   const tint = categoryColor(file.category);
@@ -170,6 +242,7 @@ function DuplicateFileRow({ file }: { file: FileEntry }) {
         <span title={file.path}>{file.path}</span>
       </div>
       <div className="file-meta">
+        {isNewest && <span className="duplicates-keep-badge">{t("duplicates.keepBadge")}</span>}
         <strong>{formatBytes(file.sizeBytes)}</strong>
         <span>{file.modifiedAt ? formatDate(file.modifiedAt) : t("common.missing")}</span>
       </div>

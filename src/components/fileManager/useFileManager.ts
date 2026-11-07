@@ -131,25 +131,40 @@ function buildBreadcrumbs(
 
 const PAGE_SIZE = 100;
 
-export function useFileManager(scanId: string, rootPath: string) {
+export function useFileManager(
+  scanId: string,
+  rootPath: string,
+  options?: { initialIncludeHidden?: boolean; initialPath?: string | null },
+) {
   const requestSequence = useRef(0);
   const pendingRequest = useRef<string | null>(null);
+  // A rescan unmounts this panel; restore the browsed directory if it still
+  // belongs to the (new) scan root.
+  const initialPath = options?.initialPath ?? null;
+  const restoredPath = initialPath && initialPath.startsWith(rootPath) ? initialPath : rootPath;
   const [state, dispatch] = useReducer(reducer, {
     status: "idle",
     loading: false,
-    currentPath: rootPath,
+    currentPath: restoredPath,
     rootPath,
-    breadcrumbs: buildBreadcrumbs(rootPath, rootPath),
+    breadcrumbs: buildBreadcrumbs(rootPath, restoredPath),
     dirs: [],
     files: [],
     totalFiles: 0,
     selected: null,
     sort: "nameAsc",
     view: "list",
-    includeHidden: false,
+    includeHidden: options?.initialIncludeHidden ?? false,
     page: 0,
     pageSize: PAGE_SIZE,
   });
+
+  // Latest values for effects that must react to a rescan without losing the
+  // browsing position.
+  const currentPathRef = useRef(state.currentPath);
+  currentPathRef.current = state.currentPath;
+  const lastScanId = useRef<string | null>(null);
+  const lastRootPath = useRef<string | null>(null);
 
   // Load a directory. Memoised so callers can put it in deps safely.
   const loadDirectory = useCallback(
@@ -188,9 +203,13 @@ export function useFileManager(scanId: string, rootPath: string) {
     [scanId, rootPath, state.sort, state.includeHidden],
   );
 
-  // Load root on mount
+  // Load the browsed directory on mount (restored after a rescan); on a new
+  // root start from the top.
   useEffect(() => {
-    void loadDirectory(rootPath);
+    const rootChanged = lastRootPath.current !== null && lastRootPath.current !== rootPath;
+    lastScanId.current = scanId;
+    lastRootPath.current = rootPath;
+    void loadDirectory(rootChanged ? rootPath : currentPathRef.current);
     return () => { requestSequence.current += 1; pendingRequest.current = null; };
     // intentionally only on mount / scanId / rootPath changes
     // eslint-disable-next-line react-hooks/exhaustive-deps

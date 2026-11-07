@@ -8,7 +8,7 @@ use crate::{
     duplicates::{self, DuplicateGroup},
     error::AppError,
     file_manager::{self, DirNode, DirectoryListing},
-    file_ops::{self, OpResult, OperationRecord},
+    file_ops::{self, OpResult, OperationLogEntry, OperationRecord},
     maintenance::{self, MaintenanceOutcome, MaintenanceReport},
     models::{
         FileEntry, InsightSummary, ScanComparison, ScanFinished, ScanStatus, ScanSummary,
@@ -837,6 +837,19 @@ pub async fn list_undoable_operations(
 ) -> Result<Vec<OperationRecord>, AppError> {
     database_task(state, move |database_path| {
         file_ops::list_undoable_operations(database_path, &scan_id, limit.unwrap_or(20))
+    })
+    .await
+}
+
+/// Return the unified operation log (all scans, including trash/copy and the
+/// cleaner/sessions family) for the 操作记录 view. Read-only.
+#[tauri::command]
+pub async fn list_recent_operations(
+    state: State<'_, AppState>,
+    limit: Option<u32>,
+) -> Result<Vec<OperationLogEntry>, AppError> {
+    database_task(state, move |database_path| {
+        file_ops::list_recent_operations(database_path, limit.unwrap_or(100))
     })
     .await
 }

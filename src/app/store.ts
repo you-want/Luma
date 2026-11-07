@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type {
+  DuplicateGroup,
   FileEntry,
   InsightSummary,
   ScanProgress,
@@ -7,6 +8,14 @@ import type {
 } from "../types/scan";
 
 export type AppPhase = "idle" | "running" | "completed" | "cancelled" | "failed";
+
+/** Shared duplicate-finding state so the overview card and the analysis
+ * section show the same result without running the content hashing twice. */
+export type DuplicatesState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; groups: DuplicateGroup[] };
 
 type AppState = {
   phase: AppPhase;
@@ -21,6 +30,14 @@ type AppState = {
   staleDays: number;
   error?: string;
   loading: boolean;
+  /** Bumped after any on-disk mutation so other views can reload their data. */
+  dataRevision: number;
+  /** Prefill for the organize page: set when navigating with a source dir. */
+  organizeSeed: { sourceDir: string; rev: number } | null;
+  /** Last directory the file manager was browsing, so a rescan (which
+   * unmounts the panel) can restore the position instead of jumping to root. */
+  fileManagerPath: string | null;
+  duplicates: DuplicatesState;
 };
 
 let state: AppState = {
@@ -32,6 +49,10 @@ let state: AppState = {
   largeFileThreshold: 1024 ** 3,
   staleDays: 180,
   loading: true,
+  dataRevision: 0,
+  organizeSeed: null,
+  fileManagerPath: null,
+  duplicates: { status: "idle" },
 };
 const listeners = new Set<() => void>();
 
@@ -62,6 +83,7 @@ export const appStore = {
       insights: [],
       error: undefined,
       loading: false,
+      duplicates: { status: "idle" },
     });
   },
   setProgress(progress: ScanProgress) {
@@ -89,6 +111,18 @@ export const appStore = {
   setInsights(insights: InsightSummary[]) {
     update({ insights });
   },
+  setDuplicates(duplicates: DuplicatesState) {
+    update({ duplicates });
+  },
+  bumpDataRevision() {
+    update({ dataRevision: state.dataRevision + 1 });
+  },
+  seedOrganize(sourceDir: string) {
+    update({ organizeSeed: { sourceDir, rev: state.dataRevision + 1 } });
+  },
+  setFileManagerPath(path: string) {
+    update({ fileManagerPath: path });
+  },
   cancel() {
     update({
       phase: "cancelled",
@@ -109,7 +143,8 @@ export const appStore = {
   },
   clearIndex() {
     update({ phase: "idle", activeScanId: undefined, progress: undefined, summary: undefined,
-      largeFiles: [], insights: [], error: undefined, loading: false });
+      largeFiles: [], insights: [], error: undefined, loading: false,
+      duplicates: { status: "idle" } });
   },
   ready() {
     update({ loading: false });

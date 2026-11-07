@@ -70,6 +70,24 @@ export type OperationRecord = {
   canUndo: boolean;
 };
 
+/**
+ * One journal row of the unified operation log (操作记录). Covers every scan
+ * plus the cleaner/sessions family; `canUndo` additionally requires the
+ * current status to be undoable, and undoing it still requires the owning
+ * `rootPath` to match the active scan (the backend enforces that).
+ */
+export type OperationLogEntry = {
+  id: string;
+  scanId: string;
+  rootPath: string;
+  kind: string;
+  label: string;
+  status: string;
+  createdAt: number;
+  finishedAt?: number;
+  canUndo: boolean;
+};
+
 // ── Phase 3: Smart organizer ───────────────────────────────────────────────────
 
 export type OrganizeRule =

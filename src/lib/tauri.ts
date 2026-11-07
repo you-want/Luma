@@ -190,6 +190,12 @@ export function listUndoableOperations(
   return invoke("list_undoable_operations", { scanId, limit });
 }
 
+export function listRecentOperations(
+  limit = 100,
+): Promise<import("../types/fileManager").OperationLogEntry[]> {
+  return invoke("list_recent_operations", { limit });
+}
+
 export function undoFileOperation(
   operationId: string,
   scanId: string,

@@ -1,0 +1,96 @@
+// OrganizeView — page-level layout around the shared org-* step styles that
+// live in FileManager.css. The page replaces the old wizard dialog: a fixed
+// header (title + step bar), a scrollable body, and a sticky action footer.
+
+.org-tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+.org-page {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--window);
+}
+
+.org-page-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  padding: 16px clamp(18px, 3vw, 34px) 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--separator);
+}
+
+.org-page-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.org-page-header .org-steps-bar { margin: 0; }
+
+.org-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.org-page-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px clamp(18px, 3vw, 34px);
+  background: var(--surface);
+  border-top: 1px solid var(--separator);
+}
+
+.org-page-footer > .button { min-height: 34px; }
+.org-page-footer .org-footer-hint { margin-left: auto; }
+.org-page-footer .button-primary { margin-left: auto; }
+.org-page-footer .org-footer-hint + .button-primary { margin-left: 0; }
+
+/* Port the dialog-scoped control styles to the page container. */
+.org-page input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
+.org-page input:focus-visible,
+.org-page select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.org-exec-error { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--danger); text-align: center; }
+.org-exec-done { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 0 10px; text-align: center; }
+.org-exec-done strong { font-size: 15px; font-weight: 600; }
+.org-exec-done p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.org-exec-check { color: var(--accent); }
+.org-exec-failures { margin-top: 12px; max-width: 520px; width: 100%; text-align: left; }
+.org-exec-fail-title { color: var(--danger); font-size: 12px; font-weight: 600; margin: 0 0 6px; }
+.org-exec-fail-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 0.5px solid var(--separator); font-size: 12px; }
+.org-exec-fail-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-exec-fail-reason { color: var(--text-secondary); text-align: right; flex-shrink: 0; }
+.org-exec-progress { display: flex; flex-direction: column; align-items: center; padding: 34px 0 18px; }
+.org-exec-bar-wrap { width: min(380px, 80%); height: 6px; border-radius: 100px; background: var(--fill-quaternary); overflow: hidden; }
+.org-exec-bar { height: 100%; background: var(--accent); border-radius: 100px; transition: width 0.25s ease; }
+.org-exec-pct { margin: 10px 0 0; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.org-exec-current { margin: 4px 0 0; color: var(--text-secondary); font-size: 11px; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.org-preview-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 0; color: var(--text-secondary); font-size: 13px; }
+.org-error { display: flex; align-items: center; gap: 8px; margin: 12px 24px; color: var(--danger); font-size: 12px; }
+.org-dir-label { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; font-size: 12px; color: var(--text-secondary); }
+.org-dir-row { display: flex; align-items: center; gap: 10px; }
+.org-dir-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--text); }
+.org-dir-btn { flex-shrink: 0; }
+.org-preview-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; font-size: 13px; }
+.org-preview-summary strong { font-size: 14px; font-weight: 600; }
+.org-preview-summary span { color: var(--text-secondary); font-size: 12px; }
+
+@media (max-width: 720px) {
+  .org-page-header { align-items: flex-start; flex-direction: column; }
+}

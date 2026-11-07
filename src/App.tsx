@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { desktopDir, downloadDir } from "@tauri-apps/api/path";
-import { BarChart2, Database, FolderOpen, HardDrive, History, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Eye, EyeOff, FolderOpen, Play, RefreshCw, Square } from "lucide-react";
 import { FileManagerView } from "./components/fileManager";
 import { CleanerCenter } from "./components/cleaner/CleanerCenter";
 import { SessionsPanel } from "./components/sessions/SessionsPanel";
+import { OverviewView } from "./components/overview/OverviewView";
+import { OrganizeView } from "./components/organize/OrganizeView";
+import { HistoryView } from "./components/history/HistoryView";
+import { SettingsView } from "./components/settings/SettingsView";
+import { Sidebar } from "./components/Sidebar";
 import { appStore, useAppStore } from "./app/store";
 import { CategoryList } from "./components/CategoryList";
 import { CleanupPanel } from "./components/CleanupPanel";
@@ -14,19 +19,20 @@ import { InsightList } from "./components/InsightList";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import { LargeFiles } from "./components/LargeFiles";
 import Projects from "./components/Projects";
-import { ScanControls } from "./components/ScanControls";
 import { ScanHistory } from "./components/ScanHistory";
-import { ScanProgress } from "./components/ScanProgress";
 import Search from "./components/Search";
 import { StorageOverview } from "./components/StorageOverview";
 import { IndexStorage } from "./components/IndexStorage";
 import { UpdateButton } from "./components/UpdateButton";
+import { ButtonSpinner } from "./components/ButtonSpinner";
 import { useScanEvents } from "./hooks/useScanEvents";
 import { useAsyncAction } from "./hooks/useAsyncAction";
 import { errorMessage } from "./lib/errors";
+import { basename } from "./lib/format";
 import {
   cancelScan,
   chooseDirectory,
+  findDuplicates,
   getLatestScan,
   getScanSummary,
   listInsights,
@@ -35,19 +41,24 @@ import {
   startScan,
 } from "./lib/tauri";
 import type { ScanFinished, ScanProgress as ScanProgressType } from "./types/scan";
+import type { AppView } from "./types/navigation";
+import { ALL_VIEWS, isScanFreeView, topbarModeFor } from "./types/navigation";
 import "./App.css";
 
-type AppTab = "analysis" | "files" | "sessions" | "cleaner";
+const VIEW_STORAGE_KEY = "luma.view";
 
-const APP_TABS: readonly AppTab[] = ["analysis", "files", "sessions", "cleaner"];
-
-/** Tabs that work without a directory scan (like the cleaner). */
-const SCAN_FREE_TABS: readonly AppTab[] = ["sessions", "cleaner"];
+/** Views that need a scan result; the sidebar keeps them gated until then. */
+function isScanGatedView(view: AppView): boolean {
+  return !isScanFreeView(view);
+}
 
 function App() {
   const { t } = useTranslation();
   const app = useAppStore();
-  const [activeTab, setActiveTab] = useState<AppTab>("analysis");
+  const [activeView, setActiveView] = useState<AppView>(() => {
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY) as AppView | null;
+    return stored && ALL_VIEWS.includes(stored) ? stored : "overview";
+  });
   const scanAction = useAsyncAction<"choose" | "desktop" | "downloads" | "start" | "cancel">();
   const [storagePending, setStoragePending] = useState(false);
   const [fileOperationPending, setFileOperationPending] = useState(false);
@@ -55,6 +66,23 @@ function App() {
     && app.selectedPath.replace(/[/\\]+$/, "") === app.summary.rootPath.replace(/[/\\]+$/, "")
     && scanAction.pending !== "start" ? app.summary : null;
   const viewsDisabled = !currentResult || scanAction.pending !== null;
+
+  // A persisted gated view (analysis/files/organize) falls back to the
+  // overview welcome state until a scan result is available again.
+  const effectiveView: AppView =
+    isScanGatedView(activeView) && !currentResult ? "overview" : activeView;
+
+  const navigate = useCallback((view: AppView, anchor?: string) => {
+    setActiveView(view);
+    localStorage.setItem(VIEW_STORAGE_KEY, view);
+    if (anchor) {
+      // The target panel may just have been un-hidden; wait a tick so
+      // scrollIntoView sees the laid-out element.
+      window.setTimeout(() => {
+        document.querySelector(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+  }, []);
 
   const loadResult = useCallback(async (scanId: string) => {
     const settings = appStore.getState();
@@ -132,7 +160,7 @@ function App() {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [app.activeScanId, app.phase, loadResult]);
+  }, [app.activeScanId, app.phase, loadResult, t]);
 
   async function handleChoose() {
     if (storagePending || fileOperationPending || appStore.getState().phase === "running") return;
@@ -201,151 +229,198 @@ function App() {
     void revealPath(path).catch((error) => appStore.fail(errorMessage(error)));
   }
 
+  // Cleanup hints → duplicates: kick off the content-hash search (if it has
+  // not run yet) and land on the duplicates section.
+  const findAndGoDuplicates = useCallback(() => {
+    const state = appStore.getState();
+    if (state.phase === "completed" && state.summary && state.duplicates.status === "idle") {
+      appStore.setDuplicates({ status: "loading" });
+      findDuplicates(state.summary.scanId)
+        .then((groups) => appStore.setDuplicates({ status: "ready", groups }))
+        .catch((error) => appStore.setDuplicates({
+          status: "error",
+          message: errorMessage(error, t("duplicates.findError")),
+        }));
+    }
+    navigate("analysis", ".duplicates-section");
+  }, [navigate, t]);
+
+  const topbarMode = topbarModeFor(effectiveView);
+  const scanControlsDisabled = app.loading || app.phase === "running" || storagePending
+    || fileOperationPending || scanAction.pending !== null;
+  const statusText = fileOperationPending ? t("fileManager.state.working") : app.phase === "running"
+    ? t("workspace.scanning") : currentResult ? t("workspace.scanned", { count: currentResult.totalFiles })
+    : app.loading ? t("status.loading") : t("workspace.scanFirst");
+  const topbarTitle = effectiveView === "cleaner" ? t("cleaner.title")
+    : effectiveView === "sessions" ? t("sessions.title")
+    : effectiveView === "history" ? t("nav.views.history")
+    : t("nav.views.settings");
+  const topbarNote = effectiveView === "cleaner" ? t("topbar.machineCleaner")
+    : effectiveView === "sessions" ? t("topbar.machineSessions")
+    : effectiveView === "history" ? t("topbar.history")
+    : t("topbar.settings");
+
   return (
     <main className="app-shell app-shell--workspace" data-han-scope data-theme="ink" data-luma-accent="celadon">
       <CommandPalette scanId={currentResult?.scanId ?? null} onNewScan={handleChoose}
-        onOpenSessions={() => setActiveTab("sessions")} />
-      <header className="app-header">
-        <img className="brand-mark" src="/luma-logo.svg" alt="" />
-        <div className="brand-copy"><strong>{t("app.name")}</strong><span>{t("app.tagline")}</span></div>
-        <div className="privacy-note"><ShieldCheck size={15} />{t("app.privacyNote")}</div>
-        <IndexStorage disabled={app.loading || app.phase === "running" || fileOperationPending || scanAction.pending !== null}
-          onCleared={appStore.clearIndex} onWorkingChange={setStoragePending} />
-        <UpdateButton />
-        <LanguageSwitcher />
-      </header>
+        onNavigate={navigate} />
+      <Sidebar activeView={effectiveView} viewsDisabled={viewsDisabled} onNavigate={navigate} />
 
-      <ScanControls
-        selectedPath={app.selectedPath}
-        includeHidden={app.includeHidden}
-        isRunning={app.phase === "running"}
-        isLoading={app.loading}
-        hasResult={currentResult !== null}
-        locked={fileOperationPending || storagePending}
-        pendingAction={scanAction.pending}
-        statusText={fileOperationPending ? t("fileManager.state.working") : app.phase === "running"
-          ? t("workspace.scanning") : currentResult ? t("workspace.scanned", { count: currentResult.totalFiles })
-          : app.loading ? t("status.loading") : t("workspace.scanFirst")}
-        onChoose={handleChoose}
-        onShortcut={handleShortcut}
-        onStart={handleStart}
-        onCancel={handleCancel}
-        onIncludeHiddenChange={appStore.setIncludeHidden}
-      >
-        <nav className="app-tab-bar" role="tablist" aria-label={t("workspace.views")}
-          onKeyDown={event => {
-            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-            event.preventDefault();
-            // The sessions and cleaner tabs work without a scan; the others stay gated.
-            const enabled = APP_TABS.filter(tab => SCAN_FREE_TABS.includes(tab) || !viewsDisabled);
-            if (enabled.length === 0) return;
-            const current = enabled.includes(activeTab) ? enabled.indexOf(activeTab) : 0;
-            const next = event.key === "Home" ? enabled[0]
-              : event.key === "End" ? enabled[enabled.length - 1]
-              : enabled[(current + (event.key === "ArrowRight" ? 1 : enabled.length - 1)) % enabled.length];
-            setActiveTab(next);
-            document.getElementById(`workspace-tab-${next}`)?.focus();
-          }}>
-          {APP_TABS.map(tab => {
-            const disabled = !SCAN_FREE_TABS.includes(tab) && viewsDisabled;
-            const label = tab === "analysis" ? t("workspace.analysis")
-              : tab === "files" ? t("workspace.files")
-              : tab === "sessions" ? t("workspace.sessions") : t("workspace.cleaner");
-            return (
-              <button key={tab} id={`workspace-tab-${tab}`} type="button" role="tab"
-                aria-selected={activeTab === tab} aria-controls={`workspace-panel-${tab}`}
-                tabIndex={activeTab === tab ? 0 : -1} disabled={disabled}
-                className={`app-tab${activeTab === tab ? " app-tab--active" : ""}`}
-                title={disabled ? t("workspace.scanFirst") : undefined}
-                onClick={() => setActiveTab(tab)}>
-                {tab === "analysis" ? <BarChart2 size={15} />
-                  : tab === "files" ? <FolderOpen size={15} />
-                  : tab === "sessions" ? <History size={15} /> : <HardDrive size={15} />}
-                {label}
+      <div className="app-body">
+        <header className="app-topbar">
+          {topbarMode === "workspace" && <div className="topbar-workspace">
+            <button type="button" className="topbar-dir-pill" onClick={handleChoose}
+              disabled={scanControlsDisabled} aria-busy={scanAction.pending === "choose"}
+              title={app.selectedPath || t("scanControls.startHint")}>
+              {scanAction.pending === "choose" ? <ButtonSpinner size={15} /> : <FolderOpen size={15} aria-hidden="true" />}
+              <span className="topbar-dir-name">{app.selectedPath
+                ? basename(app.selectedPath) || app.selectedPath
+                : t("scanControls.notSelected")}</span>
+            </button>
+            <p className="topbar-status" role="status">{statusText}</p>
+            <span className="topbar-spacer" />
+            <label className="toggle-control topbar-hidden-toggle" title={t("workspace.hiddenHint")}>
+              <span aria-hidden="true">{app.includeHidden ? <Eye size={14} /> : <EyeOff size={14} />}</span>
+              <span className="visually-hidden">{t("scanControls.includeHidden")}</span>
+              <input type="checkbox" checked={app.includeHidden} disabled={scanControlsDisabled}
+                onChange={event => appStore.setIncludeHidden(event.target.checked)} />
+              <span className="switch" aria-hidden="true" />
+            </label>
+            {app.phase === "running" ? (
+              <button className="button button-danger topbar-scan-button" type="button" onClick={handleCancel}
+                disabled={scanAction.pending !== null} aria-busy={scanAction.pending === "cancel"}>
+                {scanAction.pending === "cancel" ? <ButtonSpinner /> : <Square size={13} fill="currentColor" aria-hidden="true" />}
+                {t(scanAction.pending === "cancel" ? "scanControls.cancelling" : "scanControls.cancel")}
               </button>
-            );
-          })}
-        </nav>
-      </ScanControls>
+            ) : (
+              <button className="button button-primary topbar-scan-button" type="button" onClick={handleStart}
+                disabled={!app.selectedPath || scanControlsDisabled} aria-busy={scanAction.pending === "start"}>
+                {scanAction.pending === "start" ? <ButtonSpinner size={14} />
+                  : currentResult ? <RefreshCw size={14} aria-hidden="true" />
+                  : <Play size={14} fill="currentColor" aria-hidden="true" />}
+                {t(scanAction.pending === "start" ? "scanControls.starting" : currentResult ? "workspace.rescan" : "scanControls.scan")}
+              </button>
+            )}
+          </div>}
+          {topbarMode === "machine" && <div className="topbar-static">
+            <strong className="topbar-title">{topbarTitle}</strong>
+            <span className="topbar-note">{topbarNote}</span>
+          </div>}
+          {topbarMode === "plain" && <div className="topbar-static">
+            <strong className="topbar-title">{topbarTitle}</strong>
+            <span className="topbar-note">{topbarNote}</span>
+          </div>}
 
-      <div className="workspace-content">
-        {activeTab === "cleaner" ? (
-          <section id="workspace-panel-cleaner" className="analysis-tab-panel" role="tabpanel"
-            aria-labelledby="workspace-tab-cleaner">
-            <div className="content">
-              <div className="results">
-                <CleanerCenter />
-              </div>
-            </div>
-          </section>
-        ) : activeTab === "sessions" ? (
-          <section id="workspace-panel-sessions" className="analysis-tab-panel" role="tabpanel"
-            aria-labelledby="workspace-tab-sessions">
-            <div className="content">
-              <div className="results">
-                <SessionsPanel />
-              </div>
-            </div>
-          </section>
-        ) : <>
-        {!currentResult && <div className="workspace-status-panel"><div className="content">
-          {app.phase === "running" && <ScanProgress progress={app.progress} />}
-          {app.phase === "failed" && <section className="status-message status-error" role="alert">
-            <TriangleAlert size={20} />
-            <div><strong>{t("status.failedTitle")}</strong><p>{app.error}</p></div>
-          </section>}
-          {app.phase === "cancelled" && <section className="status-message">
-            <Database size={20} />
-            <div><strong>{t("status.cancelledTitle")}</strong><p>{t("status.cancelledBody")}</p></div>
-          </section>}
-          {app.loading && <div className="loading-state">{t("status.loading")}</div>}
-          {!app.loading && app.phase !== "running" && <section className="workspace-welcome">
-            <FolderOpen size={32} aria-hidden="true" />
-            <h1>{t(app.selectedPath ? "workspace.readyTitle" : "workspace.welcomeTitle")}</h1>
-            <p>{t(app.selectedPath ? "workspace.readyBody" : "workspace.welcomeBody")}</p>
-            <ol className="workspace-flow" aria-label={t("workspace.flowLabel")}>
-              <li><span>1</span>{t("workspace.choose")}</li>
-              <li><span>2</span>{t("scanControls.scan")}</li>
-              <li><span>3</span>{t("workspace.useViews")}</li>
-            </ol>
-          </section>}
-        </div></div>}
+          <div className="topbar-global">
+            <IndexStorage disabled={app.loading || app.phase === "running" || fileOperationPending || scanAction.pending !== null}
+              onCleared={appStore.clearIndex} onWorkingChange={setStoragePending} />
+            <UpdateButton />
+            <LanguageSwitcher />
+          </div>
+        </header>
 
-        {currentResult && <>
-          <section id="workspace-panel-analysis" className="analysis-tab-panel" role="tabpanel"
-            aria-labelledby="workspace-tab-analysis" hidden={activeTab !== "analysis"}>
-            <div className="content">
-            <div className="results">
-              <StorageOverview summary={currentResult} />
-              <div className="results-grid">
-                <CategoryList categories={currentResult.categories} totalBytes={currentResult.totalBytes} />
-                <InsightList
-                  scanId={currentResult.scanId}
-                  insights={app.insights}
-                  largeFileThreshold={app.largeFileThreshold}
-                  staleDays={app.staleDays}
-                  onSettingsChange={handleDiscoverySettings}
-                />
-              </div>
-              <LargeFiles files={app.largeFiles} onReveal={handleReveal} />
-              <CleanupPanel scanId={currentResult.scanId} />
-              <Search
-                scanId={currentResult.scanId}
-                categories={currentResult.categories.map((c) => c.category)}
+        <div className="workspace-content">
+          {effectiveView === "overview" && (
+            <section id="workspace-panel-overview" className="analysis-tab-panel" role="tabpanel"
+              aria-labelledby="workspace-tab-overview">
+              <OverviewView
+                result={currentResult}
+                phase={app.phase}
+                progress={app.progress}
+                loading={app.loading}
+                hasSelectedPath={Boolean(app.selectedPath)}
+                pendingAction={scanAction.pending}
+                onChoose={handleChoose}
+                onShortcut={handleShortcut}
+                onStart={handleStart}
+                onNavigate={navigate}
               />
-              <Duplicates scanId={currentResult.scanId} />
-              <Projects scanId={currentResult.scanId} />
-              <ScanHistory scanId={currentResult.scanId} />
-            </div>
-            </div>
-          </section>
-          <section id="workspace-panel-files" className="fm-tab-panel" role="tabpanel"
-            aria-labelledby="workspace-tab-files" hidden={activeTab !== "files"}>
-            <FileManagerView key={currentResult.scanId} scanId={currentResult.scanId} rootPath={currentResult.rootPath}
-              onWorkingChange={setFileOperationPending} />
-          </section>
-        </>}
-        </>}
+            </section>
+          )}
+
+          {effectiveView === "cleaner" && (
+            <section id="workspace-panel-cleaner" className="analysis-tab-panel" role="tabpanel"
+              aria-labelledby="workspace-tab-cleaner">
+              <div className="content">
+                <div className="results">
+                  <CleanerCenter />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {effectiveView === "sessions" && (
+            <section id="workspace-panel-sessions" className="analysis-tab-panel" role="tabpanel"
+              aria-labelledby="workspace-tab-sessions">
+              <div className="content">
+                <div className="results">
+                  <SessionsPanel />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {effectiveView === "history" && (
+            <section id="workspace-panel-history" className="analysis-tab-panel" role="tabpanel"
+              aria-labelledby="workspace-tab-history">
+              <HistoryView currentScanId={currentResult?.scanId ?? null}
+                currentRootPath={currentResult?.rootPath ?? null} />
+            </section>
+          )}
+
+          {effectiveView === "settings" && (
+            <section id="workspace-panel-settings" className="analysis-tab-panel" role="tabpanel"
+              aria-labelledby="workspace-tab-settings">
+              <SettingsView onNavigate={navigate} onDiscoverySettingsChange={handleDiscoverySettings}
+                onIndexCleared={appStore.clearIndex} onWorkingChange={setStoragePending}
+                storageLocked={app.loading || app.phase === "running" || fileOperationPending || scanAction.pending !== null} />
+            </section>
+          )}
+
+          {/* Workspace panels stay mounted (hidden) once a scan result exists
+              so search results, the file manager position and the organize
+              flow survive switching views. */}
+          {currentResult && <>
+            <section id="workspace-panel-analysis" className="analysis-tab-panel" role="tabpanel"
+              aria-labelledby="workspace-tab-analysis" hidden={effectiveView !== "analysis"}>
+              <div className="content">
+                <div className="results">
+                  <StorageOverview summary={currentResult} />
+                  <div className="results-grid">
+                    <CategoryList categories={currentResult.categories} totalBytes={currentResult.totalBytes} />
+                    <InsightList
+                      scanId={currentResult.scanId}
+                      insights={app.insights}
+                      largeFileThreshold={app.largeFileThreshold}
+                      staleDays={app.staleDays}
+                      onSettingsChange={handleDiscoverySettings}
+                    />
+                  </div>
+                  <LargeFiles files={app.largeFiles} onReveal={handleReveal}
+                    scanId={currentResult.scanId} />
+                  <CleanupPanel scanId={currentResult.scanId} rootPath={currentResult.rootPath}
+                    onOrganize={(sourceDir) => { appStore.seedOrganize(sourceDir); navigate("organize"); }}
+                    onFindDuplicates={findAndGoDuplicates} />
+                  <Search
+                    scanId={currentResult.scanId}
+                    categories={currentResult.categories.map((c) => c.category)}
+                  />
+                  <Duplicates scanId={currentResult.scanId} />
+                  <Projects scanId={currentResult.scanId} />
+                  <ScanHistory scanId={currentResult.scanId} />
+                </div>
+              </div>
+            </section>
+            <section id="workspace-panel-files" className="fm-tab-panel" role="tabpanel"
+              aria-labelledby="workspace-tab-files" hidden={effectiveView !== "files"}>
+              <FileManagerView scanId={currentResult.scanId} rootPath={currentResult.rootPath}
+                onWorkingChange={setFileOperationPending}
+                onOrganize={(sourceDir) => { appStore.seedOrganize(sourceDir); navigate("organize"); }} />
+            </section>
+            <OrganizeView scanId={currentResult.scanId} rootPath={currentResult.rootPath}
+              hidden={effectiveView !== "organize"} onNavigate={navigate} />
+          </>}
+        </div>
       </div>
     </main>
   );

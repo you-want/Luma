@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Package,
   Trash2,
+  Wand2,
 } from "lucide-react";
 import { getCleanupSummary, listCleanupFiles, revealPath } from "../lib/tauri";
 import { formatBytes, formatDate, formatNumber } from "../lib/format";
@@ -40,7 +41,16 @@ const KIND_COLOR: Record<string, string> = {
 
 type Props = {
   scanId: string;
+  /** Scan root — the organize flow's source when a category is routed there. */
+  rootPath: string;
+  /** Route a cleanable category into the organize page (prefilled). */
+  onOrganize: (sourceDir: string) => void;
+  /** Jump to the duplicates section for the estimate row. */
+  onFindDuplicates: () => void;
 };
+
+/** Kinds the organize page can act on; others get a different follow-up. */
+const ORGANIZABLE_KINDS = new Set(["development", "archives", "installers", "oldDownloads"]);
 
 // ── File detail state ─────────────────────────────────────────────────────────
 
@@ -52,7 +62,7 @@ type FileState =
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function CleanupPanel({ scanId }: Props) {
+export function CleanupPanel({ scanId, rootPath, onOrganize, onFindDuplicates }: Props) {
   const { t } = useTranslation();
 
   const [summary, setSummary] = useState<CleanupSummary | null>(null);
@@ -150,6 +160,9 @@ export function CleanupPanel({ scanId }: Props) {
               expanded={expandedKind === item.kind}
               fileState={files[item.kind] ?? { status: "idle" }}
               onToggle={toggleKind}
+              onOrganize={onOrganize}
+              onFindDuplicates={onFindDuplicates}
+              rootPath={rootPath}
             />
           ))}
         </div>
@@ -167,9 +180,12 @@ type RowProps = {
   expanded: boolean;
   fileState: FileState;
   onToggle: (kind: string) => void;
+  onOrganize: (sourceDir: string) => void;
+  onFindDuplicates: () => void;
+  rootPath: string;
 };
 
-function CleanupRow({ item, expanded, fileState, onToggle }: RowProps) {
+function CleanupRow({ item, expanded, fileState, onToggle, onOrganize, onFindDuplicates, rootPath }: RowProps) {
   const { t } = useTranslation();
   const Icon = KIND_ICON[item.kind] ?? FolderOpen;
   const color = KIND_COLOR[item.kind] ?? "var(--han-color-info)";
@@ -214,6 +230,26 @@ function CleanupRow({ item, expanded, fileState, onToggle }: RowProps) {
       {expanded && (
         <div className="insight-files">
           <CleanupFileList fileState={fileState} total={item.fileCount} />
+          {/* Next-step routing: these findings used to be dead ends. */}
+          {item.fileCount > 0 && ORGANIZABLE_KINDS.has(item.kind) && (
+            <div className="cleanup-next-row">
+              <button type="button" className="button button-primary cleanup-next-btn"
+                onClick={() => onOrganize(rootPath)}>
+                <Wand2 size={14} aria-hidden="true" />
+                {t("cleanup.organizeAction")}
+              </button>
+              <span className="cleanup-next-hint">{t("cleanup.organizeHint")}</span>
+            </div>
+          )}
+          {item.kind === "duplicatesEstimate" && item.fileCount > 0 && (
+            <div className="cleanup-next-row">
+              <button type="button" className="button cleanup-next-btn" onClick={onFindDuplicates}>
+                <Copy size={14} aria-hidden="true" />
+                {t("cleanup.duplicatesAction")}
+              </button>
+              <span className="cleanup-next-hint">{t("cleanup.duplicatesHint")}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

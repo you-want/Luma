@@ -1,7 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, Zap, Layers, ArchiveRestore, FileText, History } from "lucide-react";
+import {
+  ArchiveRestore,
+  BarChart2,
+  Bot,
+  FileText,
+  FolderOpen,
+  HardDrive,
+  History,
+  LayoutDashboard,
+  Layers,
+  Search,
+  Settings,
+  Wand2,
+  Zap,
+} from "lucide-react";
 import type { FileEntry } from "../types/scan";
+import type { AppView } from "../types/navigation";
 import { searchFiles, revealPath } from "../lib/tauri";
 import { formatBytes } from "../lib/format";
 import { errorMessage } from "../lib/errors";
@@ -17,9 +32,13 @@ type Action = {
 type FileItem = { kind: "file"; entry: FileEntry };
 type Item = Action | FileItem;
 
-type Props = { scanId: string | null; onNewScan: () => void; onOpenSessions?: () => void };
+type Props = {
+  scanId: string | null;
+  onNewScan: () => void;
+  onNavigate: (view: AppView, anchor?: string) => void;
+};
 
-export default function CommandPalette({ scanId, onNewScan, onOpenSessions }: Props) {
+export default function CommandPalette({ scanId, onNewScan, onNavigate }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -37,9 +56,6 @@ export default function CommandPalette({ scanId, onNewScan, onOpenSessions }: Pr
     setIdx(0);
   }, []);
 
-  const goto = (sel: string) =>
-    document.querySelector(sel)?.scrollIntoView({ behavior: "smooth", block: "start" });
-
   const buildActions = useCallback((): Action[] => {
     const base: Action[] = [{
       kind: "action", id: "new",
@@ -48,23 +64,34 @@ export default function CommandPalette({ scanId, onNewScan, onOpenSessions }: Pr
       icon: <Zap size={14} />,
       onSelect: () => { close(); onNewScan(); },
     }];
-    if (onOpenSessions) {
+    // Every top-level view is reachable from the palette.
+    const viewActions: { view: AppView; id: string; kw: string[]; icon: React.ReactNode }[] = [
+      { view: "overview", id: "goOverview", kw: ["overview", "总览", "首页", "home", "dashboard"], icon: <LayoutDashboard size={14} /> },
+      { view: "analysis", id: "goAnalysis", kw: ["analysis", "分析", "空间", "space"], icon: <BarChart2 size={14} /> },
+      { view: "files", id: "goFiles", kw: ["files", "文件", "管理", "browse", "manager"], icon: <FolderOpen size={14} /> },
+      { view: "organize", id: "goOrganize", kw: ["organize", "整理", "归类", "sort"], icon: <Wand2 size={14} /> },
+      { view: "cleaner", id: "goCleaner", kw: ["cleaner", "磁盘", "管家", "disk", "清理"], icon: <HardDrive size={14} /> },
+      { view: "sessions", id: "goSessions", kw: ["session", "会话", "agent", "claude", "codex", "gemini"], icon: <Bot size={14} /> },
+      { view: "history", id: "goHistory", kw: ["history", "记录", "日志", "撤销", "undo", "log"], icon: <History size={14} /> },
+      { view: "settings", id: "goSettings", kw: ["settings", "设置", "偏好", "preference"], icon: <Settings size={14} /> },
+    ];
+    for (const { view, id, kw, icon } of viewActions) {
       base.push({
-        kind: "action", id: "sessions",
-        label: t("palette.action.goSessions"),
-        kw: ["session", "会话", "agent", "claude", "codex", "gemini"],
-        icon: <History size={14} />,
-        onSelect: () => { close(); onOpenSessions(); },
+        kind: "action", id,
+        label: t(`palette.action.${id}` as "palette.action.newScan"),
+        kw,
+        icon,
+        onSelect: () => { close(); onNavigate(view); },
       });
     }
     if (!scanId) return base;
     return [...base,
-      { kind: "action", id: "search", label: t("palette.action.goSearch"), kw: ["search", "搜索", "find", "查找"], icon: <Search size={14} />, onSelect: () => { close(); goto(".search-panel"); } },
-      { kind: "action", id: "dup", label: t("palette.action.goDuplicates"), kw: ["dup", "重复", "duplicate", "相同"], icon: <Layers size={14} />, onSelect: () => { close(); goto(".duplicates-section"); } },
-      { kind: "action", id: "clean", label: t("palette.action.goCleanup"), kw: ["clean", "清理", "cleanup", "释放"], icon: <ArchiveRestore size={14} />, onSelect: () => { close(); goto(".cleanup-section"); } },
-      { kind: "action", id: "large", label: t("palette.action.goLargeFiles"), kw: ["large", "大文件", "biggest", "最大"], icon: <FileText size={14} />, onSelect: () => { close(); goto(".large-files-section"); } },
+      { kind: "action", id: "search", label: t("palette.action.goSearch"), kw: ["search", "搜索", "find", "查找"], icon: <Search size={14} />, onSelect: () => { close(); onNavigate("analysis", ".search-panel"); } },
+      { kind: "action", id: "dup", label: t("palette.action.goDuplicates"), kw: ["dup", "重复", "duplicate", "相同"], icon: <Layers size={14} />, onSelect: () => { close(); onNavigate("analysis", ".duplicates-section"); } },
+      { kind: "action", id: "clean", label: t("palette.action.goCleanup"), kw: ["clean", "清理", "cleanup", "释放"], icon: <ArchiveRestore size={14} />, onSelect: () => { close(); onNavigate("analysis", ".cleanup-section"); } },
+      { kind: "action", id: "large", label: t("palette.action.goLargeFiles"), kw: ["large", "大文件", "biggest", "最大"], icon: <FileText size={14} />, onSelect: () => { close(); onNavigate("analysis", ".large-files-section"); } },
     ];
-  }, [t, scanId, close, onNewScan, onOpenSessions]);
+  }, [t, scanId, close, onNewScan, onNavigate]);
 
   // ⌘K / Ctrl+K global shortcut
   useEffect(() => {
