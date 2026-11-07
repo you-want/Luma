@@ -618,6 +618,8 @@ mod tests {
     }
 
     /// Create a fake installed app whose Info.plist carries `bundle_id`.
+    // Only the macOS-gated plutil discovery test installs apps.
+    #[cfg(target_os = "macos")]
     fn install_app(app_roots: &Path, bundle_id: &str) {
         let info = app_roots.join(format!("App-{bundle_id}.app/Contents/Info.plist"));
         fs::create_dir_all(info.parent().unwrap()).unwrap();
