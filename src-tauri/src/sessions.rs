@@ -149,7 +149,8 @@ static PARSE_CACHE: Mutex<Option<HashMap<PathBuf, CacheEntry>>> = Mutex::new(Non
 // ── Discovery ─────────────────────────────────────────────────────────────────
 
 pub fn discover_sessions() -> Result<AgentSessionsReport, AppError> {
-    let home = home_dir().ok_or_else(|| AppError::new("SESSIONS_UNAVAILABLE", "无法定位用户主目录。"))?;
+    let home =
+        home_dir().ok_or_else(|| AppError::new("SESSIONS_UNAVAILABLE", "无法定位用户主目录。"))?;
     discover_in_home(&home)
 }
 
@@ -246,7 +247,10 @@ fn trim_cache(seen: &HashSet<PathBuf>) {
 /// Trash confirmed sessions. Re-discovers first and verifies every request
 /// against the fresh result (path + size), the cleaner-family whitelist and
 /// the generic write-path protection before anything is touched.
-pub fn trash_sessions(db_path: &Path, items: &[CleanRequestItem]) -> Result<CleanOutcome, AppError> {
+pub fn trash_sessions(
+    db_path: &Path,
+    items: &[CleanRequestItem],
+) -> Result<CleanOutcome, AppError> {
     let home =
         home_dir().ok_or_else(|| AppError::new("SESSIONS_UNAVAILABLE", "无法定位用户主目录。"))?;
     trash_sessions_in(db_path, &home, items, &|native| file_ops::trash_one(native))
@@ -475,14 +479,13 @@ fn parse_claude(_ctx: &Ctx, path: &Path, size_bytes: u64) -> Option<AgentSession
             }
             Some("ai-title") => ai_title = str_field(&value, "aiTitle").map(clean_text),
             Some("summary") => summary_line = str_field(&value, "summary").map(clean_text),
-            Some("user") => {
+            Some("user")
                 if first_message.is_none()
-                    && value.get("isSidechain").and_then(Value::as_bool) != Some(true)
-                {
-                    first_message = claude_message_texts(&value)
-                        .into_iter()
-                        .find(|text| !is_claude_injected(text));
-                }
+                    && value.get("isSidechain").and_then(Value::as_bool) != Some(true) =>
+            {
+                first_message = claude_message_texts(&value)
+                    .into_iter()
+                    .find(|text| !is_claude_injected(text));
             }
             _ => {}
         }
@@ -531,18 +534,20 @@ fn parse_claude(_ctx: &Ctx, path: &Path, size_bytes: u64) -> Option<AgentSession
     let summary = last_message.unwrap_or_default();
 
     Some(build_session(
-        "claude",
-        &id,
+        SessionDraft {
+            agent: "claude",
+            resume_command: format!("claude --resume {id}"),
+            id,
+            project_dir,
+            project_name,
+            title,
+            first_message: first_message.unwrap_or_default(),
+            summary,
+            created_at,
+            last_active_at,
+        },
         path,
         size_bytes,
-        project_dir,
-        project_name,
-        title,
-        first_message.unwrap_or_default(),
-        summary,
-        created_at,
-        last_active_at,
-        format!("claude --resume {id}"),
     ))
 }
 
@@ -554,7 +559,10 @@ fn claude_message_texts(line: &Value) -> Vec<String> {
 
 fn is_claude_injected(text: &str) -> bool {
     let trimmed = text.trim_start();
-    trimmed.is_empty() || CLAUDE_INJECTED_PREFIXES.iter().any(|prefix| trimmed.starts_with(prefix))
+    trimmed.is_empty()
+        || CLAUDE_INJECTED_PREFIXES
+            .iter()
+            .any(|prefix| trimmed.starts_with(prefix))
 }
 
 // ── Codex CLI ─────────────────────────────────────────────────────────────────
@@ -594,9 +602,7 @@ fn parse_codex(ctx: &Ctx, path: &Path, size_bytes: u64) -> Option<AgentSession> 
             head.iter().find_map(|line| {
                 serde_json::from_str::<Value>(line)
                     .ok()
-                    .and_then(|value| {
-                        str_field(&value, "timestamp").and_then(parse_rfc3339_secs)
-                    })
+                    .and_then(|value| str_field(&value, "timestamp").and_then(parse_rfc3339_secs))
             })
         });
 
@@ -664,18 +670,20 @@ fn parse_codex(ctx: &Ctx, path: &Path, size_bytes: u64) -> Option<AgentSession> 
     let summary = last_message.unwrap_or_default();
 
     Some(build_session(
-        "codex",
-        &id,
+        SessionDraft {
+            agent: "codex",
+            resume_command: format!("codex resume {id}"),
+            id,
+            project_dir,
+            project_name,
+            title,
+            first_message: first_message.unwrap_or_default(),
+            summary,
+            created_at,
+            last_active_at,
+        },
         path,
         size_bytes,
-        project_dir,
-        project_name,
-        title,
-        first_message.unwrap_or_default(),
-        summary,
-        created_at,
-        last_active_at,
-        format!("codex resume {id}"),
     ))
 }
 
@@ -683,7 +691,10 @@ fn parse_codex(ctx: &Ctx, path: &Path, size_bytes: u64) -> Option<AgentSession> 
 /// Code-originated sessions ("## My request for Codex: …").
 fn normalize_codex_user_text(text: &str) -> Option<String> {
     let trimmed = text.trim_start();
-    if trimmed.is_empty() || CODEX_INJECTED_PREFIXES.iter().any(|prefix| trimmed.starts_with(prefix))
+    if trimmed.is_empty()
+        || CODEX_INJECTED_PREFIXES
+            .iter()
+            .any(|prefix| trimmed.starts_with(prefix))
     {
         return None;
     }
@@ -742,9 +753,7 @@ fn parse_gemini(_ctx: &Ctx, path: &Path, size_bytes: u64) -> Option<AgentSession
 
     // Fallbacks for unreadable/oversized transcripts: still show the session
     // with file-derived metadata.
-    let id = doc
-        .session_id
-        .unwrap_or_else(|| file_stem_string(path));
+    let id = doc.session_id.unwrap_or_else(|| file_stem_string(path));
     let created_at = doc.start.or_else(|| file_modified_secs(path));
     let last_active_at = doc.updated.or(created_at);
     let project_name = basename_string(&project_dir);
@@ -771,18 +780,20 @@ fn parse_gemini(_ctx: &Ctx, path: &Path, size_bytes: u64) -> Option<AgentSession
     let summary = last_message.unwrap_or_default();
 
     Some(build_session(
-        "gemini",
-        &id,
+        SessionDraft {
+            agent: "gemini",
+            resume_command: format!("gemini --resume {id}"),
+            id,
+            project_dir,
+            project_name,
+            title,
+            first_message: first_message.unwrap_or_default(),
+            summary,
+            created_at,
+            last_active_at,
+        },
         path,
         size_bytes,
-        project_dir,
-        project_name,
-        title,
-        first_message.unwrap_or_default(),
-        summary,
-        created_at,
-        last_active_at,
-        format!("gemini --resume {id}"),
     ))
 }
 
@@ -869,11 +880,11 @@ fn clean_text(text: &str) -> String {
     text.trim().to_owned()
 }
 
-fn build_session(
-    agent: &str,
-    id: &str,
-    path: &Path,
-    size_bytes: u64,
+/// Everything one parse knows about a session, before the shared finishing
+/// pass (truncation, store-path mapping) that turns it into an `AgentSession`.
+struct SessionDraft {
+    agent: &'static str,
+    id: String,
     project_dir: String,
     project_name: String,
     title: String,
@@ -882,20 +893,22 @@ fn build_session(
     created_at: Option<i64>,
     last_active_at: Option<i64>,
     resume_command: String,
-) -> AgentSession {
+}
+
+fn build_session(draft: SessionDraft, path: &Path, size_bytes: u64) -> AgentSession {
     AgentSession {
-        id: id.to_owned(),
-        agent: agent.to_owned(),
-        project_dir,
-        project_name,
-        title: truncate_chars(&title, TITLE_CHARS),
-        summary: truncate_chars(&summary, PREVIEW_CHARS),
-        first_message: truncate_chars(&first_message, PREVIEW_CHARS),
-        created_at,
-        last_active_at,
+        id: draft.id,
+        agent: draft.agent.to_owned(),
+        project_dir: draft.project_dir,
+        project_name: draft.project_name,
+        title: truncate_chars(&draft.title, TITLE_CHARS),
+        summary: truncate_chars(&draft.summary, PREVIEW_CHARS),
+        first_message: truncate_chars(&draft.first_message, PREVIEW_CHARS),
+        created_at: draft.created_at,
+        last_active_at: draft.last_active_at,
         size_bytes,
         source_path: to_store_path(path),
-        resume_command,
+        resume_command: draft.resume_command,
     }
 }
 
@@ -1054,7 +1067,11 @@ fn parse_ts_value(value: &Value) -> Option<i64> {
         return parse_rfc3339_secs(raw);
     }
     if let Some(number) = value.as_f64() {
-        let secs = if number.abs() > 1.0e12 { number / 1000.0 } else { number };
+        let secs = if number.abs() > 1.0e12 {
+            number / 1000.0
+        } else {
+            number
+        };
         return Some(secs as i64);
     }
     None
@@ -1063,7 +1080,11 @@ fn parse_ts_value(value: &Value) -> Option<i64> {
 /// Days since 1970-01-01 for a civil date (Howard Hinnant's algorithm).
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let shifted_year = if month <= 2 { year - 1 } else { year };
-    let era = if shifted_year >= 0 { shifted_year } else { shifted_year - 399 } / 400;
+    let era = if shifted_year >= 0 {
+        shifted_year
+    } else {
+        shifted_year - 399
+    } / 400;
     let year_of_era = shifted_year - era * 400;
     let day_of_year = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
     let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
@@ -1106,7 +1127,10 @@ mod tests {
 
     #[test]
     fn rfc3339_utc() {
-        assert_eq!(parse_rfc3339_secs("2026-11-06T16:16:43Z"), Some(1_793_981_803));
+        assert_eq!(
+            parse_rfc3339_secs("2026-11-06T16:16:43Z"),
+            Some(1_793_981_803)
+        );
         assert_eq!(
             parse_rfc3339_secs("2026-11-06T16:16:43.123Z"),
             Some(1_793_981_803)
@@ -1134,8 +1158,14 @@ mod tests {
 
     #[test]
     fn ts_value_accepts_epoch_millis() {
-        assert_eq!(parse_ts_value(&Value::from(1_793_981_803_000_f64)), Some(1_793_981_803));
-        assert_eq!(parse_ts_value(&Value::from(1_793_981_803)), Some(1_793_981_803));
+        assert_eq!(
+            parse_ts_value(&Value::from(1_793_981_803_000_f64)),
+            Some(1_793_981_803)
+        );
+        assert_eq!(
+            parse_ts_value(&Value::from(1_793_981_803)),
+            Some(1_793_981_803)
+        );
     }
 
     // ── Text helpers ──
@@ -1165,7 +1195,9 @@ mod tests {
         assert!(!is_claude_transcript(Path::new(
             "/p/-Users-x/8f2b/subagents/agent-abc.jsonl"
         )));
-        assert!(!is_claude_transcript(Path::new("/p/-Users-x/journal.jsonl")));
+        assert!(!is_claude_transcript(Path::new(
+            "/p/-Users-x/journal.jsonl"
+        )));
     }
 
     #[test]
@@ -1173,7 +1205,9 @@ mod tests {
         assert!(is_codex_rollout(Path::new(
             "/s/2026/11/06/rollout-2026-11-06T16-16-43-01a1.jsonl"
         )));
-        assert!(!is_codex_rollout(Path::new("/s/2026/11/06/rollout-2026.jsonl.zst")));
+        assert!(!is_codex_rollout(Path::new(
+            "/s/2026/11/06/rollout-2026.jsonl.zst"
+        )));
         assert!(!is_codex_rollout(Path::new("/s/2026/11/06/other.jsonl")));
     }
 
@@ -1302,7 +1336,11 @@ mod tests {
         let root = temp_root("gemini-parse");
         let chats = root.join("tmp/my-project/chats");
         fs::create_dir_all(&chats).unwrap();
-        fs::write(root.join("tmp/my-project/.project_root"), "/Users/x/real-root\n").unwrap();
+        fs::write(
+            root.join("tmp/my-project/.project_root"),
+            "/Users/x/real-root\n",
+        )
+        .unwrap();
         let file = chats.join("session-1.json");
         fs::write(
             &file,
@@ -1371,7 +1409,9 @@ mod tests {
         assert!(names.iter().any(|n| n.ends_with("/p/sid-1")));
         assert!(names.iter().any(|n| n.contains("file-history/sid-1")));
         assert!(names.iter().any(|n| n.contains("session-env/sid-1")));
-        assert!(names.iter().any(|n| n.ends_with("todos/sid-1-agent-1.json")));
+        assert!(names
+            .iter()
+            .any(|n| n.ends_with("todos/sid-1-agent-1.json")));
         assert!(!names.iter().any(|n| n.ends_with("todos/other.json")));
     }
 
@@ -1385,14 +1425,16 @@ mod tests {
 
         let sidecars = sidecar_paths("codex", &transcript, &home);
         assert_eq!(sidecars.len(), 1);
-        assert!(sidecars[0].to_string_lossy().ends_with("rollout-x.jsonl.zst"));
+        assert!(sidecars[0]
+            .to_string_lossy()
+            .ends_with("rollout-x.jsonl.zst"));
     }
 
     #[test]
     fn gemini_sidecars_include_legacy_twin() {
         let home = temp_root("gemini-sidecars");
         let transcript = home.join("chats/session-1.jsonl");
-        fs::create_dir_all(&transcript.parent().unwrap()).unwrap();
+        fs::create_dir_all(transcript.parent().unwrap()).unwrap();
         fs::write(&transcript, "{}").unwrap();
         fs::write(transcript.parent().unwrap().join("session-1.json"), "{}").unwrap();
 
@@ -1420,7 +1462,11 @@ mod tests {
         // Gemini.
         let gemini_dir = home.join(".gemini/tmp/k/chats");
         fs::create_dir_all(&gemini_dir).unwrap();
-        fs::write(gemini_dir.join("session-1.json"), r#"{"sessionId":"gem-1","messages":[{"type":"user","content":[{"text":"hi"}]}]}"#).unwrap();
+        fs::write(
+            gemini_dir.join("session-1.json"),
+            r#"{"sessionId":"gem-1","messages":[{"type":"user","content":[{"text":"hi"}]}]}"#,
+        )
+        .unwrap();
         // An agent that is not installed contributes nothing.
         let empty = discover_in_home(&home).expect("discovers");
         assert_eq!(empty.agents.len(), 3);
@@ -1518,7 +1564,9 @@ mod tests {
         let trashed = trashed.into_inner();
         assert!(trashed[0].ends_with("sid-1.jsonl"));
         assert!(trashed.iter().any(|p| p.ends_with("sid-1")));
-        assert!(trashed.iter().any(|p| p.to_string_lossy().contains("file-history/sid-1")));
+        assert!(trashed
+            .iter()
+            .any(|p| p.to_string_lossy().contains("file-history/sid-1")));
     }
 
     #[test]

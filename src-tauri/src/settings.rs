@@ -10,20 +10,12 @@ use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
     /// Tray performance monitoring — OFF by default: sampling only runs
     /// while the app is open AND the user explicitly opted in.
     pub tray_monitor_enabled: bool,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            tray_monitor_enabled: false,
-        }
-    }
 }
 
 fn settings_path(data_dir: &Path) -> PathBuf {
