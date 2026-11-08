@@ -1,13 +1,9 @@
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnalysisPanel } from "./components/analysis/AnalysisPanel";
 import { FileManagerView } from "./components/fileManager";
-import { CleanerCenter } from "./components/cleaner/CleanerCenter";
-import { SessionsPanel } from "./components/sessions/SessionsPanel";
 import { OverviewView } from "./components/overview/OverviewView";
 import { OrganizeView } from "./components/organize/OrganizeView";
-import { HistoryView } from "./components/history/HistoryView";
-import { SettingsView } from "./components/settings/SettingsView";
 import { Sidebar } from "./components/shell/Sidebar";
 import { Topbar } from "./components/shell/Topbar";
 import CommandPalette from "./components/shell/CommandPalette";
@@ -19,6 +15,17 @@ import { findDuplicates, listInsights, revealPath } from "./lib/tauri";
 import type { AppView } from "./types/navigation";
 import { ALL_VIEWS, isScanFreeView, topbarModeFor } from "./types/navigation";
 import "./App.css";
+
+// Machine-scoped and system views load on first visit — they are large,
+// self-contained features and never part of the landing experience.
+const CleanerCenter = lazy(() => import("./components/cleaner/CleanerCenter")
+  .then(m => ({ default: m.CleanerCenter })));
+const SessionsPanel = lazy(() => import("./components/sessions/SessionsPanel")
+  .then(m => ({ default: m.SessionsPanel })));
+const HistoryView = lazy(() => import("./components/history/HistoryView")
+  .then(m => ({ default: m.HistoryView })));
+const SettingsView = lazy(() => import("./components/settings/SettingsView")
+  .then(m => ({ default: m.SettingsView })));
 
 const VIEW_STORAGE_KEY = "luma.view";
 
@@ -106,6 +113,12 @@ function App() {
     ? t("workspace.scanning") : currentResult ? t("workspace.scanned", { count: currentResult.totalFiles })
     : app.loading ? t("status.loading") : t("workspace.scanFirst");
 
+  const lazyView = (node: React.ReactNode) => (
+    <Suspense fallback={<div className="loading-state">{t("status.loading")}</div>}>
+      {node}
+    </Suspense>
+  );
+
   return (
     <main className="app-shell app-shell--workspace" data-han-scope data-theme="ink" data-luma-accent="celadon">
       <CommandPalette scanId={currentResult?.scanId ?? null} onNewScan={handleChoose}
@@ -155,39 +168,47 @@ function App() {
           {effectiveView === "cleaner" && (
             <section id="workspace-panel-cleaner" className="analysis-tab-panel" role="tabpanel"
               aria-labelledby="workspace-tab-cleaner">
-              <div className="content">
-                <div className="results">
-                  <CleanerCenter />
-                </div>
-              </div>
+              {lazyView(
+                <div className="content">
+                  <div className="results">
+                    <CleanerCenter />
+                  </div>
+                </div>,
+              )}
             </section>
           )}
 
           {effectiveView === "sessions" && (
             <section id="workspace-panel-sessions" className="analysis-tab-panel" role="tabpanel"
               aria-labelledby="workspace-tab-sessions">
-              <div className="content">
-                <div className="results">
-                  <SessionsPanel />
-                </div>
-              </div>
+              {lazyView(
+                <div className="content">
+                  <div className="results">
+                    <SessionsPanel />
+                  </div>
+                </div>,
+              )}
             </section>
           )}
 
           {effectiveView === "history" && (
             <section id="workspace-panel-history" className="analysis-tab-panel" role="tabpanel"
               aria-labelledby="workspace-tab-history">
-              <HistoryView currentScanId={currentResult?.scanId ?? null}
-                currentRootPath={currentResult?.rootPath ?? null} />
+              {lazyView(
+                <HistoryView currentScanId={currentResult?.scanId ?? null}
+                  currentRootPath={currentResult?.rootPath ?? null} />,
+              )}
             </section>
           )}
 
           {effectiveView === "settings" && (
             <section id="workspace-panel-settings" className="analysis-tab-panel" role="tabpanel"
               aria-labelledby="workspace-tab-settings">
-              <SettingsView onNavigate={navigate} onDiscoverySettingsChange={handleDiscoverySettings}
-                onIndexCleared={appStore.clearIndex} onWorkingChange={setStoragePending}
-                storageLocked={app.loading || app.phase === "running" || scanLocked || scanAction.pending !== null} />
+              {lazyView(
+                <SettingsView onNavigate={navigate} onDiscoverySettingsChange={handleDiscoverySettings}
+                  onIndexCleared={appStore.clearIndex} onWorkingChange={setStoragePending}
+                  storageLocked={app.loading || app.phase === "running" || scanLocked || scanAction.pending !== null} />,
+              )}
             </section>
           )}
 
