@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Trash2 } from "lucide-react";
-import { trashFiles } from "../lib/tauri";
-import { appStore } from "../app/store";
-import { useToast } from "../contexts/ToastContext";
-import { useAsyncAction } from "../hooks/useAsyncAction";
-import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
-import { formatBytes, formatDate } from "../lib/format";
-import { errorMessage } from "../lib/errors";
-import { ConfirmDialog } from "./fileManager/ConfirmDialog";
-import type { FileEntry } from "../types/scan";
+import { trashFiles } from "../../lib/tauri";
+import { appStore } from "../../app/store";
+import { useToast } from "../../contexts/ToastContext";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { categoryColor, categoryIcon, categoryTint } from "../../lib/categories";
+import { formatBytes, formatDate } from "../../lib/format";
+import { errorMessage } from "../../lib/errors";
+import { ConfirmDialog } from "../fileManager/ConfirmDialog";
+import type { FileEntry } from "../../types/scan";
 
 export function LargeFiles({
   files,

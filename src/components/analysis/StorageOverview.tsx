@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Files, FolderTree, HardDrive, TriangleAlert } from "lucide-react";
-import { formatBytes, formatDate, formatNumber } from "../lib/format";
-import type { ScanSummary } from "../types/scan";
+import { formatBytes, formatDate, formatNumber } from "../../lib/format";
+import type { ScanSummary } from "../../types/scan";
 
 export function StorageOverview({ summary }: { summary: ScanSummary }) {
   const { t } = useTranslation();

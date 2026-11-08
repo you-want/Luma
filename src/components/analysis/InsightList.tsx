@@ -9,15 +9,15 @@ import {
   PackageSearch,
   Trash2,
 } from "lucide-react";
-import { listInsightFiles, revealPath, trashFiles } from "../lib/tauri";
-import { appStore } from "../app/store";
-import { useToast } from "../contexts/ToastContext";
-import { useAsyncAction } from "../hooks/useAsyncAction";
-import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
-import { formatBytes, formatDate, formatNumber } from "../lib/format";
-import { errorMessage } from "../lib/errors";
-import { ConfirmDialog } from "./fileManager/ConfirmDialog";
-import type { FileEntry, InsightKind, InsightSummary } from "../types/scan";
+import { listInsightFiles, revealPath, trashFiles } from "../../lib/tauri";
+import { appStore } from "../../app/store";
+import { useToast } from "../../contexts/ToastContext";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { categoryColor, categoryIcon, categoryTint } from "../../lib/categories";
+import { formatBytes, formatDate, formatNumber } from "../../lib/format";
+import { errorMessage } from "../../lib/errors";
+import { ConfirmDialog } from "../fileManager/ConfirmDialog";
+import type { FileEntry, InsightKind, InsightSummary } from "../../types/scan";
 
 const insightMeta: Record<InsightKind, { icon: typeof PackageSearch; color: string }> = {
   largeFiles: { icon: PackageSearch, color: "var(--han-color-warning)" },

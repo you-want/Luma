@@ -17,7 +17,7 @@ import { chooseDirectory, getDirectoryNodes } from "../../lib/tauri";
 import { appStore, useAppStore } from "../../app/store";
 import { errorMessage } from "../../lib/errors";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import { ButtonSpinner } from "../ButtonSpinner";
+import { ButtonSpinner } from "../shell/ButtonSpinner";
 import type { DirNode } from "../../types/fileManager";
 import "./FileManager.css";
 

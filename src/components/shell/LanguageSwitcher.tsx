@@ -5,7 +5,7 @@ import {
   currentLanguage,
   SUPPORTED_LANGUAGES,
   type Language,
-} from "../i18n";
+} from "../../i18n";
 
 // A compact language selector for the header. The current language is read from
 // i18n (not local state) so it stays correct after a persisted choice is

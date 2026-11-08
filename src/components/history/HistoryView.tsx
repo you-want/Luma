@@ -12,7 +12,7 @@ import { useToast } from "../../contexts/ToastContext";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { errorMessage } from "../../lib/errors";
 import { formatDate } from "../../lib/format";
-import { ButtonSpinner } from "../ButtonSpinner";
+import { ButtonSpinner } from "../shell/ButtonSpinner";
 import type { OperationLogEntry } from "../../types/fileManager";
 import "./History.css";
 

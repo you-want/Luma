@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { FileEntry, SearchRequest, SearchSort } from "../types/scan";
-import { searchFiles, revealPath } from "../lib/tauri";
-import { formatBytes } from "../lib/format";
-import { categoryLabelKey } from "../lib/categories";
-import { errorMessage } from "../lib/errors";
-import { useSelection } from "../contexts/SelectionContext";
+import type { FileEntry, SearchRequest, SearchSort } from "../../types/scan";
+import { searchFiles, revealPath } from "../../lib/tauri";
+import { formatBytes } from "../../lib/format";
+import { categoryLabelKey } from "../../lib/categories";
+import { errorMessage } from "../../lib/errors";
+import { useSelection } from "../../contexts/SelectionContext";
 
 type SearchProps = {
   scanId: string;

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { listProjects } from '../lib/tauri'
-import { formatBytes, formatNumber } from '../lib/format'
-import { errorMessage } from '../lib/errors'
-import type { ProjectCandidate } from '../types/scan'
+import { listProjects } from "../../lib/tauri"
+import { formatBytes, formatNumber } from "../../lib/format"
+import { errorMessage } from "../../lib/errors"
+import type { ProjectCandidate } from "../../types/scan"
 
 interface ProjectsProps {
   scanId: string

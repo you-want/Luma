@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowRight, GitCompareArrows } from "lucide-react";
-import { compareScans, listScanHistory } from "../lib/tauri";
+import { compareScans, listScanHistory } from "../../lib/tauri";
 import {
   categoryColor,
   categoryIcon,
   categoryLabelKey,
   categoryTint,
-} from "../lib/categories";
-import { errorMessage } from "../lib/errors";
-import { formatBytes, formatDate, formatNumber } from "../lib/format";
-import type { ScanComparison, ScanSummary } from "../types/scan";
+} from "../../lib/categories";
+import { errorMessage } from "../../lib/errors";
+import { formatBytes, formatDate, formatNumber } from "../../lib/format";
+import type { ScanComparison, ScanSummary } from "../../types/scan";
 
 type ScanHistoryProps = {
   scanId: string;

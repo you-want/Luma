@@ -11,11 +11,11 @@ import {
   Trash2,
   Wand2,
 } from "lucide-react";
-import { getCleanupSummary, listCleanupFiles, revealPath } from "../lib/tauri";
-import { formatBytes, formatDate, formatNumber } from "../lib/format";
-import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
-import { errorMessage } from "../lib/errors";
-import type { CleanupItem, CleanupSummary, FileEntry } from "../types/scan";
+import { getCleanupSummary, listCleanupFiles, revealPath } from "../../lib/tauri";
+import { formatBytes, formatDate, formatNumber } from "../../lib/format";
+import { categoryColor, categoryIcon, categoryTint } from "../../lib/categories";
+import { errorMessage } from "../../lib/errors";
+import type { CleanupItem, CleanupSummary, FileEntry } from "../../types/scan";
 
 // ── Icon map ──────────────────────────────────────────────────────────────────
 

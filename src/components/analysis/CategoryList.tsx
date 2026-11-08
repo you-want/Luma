@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { categoryColor, categoryLabelKey } from "../lib/categories";
-import { formatBytes } from "../lib/format";
-import type { CategorySummary } from "../types/scan";
+import { categoryColor, categoryLabelKey } from "../../lib/categories";
+import { formatBytes } from "../../lib/format";
+import type { CategorySummary } from "../../types/scan";
 
 export function CategoryList({
   categories,

@@ -16,8 +16,8 @@ import {
   Settings,
   Wand2,
 } from "lucide-react";
-import type { AppView } from "../types/navigation";
-import { NAV_GROUPS } from "../types/navigation";
+import type { AppView } from "../../types/navigation";
+import { NAV_GROUPS } from "../../types/navigation";
 
 const VIEW_ICONS: Record<AppView, typeof LayoutDashboard> = {
   overview: LayoutDashboard,

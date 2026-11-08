@@ -15,11 +15,11 @@ import {
   Wand2,
   Zap,
 } from "lucide-react";
-import type { FileEntry } from "../types/scan";
-import type { AppView } from "../types/navigation";
-import { searchFiles, revealPath } from "../lib/tauri";
-import { formatBytes } from "../lib/format";
-import { errorMessage } from "../lib/errors";
+import type { FileEntry } from "../../types/scan";
+import type { AppView } from "../../types/navigation";
+import { searchFiles, revealPath } from "../../lib/tauri";
+import { formatBytes } from "../../lib/format";
+import { errorMessage } from "../../lib/errors";
 
 type Action = {
   kind: "action";

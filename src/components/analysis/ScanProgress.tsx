@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { LoaderCircle } from "lucide-react";
-import { formatBytes, formatNumber } from "../lib/format";
-import type { ScanProgress as ScanProgressType } from "../types/scan";
+import { formatBytes, formatNumber } from "../../lib/format";
+import type { ScanProgress as ScanProgressType } from "../../types/scan";
 
 export function ScanProgress({ progress }: { progress?: ScanProgressType }) {
   const { t } = useTranslation();

@@ -26,7 +26,7 @@ import { errorMessage } from "../../lib/errors";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { appStore, useAppStore } from "../../app/store";
 import { useToast } from "../../contexts/ToastContext";
-import { ButtonSpinner } from "../ButtonSpinner";
+import { ButtonSpinner } from "../shell/ButtonSpinner";
 import type { AppView } from "../../types/navigation";
 import type {
   OrganizeMove,

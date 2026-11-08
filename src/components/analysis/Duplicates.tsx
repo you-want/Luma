@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, ChevronRight, AlertCircle, Trash2 } from "lucide-react";
-import { findDuplicates, revealPath, trashFiles } from "../lib/tauri";
-import { appStore, useAppStore } from "../app/store";
-import { useToast } from "../contexts/ToastContext";
-import { useAsyncAction } from "../hooks/useAsyncAction";
-import { categoryColor, categoryIcon, categoryTint } from "../lib/categories";
-import { formatBytes, formatDate, formatNumber } from "../lib/format";
-import { errorMessage } from "../lib/errors";
-import { ConfirmDialog } from "./fileManager/ConfirmDialog";
-import type { DuplicateGroup, FileEntry } from "../types/scan";
+import { findDuplicates, revealPath, trashFiles } from "../../lib/tauri";
+import { appStore, useAppStore } from "../../app/store";
+import { useToast } from "../../contexts/ToastContext";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { categoryColor, categoryIcon, categoryTint } from "../../lib/categories";
+import { formatBytes, formatDate, formatNumber } from "../../lib/format";
+import { errorMessage } from "../../lib/errors";
+import { ConfirmDialog } from "../fileManager/ConfirmDialog";
+import type { DuplicateGroup, FileEntry } from "../../types/scan";
 
 type DuplicatesProps = {
   scanId: string;

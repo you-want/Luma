@@ -1,11 +1,11 @@
 import { Database, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAsyncAction } from "../hooks/useAsyncAction";
-import { clearScanIndex, compactIndexStorage, getIndexStorage, getLatestScan, type IndexStorageUsage } from "../lib/tauri";
-import { formatBytes, formatNumber } from "../lib/format";
-import { errorMessage } from "../lib/errors";
-import { ButtonSpinner } from "./ButtonSpinner";
+import { useAsyncAction } from "../../hooks/useAsyncAction";
+import { clearScanIndex, compactIndexStorage, getIndexStorage, getLatestScan, type IndexStorageUsage } from "../../lib/tauri";
+import { formatBytes, formatNumber } from "../../lib/format";
+import { errorMessage } from "../../lib/errors";
+import { ButtonSpinner } from "../shell/ButtonSpinner";
 
 export function IndexStorage({ disabled, onCleared, onWorkingChange }: {
   disabled: boolean;

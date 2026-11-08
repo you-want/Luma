@@ -13,7 +13,7 @@ import {
 import { useTranslation } from "react-i18next";
 import type { DirFileSort, FileListView } from "../../types/fileManager";
 import type { FileOperation } from "./useFileOps";
-import { ButtonSpinner } from "../ButtonSpinner";
+import { ButtonSpinner } from "../shell/ButtonSpinner";
 
 type Props = {
   pendingAction?: FileOperation | "open" | "reveal" | null;
