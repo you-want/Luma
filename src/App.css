@@ -1,4 +1,4 @@
-@import url("../website/assets/han/han-scoped.css");
+@import url("./styles/han-tokens.css");
 
 :root {
   /* macOS uses the San Francisco system font; -apple-system resolves to it. */
