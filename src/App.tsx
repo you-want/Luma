@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { desktopDir, downloadDir } from "@tauri-apps/api/path";
-import { Eye, EyeOff, FolderOpen, Play, RefreshCw, Square } from "lucide-react";
+import { AnalysisPanel } from "./components/analysis/AnalysisPanel";
 import { FileManagerView } from "./components/fileManager";
 import { CleanerCenter } from "./components/cleaner/CleanerCenter";
 import { SessionsPanel } from "./components/sessions/SessionsPanel";
@@ -10,37 +9,13 @@ import { OrganizeView } from "./components/organize/OrganizeView";
 import { HistoryView } from "./components/history/HistoryView";
 import { SettingsView } from "./components/settings/SettingsView";
 import { Sidebar } from "./components/shell/Sidebar";
-import { appStore, useAppStore } from "./app/store";
-import { CategoryList } from "./components/analysis/CategoryList";
-import { CleanupPanel } from "./components/analysis/CleanupPanel";
+import { Topbar } from "./components/shell/Topbar";
 import CommandPalette from "./components/shell/CommandPalette";
-import { Duplicates } from "./components/analysis/Duplicates";
-import { InsightList } from "./components/analysis/InsightList";
-import { LanguageSwitcher } from "./components/shell/LanguageSwitcher";
-import { LargeFiles } from "./components/analysis/LargeFiles";
-import Projects from "./components/analysis/Projects";
-import { ScanHistory } from "./components/analysis/ScanHistory";
-import Search from "./components/analysis/Search";
-import { StorageOverview } from "./components/analysis/StorageOverview";
-import { IndexStorage } from "./components/shell/IndexStorage";
-import { UpdateButton } from "./components/shell/UpdateButton";
-import { ButtonSpinner } from "./components/shell/ButtonSpinner";
-import { useScanEvents } from "./hooks/useScanEvents";
-import { useAsyncAction } from "./hooks/useAsyncAction";
+import { appStore, useAppStore } from "./app/store";
+import { useScanActions } from "./hooks/useScanActions";
+import { useScanLifecycle } from "./hooks/useScanLifecycle";
 import { errorMessage } from "./lib/errors";
-import { basename } from "./lib/format";
-import {
-  cancelScan,
-  chooseDirectory,
-  findDuplicates,
-  getLatestScan,
-  getScanSummary,
-  listInsights,
-  listLargeFiles,
-  revealPath,
-  startScan,
-} from "./lib/tauri";
-import type { ScanFinished, ScanProgress as ScanProgressType } from "./types/scan";
+import { findDuplicates, listInsights, revealPath } from "./lib/tauri";
 import type { AppView } from "./types/navigation";
 import { ALL_VIEWS, isScanFreeView, topbarModeFor } from "./types/navigation";
 import "./App.css";
@@ -59,9 +34,15 @@ function App() {
     const stored = localStorage.getItem(VIEW_STORAGE_KEY) as AppView | null;
     return stored && ALL_VIEWS.includes(stored) ? stored : "overview";
   });
-  const scanAction = useAsyncAction<"choose" | "desktop" | "downloads" | "start" | "cancel">();
   const [storagePending, setStoragePending] = useState(false);
   const [fileOperationPending, setFileOperationPending] = useState(false);
+
+  useScanLifecycle();
+
+  const scanLocked = storagePending || fileOperationPending;
+  const { scanAction, handleChoose, handleShortcut, handleStart, handleCancel } =
+    useScanActions(scanLocked);
+
   const currentResult = app.phase === "completed" && app.summary
     && app.selectedPath.replace(/[/\\]+$/, "") === app.summary.rootPath.replace(/[/\\]+$/, "")
     && scanAction.pending !== "start" ? app.summary : null;
@@ -84,150 +65,10 @@ function App() {
     }
   }, []);
 
-  const loadResult = useCallback(async (scanId: string) => {
-    const settings = appStore.getState();
-    const [summary, files, insights] = await Promise.all([
-      getScanSummary(scanId),
-      listLargeFiles(scanId),
-      listInsights(scanId, settings.largeFileThreshold, settings.staleDays),
-    ]);
-    if (summary.status === "completed") appStore.complete(summary, files, insights);
-  }, []);
-
-  const handleProgress = useCallback((progress: ScanProgressType) => {
-    appStore.setProgress(progress);
-  }, []);
-
-  const handleFinished = useCallback(
-    async (finished: ScanFinished) => {
-      if (finished.scanId !== appStore.getState().activeScanId) return;
-      if (finished.status === "completed" && finished.summary) {
-        try {
-          await loadResult(finished.scanId);
-        } catch (error) {
-          appStore.fail(errorMessage(error));
-        }
-      } else if (finished.status === "cancelled") {
-        appStore.cancel();
-      } else {
-        appStore.fail(errorMessage(finished.error));
-      }
-    },
-    [loadResult],
-  );
-
-  useScanEvents({ onProgress: handleProgress, onFinished: handleFinished });
-
-  useEffect(() => {
-    getLatestScan()
-      .then(async (summary) => {
-        if (summary) await loadResult(summary.scanId);
-        else appStore.ready();
-      })
-      .catch(error => appStore.fail(errorMessage(error)));
-  }, [loadResult]);
-
-  // Events are the fast path, but a terminal event can be missed while the
-  // webview is mounting or when a very small directory finishes immediately.
-  // Reconcile the persisted run while scanning so the UI cannot remain stuck.
-  useEffect(() => {
-    if (app.phase !== "running" || !app.activeScanId) return;
-
-    const scanId = app.activeScanId;
-    let disposed = false;
-    let checking = false;
-    const reconcile = async () => {
-      if (checking) return;
-      checking = true;
-      try {
-        const current = await getScanSummary(scanId);
-        if (disposed || appStore.getState().activeScanId !== scanId) return;
-        if (current.status === "completed") await loadResult(scanId);
-        else if (current.status === "cancelled") appStore.cancel();
-        else if (current.status === "failed") appStore.fail(t("errors.SCAN_FAILED"));
-      } catch (error) {
-        if (!disposed && appStore.getState().activeScanId === scanId) {
-          appStore.fail(errorMessage(error));
-        }
-      } finally {
-        checking = false;
-      }
-    };
-
-    void reconcile();
-    const timer = window.setInterval(() => void reconcile(), 1000);
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-    };
-  }, [app.activeScanId, app.phase, loadResult, t]);
-
-  async function handleChoose() {
-    if (storagePending || fileOperationPending || appStore.getState().phase === "running") return;
-    await scanAction.run("choose", async () => {
-      try {
-        const path = await chooseDirectory();
-        if (path) appStore.setSelectedPath(path);
-      } catch (error) {
-        appStore.fail(errorMessage(error));
-      }
-    });
-  }
-
-  async function handleShortcut(location: "desktop" | "downloads") {
-    if (storagePending || fileOperationPending || appStore.getState().phase === "running") return;
-    await scanAction.run(location, async () => {
-      try {
-        const path = await (location === "desktop" ? desktopDir() : downloadDir());
-        appStore.setSelectedPath(path);
-      } catch (error) {
-        appStore.fail(errorMessage(error));
-      }
-    });
-  }
-
-  async function handleStart() {
-    if (!app.selectedPath || storagePending || fileOperationPending || appStore.getState().phase === "running") return;
-    await scanAction.run("start", async () => {
-      try {
-        const scanId = await startScan({
-          rootPath: app.selectedPath,
-          includeHidden: app.includeHidden,
-          stayOnFileSystem: true,
-        });
-        appStore.start(scanId);
-      } catch (error) {
-        appStore.fail(errorMessage(error));
-      }
-    });
-  }
-
-  async function handleCancel() {
-    const scanId = app.activeScanId;
-    if (!scanId) return;
-    await scanAction.run("cancel", async () => {
-      try {
-        await cancelScan(scanId);
-      } catch (error) {
-        appStore.fail(errorMessage(error));
-      }
-    });
-  }
-
-  async function handleDiscoverySettings(largeFileThreshold: number, staleDays: number) {
-    appStore.setDiscoverySettings(largeFileThreshold, staleDays);
-    if (!app.summary) return;
-    try {
-      const insights = await listInsights(app.summary.scanId, largeFileThreshold, staleDays);
-      appStore.setInsights(insights);
-    } catch (error) {
-      appStore.fail(errorMessage(error));
-    }
-  }
-
-  function handleReveal(path: string) {
-    void revealPath(path).catch((error) => appStore.fail(errorMessage(error)));
-  }
+  const seedOrganizeAndNavigate = useCallback((sourceDir: string) => {
+    appStore.seedOrganize(sourceDir);
+    navigate("organize");
+  }, [navigate]);
 
   // Cleanup hints → duplicates: kick off the content-hash search (if it has
   // not run yet) and land on the duplicates section.
@@ -245,20 +86,25 @@ function App() {
     navigate("analysis", ".duplicates-section");
   }, [navigate, t]);
 
-  const topbarMode = topbarModeFor(effectiveView);
-  const scanControlsDisabled = app.loading || app.phase === "running" || storagePending
-    || fileOperationPending || scanAction.pending !== null;
+  const handleDiscoverySettings = useCallback(async (largeFileThreshold: number, staleDays: number) => {
+    appStore.setDiscoverySettings(largeFileThreshold, staleDays);
+    const summary = appStore.getState().summary;
+    if (!summary) return;
+    try {
+      const insights = await listInsights(summary.scanId, largeFileThreshold, staleDays);
+      appStore.setInsights(insights);
+    } catch (error) {
+      appStore.fail(errorMessage(error));
+    }
+  }, []);
+
+  const handleReveal = useCallback((path: string) => {
+    void revealPath(path).catch((error) => appStore.fail(errorMessage(error)));
+  }, []);
+
   const statusText = fileOperationPending ? t("fileManager.state.working") : app.phase === "running"
     ? t("workspace.scanning") : currentResult ? t("workspace.scanned", { count: currentResult.totalFiles })
     : app.loading ? t("status.loading") : t("workspace.scanFirst");
-  const topbarTitle = effectiveView === "cleaner" ? t("cleaner.title")
-    : effectiveView === "sessions" ? t("sessions.title")
-    : effectiveView === "history" ? t("nav.views.history")
-    : t("nav.views.settings");
-  const topbarNote = effectiveView === "cleaner" ? t("topbar.machineCleaner")
-    : effectiveView === "sessions" ? t("topbar.machineSessions")
-    : effectiveView === "history" ? t("topbar.history")
-    : t("topbar.settings");
 
   return (
     <main className="app-shell app-shell--workspace" data-han-scope data-theme="ink" data-luma-accent="celadon">
@@ -267,57 +113,25 @@ function App() {
       <Sidebar activeView={effectiveView} viewsDisabled={viewsDisabled} onNavigate={navigate} />
 
       <div className="app-body">
-        <header className="app-topbar">
-          {topbarMode === "workspace" && <div className="topbar-workspace">
-            <button type="button" className="topbar-dir-pill" onClick={handleChoose}
-              disabled={scanControlsDisabled} aria-busy={scanAction.pending === "choose"}
-              title={app.selectedPath || t("scanControls.startHint")}>
-              {scanAction.pending === "choose" ? <ButtonSpinner size={15} /> : <FolderOpen size={15} aria-hidden="true" />}
-              <span className="topbar-dir-name">{app.selectedPath
-                ? basename(app.selectedPath) || app.selectedPath
-                : t("scanControls.notSelected")}</span>
-            </button>
-            <p className="topbar-status" role="status">{statusText}</p>
-            <span className="topbar-spacer" />
-            <label className="toggle-control topbar-hidden-toggle" title={t("workspace.hiddenHint")}>
-              <span aria-hidden="true">{app.includeHidden ? <Eye size={14} /> : <EyeOff size={14} />}</span>
-              <span className="visually-hidden">{t("scanControls.includeHidden")}</span>
-              <input type="checkbox" checked={app.includeHidden} disabled={scanControlsDisabled}
-                onChange={event => appStore.setIncludeHidden(event.target.checked)} />
-              <span className="switch" aria-hidden="true" />
-            </label>
-            {app.phase === "running" ? (
-              <button className="button button-danger topbar-scan-button" type="button" onClick={handleCancel}
-                disabled={scanAction.pending !== null} aria-busy={scanAction.pending === "cancel"}>
-                {scanAction.pending === "cancel" ? <ButtonSpinner /> : <Square size={13} fill="currentColor" aria-hidden="true" />}
-                {t(scanAction.pending === "cancel" ? "scanControls.cancelling" : "scanControls.cancel")}
-              </button>
-            ) : (
-              <button className="button button-primary topbar-scan-button" type="button" onClick={handleStart}
-                disabled={!app.selectedPath || scanControlsDisabled} aria-busy={scanAction.pending === "start"}>
-                {scanAction.pending === "start" ? <ButtonSpinner size={14} />
-                  : currentResult ? <RefreshCw size={14} aria-hidden="true" />
-                  : <Play size={14} fill="currentColor" aria-hidden="true" />}
-                {t(scanAction.pending === "start" ? "scanControls.starting" : currentResult ? "workspace.rescan" : "scanControls.scan")}
-              </button>
-            )}
-          </div>}
-          {topbarMode === "machine" && <div className="topbar-static">
-            <strong className="topbar-title">{topbarTitle}</strong>
-            <span className="topbar-note">{topbarNote}</span>
-          </div>}
-          {topbarMode === "plain" && <div className="topbar-static">
-            <strong className="topbar-title">{topbarTitle}</strong>
-            <span className="topbar-note">{topbarNote}</span>
-          </div>}
-
-          <div className="topbar-global">
-            <IndexStorage disabled={app.loading || app.phase === "running" || fileOperationPending || scanAction.pending !== null}
-              onCleared={appStore.clearIndex} onWorkingChange={setStoragePending} />
-            <UpdateButton />
-            <LanguageSwitcher />
-          </div>
-        </header>
+        <Topbar
+          mode={topbarModeFor(effectiveView)}
+          view={effectiveView}
+          selectedPath={app.selectedPath}
+          includeHidden={app.includeHidden}
+          isRunning={app.phase === "running"}
+          loading={app.loading}
+          hasResult={currentResult !== null}
+          statusText={statusText}
+          fileOperationPending={fileOperationPending}
+          storagePending={storagePending}
+          pendingAction={scanAction.pending}
+          onChoose={handleChoose}
+          onIncludeHiddenChange={appStore.setIncludeHidden}
+          onStart={handleStart}
+          onCancel={handleCancel}
+          onIndexCleared={appStore.clearIndex}
+          onIndexWorkingChange={setStoragePending}
+        />
 
         <div className="workspace-content">
           {effectiveView === "overview" && (
@@ -373,7 +187,7 @@ function App() {
               aria-labelledby="workspace-tab-settings">
               <SettingsView onNavigate={navigate} onDiscoverySettingsChange={handleDiscoverySettings}
                 onIndexCleared={appStore.clearIndex} onWorkingChange={setStoragePending}
-                storageLocked={app.loading || app.phase === "running" || fileOperationPending || scanAction.pending !== null} />
+                storageLocked={app.loading || app.phase === "running" || scanLocked || scanAction.pending !== null} />
             </section>
           )}
 
@@ -383,39 +197,14 @@ function App() {
           {currentResult && <>
             <section id="workspace-panel-analysis" className="analysis-tab-panel" role="tabpanel"
               aria-labelledby="workspace-tab-analysis" hidden={effectiveView !== "analysis"}>
-              <div className="content">
-                <div className="results">
-                  <StorageOverview summary={currentResult} />
-                  <div className="results-grid">
-                    <CategoryList categories={currentResult.categories} totalBytes={currentResult.totalBytes} />
-                    <InsightList
-                      scanId={currentResult.scanId}
-                      insights={app.insights}
-                      largeFileThreshold={app.largeFileThreshold}
-                      staleDays={app.staleDays}
-                      onSettingsChange={handleDiscoverySettings}
-                    />
-                  </div>
-                  <LargeFiles files={app.largeFiles} onReveal={handleReveal}
-                    scanId={currentResult.scanId} />
-                  <CleanupPanel scanId={currentResult.scanId} rootPath={currentResult.rootPath}
-                    onOrganize={(sourceDir) => { appStore.seedOrganize(sourceDir); navigate("organize"); }}
-                    onFindDuplicates={findAndGoDuplicates} />
-                  <Search
-                    scanId={currentResult.scanId}
-                    categories={currentResult.categories.map((c) => c.category)}
-                  />
-                  <Duplicates scanId={currentResult.scanId} />
-                  <Projects scanId={currentResult.scanId} />
-                  <ScanHistory scanId={currentResult.scanId} />
-                </div>
-              </div>
+              <AnalysisPanel summary={currentResult}
+                onDiscoverySettingsChange={handleDiscoverySettings} onReveal={handleReveal}
+                onOrganize={seedOrganizeAndNavigate} onFindDuplicates={findAndGoDuplicates} />
             </section>
             <section id="workspace-panel-files" className="fm-tab-panel" role="tabpanel"
               aria-labelledby="workspace-tab-files" hidden={effectiveView !== "files"}>
               <FileManagerView scanId={currentResult.scanId} rootPath={currentResult.rootPath}
-                onWorkingChange={setFileOperationPending}
-                onOrganize={(sourceDir) => { appStore.seedOrganize(sourceDir); navigate("organize"); }} />
+                onWorkingChange={setFileOperationPending} onOrganize={seedOrganizeAndNavigate} />
             </section>
             <OrganizeView scanId={currentResult.scanId} rootPath={currentResult.rootPath}
               hidden={effectiveView !== "organize"} onNavigate={navigate} />
