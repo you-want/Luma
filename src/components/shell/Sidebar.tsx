@@ -63,9 +63,9 @@ export function Sidebar({ activeView, viewsDisabled, onNavigate }: SidebarProps)
         <img className="brand-mark" src="/luma-logo.svg" alt="" />
         <div className="brand-copy">
           <strong>{t("app.name")}</strong>
-          <span>{t("app.tagline")}</span>
         </div>
       </div>
+      <p className="app-sidebar-tagline">{t("app.tagline")}</p>
 
       <nav className="app-sidebar-nav" role="tablist" aria-orientation="vertical"
         aria-label={t("workspace.views")}>

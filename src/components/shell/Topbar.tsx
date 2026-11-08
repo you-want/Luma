@@ -1,16 +1,17 @@
 // Topbar — the contextual top bar. One component, three modes:
-//   workspace  directory pill + scan status + hidden toggle + scan/cancel
+//   workspace  directory pill + scan status + scan/cancel
 //   machine    page title + whole-machine privacy note (cleaner, sessions)
 //   plain      page title + note (history, settings)
-// The global cluster (local storage, updates, language) renders in all modes.
+// The only global control is 本地存储; update checks and language live in
+// Settings, and hidden files are toggled in the file manager toolbar and
+// Settings (one cryptic eye+switch in the top bar confused users and
+// duplicated those affordances).
 
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, FolderOpen, Play, RefreshCw, Square } from "lucide-react";
+import { FolderOpen, Play, RefreshCw, Square } from "lucide-react";
 import { basename } from "../../lib/format";
 import { ButtonSpinner } from "./ButtonSpinner";
 import { IndexStorage } from "./IndexStorage";
-import { LanguageSwitcher } from "./LanguageSwitcher";
-import { UpdateButton } from "./UpdateButton";
 import type { AppView, TopbarMode } from "../../types/navigation";
 import type { ScanActionPending } from "../../hooks/useScanActions";
 
@@ -18,7 +19,6 @@ type TopbarProps = {
   mode: TopbarMode;
   view: AppView;
   selectedPath: string;
-  includeHidden: boolean;
   isRunning: boolean;
   loading: boolean;
   hasResult: boolean;
@@ -28,7 +28,6 @@ type TopbarProps = {
   storagePending: boolean;
   pendingAction: ScanActionPending | null;
   onChoose: () => void;
-  onIncludeHiddenChange: (value: boolean) => void;
   onStart: () => void;
   onCancel: () => void;
   onIndexCleared: () => void;
@@ -39,7 +38,6 @@ export function Topbar({
   mode,
   view,
   selectedPath,
-  includeHidden,
   isRunning,
   loading,
   hasResult,
@@ -48,7 +46,6 @@ export function Topbar({
   storagePending,
   pendingAction,
   onChoose,
-  onIncludeHiddenChange,
   onStart,
   onCancel,
   onIndexCleared,
@@ -71,13 +68,6 @@ export function Topbar({
         </button>
         <p className="topbar-status" role="status">{statusText}</p>
         <span className="topbar-spacer" />
-        <label className="toggle-control topbar-hidden-toggle" title={t("workspace.hiddenHint")}>
-          <span aria-hidden="true">{includeHidden ? <Eye size={14} /> : <EyeOff size={14} />}</span>
-          <span className="visually-hidden">{t("scanControls.includeHidden")}</span>
-          <input type="checkbox" checked={includeHidden} disabled={scanControlsDisabled}
-            onChange={event => onIncludeHiddenChange(event.target.checked)} />
-          <span className="switch" aria-hidden="true" />
-        </label>
         {isRunning ? (
           <button className="button button-danger topbar-scan-button" type="button" onClick={onCancel}
             disabled={pendingAction !== null} aria-busy={pendingAction === "cancel"}>
@@ -108,8 +98,6 @@ export function Topbar({
       <div className="topbar-global">
         <IndexStorage disabled={scanControlsDisabled}
           onCleared={onIndexCleared} onWorkingChange={onIndexWorkingChange} />
-        <UpdateButton />
-        <LanguageSwitcher />
       </div>
     </header>
   );

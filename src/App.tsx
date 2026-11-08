@@ -130,7 +130,6 @@ function App() {
           mode={topbarModeFor(effectiveView)}
           view={effectiveView}
           selectedPath={app.selectedPath}
-          includeHidden={app.includeHidden}
           isRunning={app.phase === "running"}
           loading={app.loading}
           hasResult={currentResult !== null}
@@ -139,7 +138,6 @@ function App() {
           storagePending={storagePending}
           pendingAction={scanAction.pending}
           onChoose={handleChoose}
-          onIncludeHiddenChange={appStore.setIncludeHidden}
           onStart={handleStart}
           onCancel={handleCancel}
           onIndexCleared={appStore.clearIndex}

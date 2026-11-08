@@ -12,6 +12,7 @@ import { getCleanerWhitelist, getTrayMonitorEnabled, setTrayMonitorEnabled } fro
 import { appStore, useAppStore } from "../../app/store";
 import { LanguageSwitcher } from "../shell/LanguageSwitcher";
 import { IndexStorage } from "../shell/IndexStorage";
+import { UpdateButton } from "../shell/UpdateButton";
 import type { AppView } from "../../types/navigation";
 import type { CleanerWhitelistEntry } from "../../types/scan";
 import "./Settings.css";
@@ -174,6 +175,7 @@ export function SettingsView({
               <strong>Luma{version ? ` · v${version}` : ""}</strong>
               <p>{t("settings.about.hint")}</p>
             </div>
+            <UpdateButton />
           </div>
         </section>
       </div>
