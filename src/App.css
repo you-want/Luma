@@ -53,9 +53,13 @@ button { letter-spacing: -0.01em; }
 .brand-mark {
   width: 28px; height: 28px; display: block; flex: 0 0 auto;
 }
-.brand-copy { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.brand-copy strong { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-.brand-copy span { color: var(--text-secondary); font-size: 12px; }
+/* Sidebar brand: logo left, name over tagline on the right. */
+.brand-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.brand-copy strong { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.brand-copy span {
+  color: var(--text-secondary); font-size: 11px; line-height: 1.35;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
 
 .language-switcher {
   display: flex; align-items: center; gap: 4px;
@@ -241,7 +245,6 @@ button[aria-busy="true"]:disabled { opacity: 0.8; cursor: progress; }
 
 @media (max-width: 620px) {
   .content { width: calc(100% - 28px); }
-  .privacy-note span, .brand-copy span { display: none; }
   .path-picker { grid-template-columns: 1fr; }
   .button { width: 100%; }
   .progress-stats { grid-template-columns: repeat(2, 1fr); }
@@ -1016,23 +1019,6 @@ button[aria-busy="true"]:disabled { opacity: 0.8; cursor: progress; }
   border: 1px solid color-mix(in srgb, var(--han-color-accent-control) 32%, transparent);
   border-radius: 3px;
   background: var(--surface);
-}
-
-.brand-copy {
-  align-items: center;
-  gap: 10px;
-}
-
-.brand-copy strong {
-  font-family: var(--han-font-kai);
-  font-size: 18px;
-  font-weight: 500;
-}
-
-.brand-copy span {
-  padding-left: 10px;
-  border-left: 1px solid var(--separator);
-  font-size: 11px;
 }
 
 .privacy-note,
