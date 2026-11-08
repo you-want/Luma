@@ -15,15 +15,23 @@ pnpm tauri dev
 
 | 目录 | 内容 |
 |---|---|
-| `src/` | React 界面、状态、国际化与 Tauri 命令封装 |
-| `src/components/fileManager/` | 文件浏览、预览、操作确认与整理向导 |
-| `src-tauri/src/` | Rust 扫描、SQLite 索引、搜索、文件操作、整理与存储维护 |
+| `src/app/` | 全局 store（扫描状态、共享重复文件状态、数据版本号） |
+| `src/components/analysis/` | 空间分析各区块（概览、分类、洞察、清理建议、搜索、重复、项目、历史对比） |
+| `src/components/fileManager/` | 文件浏览、预览、操作确认 |
+| `src/components/organize/` | 整理独立页（规则 → 预览 → 执行） |
+| `src/components/{cleaner,sessions,overview,history,settings}/` | 磁盘管家、会话、总览仪表盘、操作记录、设置（后四者按需懒加载） |
+| `src/components/shell/` | 应用外壳：侧边栏、上下文顶栏、命令面板、更新/语言/本地存储 |
+| `src/hooks/` | 扫描生命周期（事件/启动恢复/对账）与扫描动作（选择/开始/取消） |
+| `src/lib/ipc/` | Tauri 命令封装，按领域分模块；`src/lib/tauri.ts` 为统一出口 |
+| `src/styles/han-tokens.css` | 自包含的设计 token（不再依赖 website 设计系统） |
+| `src-tauri/src/commands/` | Tauri 命令层，按领域分模块（`mod.rs` 仅保留共享基础设施与重导出） |
+| `src-tauri/src/` 其余 | Rust 扫描、SQLite 索引、搜索、文件操作、整理与存储维护 |
 | `src-tauri/dmg/` | macOS 安装盘背景 |
 | `scripts/` | 浏览器交互回归与 macOS 安装盘构建脚本 |
 | `website/` | 官方网站静态页面 |
 | `docs/` | 使用边界、设计、路线图与发布记录 |
 
-扫描、文件读写和数据库任务在 Rust 后台线程执行。前端通过 `src/lib/tauri.ts` 调用命令，通过事件接收扫描进度；本地 SQLite 保存索引、历史摘要与操作日志。
+扫描、文件读写和数据库任务在 Rust 后台线程执行。前端通过 `src/lib/ipc/`（经 `src/lib/tauri.ts` 转出）调用命令，通过事件接收扫描进度；本地 SQLite 保存索引、历史摘要与操作日志。约定：`invoke` 只允许出现在 `src/lib/ipc/`；界面组件不直接触达 Tauri API。
 
 macOS 的数据库通常位于 `~/Library/Application Support/com.rain9.luma/luma.sqlite3`。数据库属于应用数据，普通扫描不会因此变成“零磁盘写入”；存储管理与 schema 升级边界见[本地存储说明](local-storage.md)。
 
