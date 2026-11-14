@@ -50,20 +50,14 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
 
-浏览器回归使用真实 React 组件和独立的模拟 Tauri IPC，不会操作用户文件。需要 Python Playwright、已安装的 Google Chrome 和 Playwright WebKit：
+浏览器回归使用真实 React 组件和模拟 Tauri IPC（`e2e/tauriMock.ts` 注入的确定性假实现），不会操作用户文件，由 Playwright 驱动：
 
 ```sh
-python3 -m pip install playwright
-playwright install webkit
-pnpm dev --host 127.0.0.1
-# 在另一个终端执行；截图默认输出到系统临时目录的 luma-file-manager-review。
-python3 scripts/test-file-manager.py --browser all
+pnpm test:e2e
 ```
 
-覆盖整理向导全部步骤、排除文件和自定义分类、修改后更新预览、冲突编号、结果与撤销、取消/确认删除、目录切换、重命名键盘事件、复制/移动参数、隐藏文件、205 文件分页、图片与 PDF 实际渲染、文本请求竞态，以及中英文小窗口布局。共享工作区另覆盖目录栏固定、视图状态保留、更换目录后旧结果隐藏、新扫描恢复原视图和键盘切换。可用 `--workspace-only` 单独执行工作区回归，通过 `--browser-path` 指定 Playwright 浏览器缓存，`--base-url` 指定开发服务地址，`--output` 指定截图目录。
+`e2e/ux.e2e.ts` 覆盖整理向导全部步骤（规则 → 预览 → 执行 → 撤销）、批量选择与确认删除、操作记录、设置、重复文件按保留最新清理，以及清理入口路由。`e2e/fileManager.e2e.ts` 覆盖 205 文件分页翻页、图片/文本/PDF 首页真实渲染（pdfjs 画布），以及慢目录列表下的分页竞态防回跳。`tauriMock` 的 handler 支持 `delayMs` 与按参数取值（`byArgsKey`），可为预览等命令按路径返回不同字节。
 
-`--layout-only` 会截取中英文、1120×760 和 760×560 窗口中的列表、预览、批量选择、网格及整理弹窗，便于检查组件间距和对齐。
-
-额外的慢请求回归将目录选择、预览、打开文件、扫描启动/取消延迟 800 ms，连续点击三次并核对实际 IPC 请求只发出一次，同时检查按钮 spinner、禁用状态、取消/失败后的恢复，以及重命名草稿不会吞掉对「整理」的首次点击。Rust 测试另验证阻塞任务使用工作线程、错误原样返回，以及并发文件写入被拒绝且失败后能释放互斥锁。
+模拟 IPC 的交互检查不能替代真机文件操作验证：原生目录选择、系统权限、跨磁盘移动与废纸篓实际行为仍需桌面端人工回归。
 
 桌面端人工回归应使用测试目录：验证系统权限、原生目录选择、当前层/递归范围、冲突策略、跨磁盘移动、部分失败与重启后撤销。Windows 真机回归仍待 Windows 环境；浏览器中模拟 Tauri IPC 的交互检查不能替代真机文件操作验证。

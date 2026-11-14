@@ -16,10 +16,12 @@
 // Handler maps are plain JSON (no functions) because they cross the
 // init-script serialization boundary. Each entry is a *return spec*:
 //
-//   { value?: unknown, error?: string }
+//   { value?: unknown, error?: string, delayMs?: number }
 //
 //   - `value` — resolved by the mocked `invoke`
 //   - `error` — if set, the call rejects with `new Error(error)`
+//   - `delayMs` — resolves after this many ms; lets tests exercise the
+//     loading/spinner states and the single-flight/race guards
 //
 // Unknown commands reject with `new Error(`[mock] no handler …`)`, so the
 // app's error paths surface as testable alerts instead of silent hangs.
@@ -33,6 +35,13 @@ export type HandlerSpec =
   | {
       value?: unknown;
       error?: string;
+      delayMs?: number;
+      // Per-argument override: pick a nested spec by `args[byArgsKey]`.
+      // Lets one command return different payloads per path/id (e.g. a
+      // PNG for one file and PDF bytes for another) while keeping the
+      // handler map JSON-serializable across the init-script boundary.
+      byArgsKey?: string;
+      values?: Record<string, HandlerSpec>;
     };
 
 export type HandlerMap = Record<string, HandlerSpec>;
@@ -51,7 +60,17 @@ export interface TestCall {
 export async function installTauriMock(page: Page, handlers: HandlerMap) {
   const map: Record<string, Record<string, unknown>> = {};
   for (const [cmd, spec] of Object.entries(handlers)) {
-    if (spec) map[cmd] = { value: spec.value ?? null, error: spec.error };
+    if (spec) {
+      map[cmd] = {
+        value: spec.value ?? null,
+        error: spec.error,
+        delayMs: spec.delayMs,
+        byArgsKey: spec.byArgsKey,
+        // Nested per-argument specs stay JSON-serializable because HandlerSpec
+        // is plain data all the way down.
+        values: spec.values as unknown as Record<string, unknown>,
+      };
+    }
   }
 
   // Plugin commands the app calls at module scope that have no fixture:
@@ -92,10 +111,42 @@ export async function installTauriMock(page: Page, handlers: HandlerMap) {
         if (!spec) {
           throw new Error(`[mock] no handler for "${cmd}"`);
         }
-        if (spec.error !== undefined) {
-          throw new Error(String(spec.error));
+        let effectiveSpec = spec;
+        if (spec.byArgsKey && spec.values) {
+          const key = String(args?.[spec.byArgsKey] ?? "");
+          const override = spec.values[key];
+          if (override) effectiveSpec = override;
         }
-        return spec.value;
+        const respond = () => {
+          if (effectiveSpec.error !== undefined) {
+            throw new Error(String(effectiveSpec.error));
+          }
+          // Directory listings carry the full fixture; slice by the paging
+          // args the same way the real backend does, so pagination tests can
+          // exercise Next/Previous against more rows than one page holds.
+          if (cmd === "list_directory_files" && effectiveSpec.value && typeof effectiveSpec.value === "object") {
+            const page = { ...(effectiveSpec.value as Record<string, unknown>) };
+            if (Array.isArray(page.files)) {
+              const offset = Number(args.offset ?? 0);
+              const limit = Number(args.limit ?? 100);
+              page.files = (page.files as unknown[]).slice(offset, offset + limit);
+            }
+            return page;
+          }
+          return effectiveSpec.value;
+        };
+        if (effectiveSpec.delayMs) {
+          return new Promise((resolve, reject) => {
+            setTimeout(() => {
+              try {
+                resolve(respond());
+              } catch (error) {
+                reject(error);
+              }
+            }, effectiveSpec.delayMs);
+          });
+        }
+        return respond();
       },
       transformCallback: (_cb: unknown, _once?: boolean) => 1,
       unregisterCallback: () => {},
