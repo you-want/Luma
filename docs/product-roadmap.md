@@ -4,7 +4,7 @@
 > v0.5.0 新增磁盘管家（清理中心、项目瘦身、应用残留、模拟器设备、二进制瘦身、维护与状态卡）与 Agent 会话管理，见 [磁盘管家工作包](disk-cleaner.md) 与 [Agent 会话工作包](agent-sessions.md)。
 > 进行中：交互信息架构重构（工作包 I，`feature/ux-redesign` 分支）——侧边栏导航、总览仪表盘、整理独立页、统一操作记录与设置页，见下方工作包 I。
 > 路线图基线：工作区当前实现（2026-08-17）
-> 最后更新：2026-11-08
+> 最后更新：2026-11-14
 > 维护方式：实现、验收或范围发生变化时，同步更新“总览”“工作包”和“进度记录”。
 
 ## 1. 状态约定
@@ -401,6 +401,7 @@ Search v2 的详细设计、逐项状态和性能记录以 [`search-v2-plan.md`]
 | 2026-11-05 | 工作包 H（CLN-403） | `TODO → DONE（开发完成）` | 托盘性能显示 + 开关：托盘菜单新增性能行与勾选开关（默认关闭，持久化 `app_settings.json`，损坏 fail-safe 回退默认）；`tray_monitor.rs` 采样线程复用 `system_info::system_status()`（macOS 10s / Windows 20s 间隔，间隔外只轮询标志零开销），更新菜单文本与托盘 tooltip；应用内系统状态卡加同步开关（`tray-monitor-changed` 事件双向同步）；`AppState` 增加 `app_data_dir`。中英文托盘文案经 `i18n.rs` 扩展。验证：Rust 140 项测试（新增 16 项：settings 往返/损坏回退、托盘文案格式）+ fmt + Clippy 零警告通过；前端 6 项测试 + 生产构建通过 | 桌面端托盘中英文人工回归待做 |
 | 2026-11-08 | 工作包 I（UX-001~009） | `TODO → DONE（开发完成）` | 交互信息架构重构（分支 `feature/ux-redesign`）：顶部页签改为侧边栏（工作区/全机/系统三组 + 上下文顶栏 + 视图持久化）；新增总览仪表盘（三张行动卡 + 最近操作 + 扫描摘要，承载欢迎态）；整理向导弹窗升级为独立页（能力全保留，支持总览/文件管理预填源目录）；新增统一操作记录页（Rust 新命令 `list_recent_operations`，跨扫描日志 + 按条目撤销，undo 传当前活跃 scanId 以匹配后端根校验）；新增设置页（语言/隐藏文件/洞察阈值/托盘/本地存储/受保护路径入口）；死胡同闭环（重复组保留最新移废纸篓、清理建议路由整理/查重、洞察与大文件行内删除，重复状态提升到 store 共享）；命令面板覆盖全部视图；重扫描经 store `fileManagerPath` 还原文件管理目录，`includeHidden` 三处同源；全局 Toast 上下文复用文件管理样式。验证：前端 7 项单测 + e2e 36 项（新增总览冒烟与 ux 套件，覆盖每个页签的渲染与关键写入链路）+ 生产构建通过；Rust 163 项测试（新增 1 项 `recent_operations_log`）+ fmt + Clippy 零警告通过 | UX-010 桌面端中英文人工回归；路线图基线与官网/发布说明随 v0.6.0 发布同步 |
 | 2026-11-08 | 架构治理（同分支，5 个独立提交） | `—` | 模块化与性能专项：① CSS 死重——`App.css` 引入的网站设计系统（13 文件约 330KB）经"han 类名 × 应用渲染类名"交集审计确认零使用，抽出 `src/styles/han-tokens.css`（基础 token + ink 主题，运行时生效变量值逐一比对无变化），构建 CSS 279KB → 103KB（gzip 47 → 18.6KB），并补上被引用却从未定义的 `--han-color-error`；② `App.tsx` 429 → 218 行，拆出 `useScanLifecycle` / `useScanActions` / `Topbar` / `AnalysisPanel`；③ 16 个散落组件归位 `components/analysis/` 与 `components/shell/`；④ `lib/tauri.ts` 拆为 `lib/ipc/` 八个领域模块（barrel 保持调用方不变），约定 `invoke` 只允许出现在 `lib/ipc/`；⑤ 非首屏视图（磁盘管家/会话/操作记录/设置）懒加载，主包 510KB → 457KB，>500KB chunk 告警消除；⑥ Rust `commands.rs` 998 行拆为 `commands/` 七个领域子模块（`mod.rs` 仅保留 AppState、spawn_blocking 包装、DATABASE_BUSY 守卫与重导出，lib.rs 注册路径不变）。每步独立提交并过全量门禁（tsc、单测 7、e2e 36、构建、cargo check/clippy 零告警、fmt、Rust 163 项测试） | 桌面端真机回归（UX-010）同样覆盖重构后路径 |
+| 2026-11-14 | 工作包 I 追加 + 提交前清理与官网同步 | `—` | 补记 2026-11-08 下午三个提交：顶栏精简——移除含义不明的「显示隐藏文件」顶栏开关（`includeHidden` 仍由设置页与文件管理同源控制），检查更新与语言切换移入设置页，顶栏只保留当前视图上下文；侧边栏 brand 块两轮修正（logo 居左、名称/标语右列两行）并微调底部留白。提交前仓库清理：移除根目录遗留的 v0.1.0 性能测试报告（`performance-test.md`，全仓库无引用）；确认本地产物（`.DS_Store`、`dist/`、`output/`、`test-results/`、`.pnpm-store/`）均被 `.gitignore` 覆盖，无敏感文件与超大文件入库。官网同步：修正遗留的 0.4.1 版本标记——`luma-version` meta、hero 下载按钮、最终下载段落（升级表述改为通用口径）、磁盘管家注释，`luma-content-revision` 更新为 2026-11-14；完整基线同步仍按计划随 v0.6.0 发布进行。验证：前端 7 项单测 + tsc + 生产构建通过（主包 452.8KB / CSS 98.6KB） | UX-010 桌面端中英文人工回归 |
 
 ## 10. 决策记录
 
