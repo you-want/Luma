@@ -1737,6 +1737,12 @@ button[aria-busy="true"]:disabled { opacity: 0.8; cursor: progress; }
   font-weight: 600;
 }
 
+/* Flex row: label + count on the left, the delete button pushed to the far
+   edge (margin-left:auto only works inside a flex container). */
+.sessions-select-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 2px 0 10px;
+}
 .sessions-select-bar .cleaner-clean-button {
   display: inline-flex; align-items: center; gap: 6px;
   margin-left: auto;
