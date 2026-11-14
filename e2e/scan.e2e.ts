@@ -47,6 +47,9 @@ function scanHandlers(overrides: HandlerMap = {}): HandlerMap {
     get_scan_summary: { value: SCAN_SUMMARY },
     list_large_files: { value: LARGE_FILES_FIXTURE },
     list_insights: { value: [] },
+    list_directory_files: { value: { dirs: [], files: [], totalFiles: 12 } },
+    get_cleanup_summary: { value: { items: [], totalBytes: 0 } },
+    list_recent_operations: { value: [] },
     get_cleaner_overview: { value: { locations: [], volumes: [], generatedAt: 1_700_000_000 } },
     get_system_status: {
       value: { cpuUsagePercent: 0, memoryTotalBytes: 0, memoryUsedBytes: 0, battery: null, platformSupported: true },
@@ -78,9 +81,12 @@ test("with a previous scan: analysis tab shows category breakdown and large file
 }) => {
   await openWithScan(page, scanHandlers());
 
+  // The app now lands on the Overview dashboard; the analysis view is one
+  // sidebar click away once the restored scan has loaded.
   const panel = page.locator("#workspace-panel-analysis");
   await expect(page.getByRole("tab", { name: "Space analysis" })).toBeEnabled({ timeout: 15_000 });
-  await panel.waitFor();
+  await page.getByRole("tab", { name: "Space analysis" }).click();
+  await expect(panel).toBeVisible();
 
   // Category list rendered.
   await expect(panel.locator(".legend-label", { hasText: "Videos" })).toBeVisible();
@@ -91,7 +97,7 @@ test("with a previous scan: analysis tab shows category breakdown and large file
   await expect(panel.locator(".file-list strong", { hasText: "archive.iso" }).first()).toBeVisible();
 });
 
-test("no previous scan: welcome state with scan CTA, analysis tab disabled", async ({
+test("no previous scan: overview welcome state with scan CTA, workspace tabs disabled", async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -100,12 +106,30 @@ test("no previous scan: welcome state with scan CTA, analysis tab disabled", asy
   await installTauriMock(page, { get_latest_scan: { value: null } });
   await page.goto("/");
   await page.locator("#root").waitFor();
+  // The Overview dashboard is the landing view and hosts the welcome state.
   await expect(page.getByRole("heading", { name: "Start with a folder" })).toBeVisible({ timeout: 15_000 });
 
-  // No result yet: analysis + file-manager tabs are disabled, cleaner still works.
+  // No result yet: workspace tabs are disabled; overview + machine tabs work.
+  await expect(page.getByRole("tab", { name: "Overview" })).toBeEnabled();
   await expect(page.getByRole("tab", { name: "Space analysis" })).toBeDisabled();
   await expect(page.getByRole("tab", { name: "File manager" })).toBeDisabled();
+  await expect(page.getByRole("tab", { name: "Organize" })).toBeDisabled();
   await expect(page.getByRole("tab", { name: "Disk cleaner" })).toBeEnabled();
+});
+
+test("overview dashboard: organize card counts loose files and routes to the organize page", async ({
+  page,
+}) => {
+  await openWithScan(page, scanHandlers());
+
+  const card = page.locator(".overview-card", { hasText: "To organize" });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText("12 files")).toBeVisible();
+
+  await card.getByRole("button", { name: "Start organizing" }).click();
+  await expect(page.getByRole("tab", { name: "Organize" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#workspace-panel-organize")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose organizing rule" })).toBeVisible();
 });
 
 test("scan summary error surfaces as an alert on the analysis tab", async ({

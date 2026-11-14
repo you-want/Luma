@@ -19,7 +19,7 @@ import { categoryLabelKey } from "../../lib/categories";
 import { errorMessage } from "../../lib/errors";
 import { formatBytes, formatDate } from "../../lib/format";
 import { PdfPreview } from "./PdfPreview";
-import { ButtonSpinner } from "../ButtonSpinner";
+import { ButtonSpinner } from "../shell/ButtonSpinner";
 import type { FileOperation } from "./useFileOps";
 
 // ── Preview strategies ─────────────────────────────────────────────────────────

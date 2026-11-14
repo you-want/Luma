@@ -2,7 +2,7 @@
 // Composes DirectoryTree + FileList + FilePreviewPanel via useFileManager + useFileOps.
 
 import { AlertTriangle } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Breadcrumb } from "./Breadcrumb";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -10,14 +10,14 @@ import { DirectoryTree } from "./DirectoryTree";
 import { FileList } from "./FileList";
 import { FileManagerToolbar } from "./FileManagerToolbar";
 import { FilePreviewPanel } from "./FilePreviewPanel";
-import { OrganizeWizard } from "./OrganizeWizard";
 import { ToastStack, useToasts } from "./ToastStack";
 import { useFileManager } from "./useFileManager";
 import { useFileOps } from "./useFileOps";
 import { chooseDirectory, getDirectoryNodes } from "../../lib/tauri";
+import { appStore, useAppStore } from "../../app/store";
 import { errorMessage } from "../../lib/errors";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import { ButtonSpinner } from "../ButtonSpinner";
+import { ButtonSpinner } from "../shell/ButtonSpinner";
 import type { DirNode } from "../../types/fileManager";
 import "./FileManager.css";
 
@@ -25,13 +25,25 @@ type Props = {
   scanId: string;
   rootPath: string;
   onWorkingChange?: (working: boolean) => void;
+  /** Deep-link into the organize page prefilled with the given source dir. */
+  onOrganize: (sourceDir: string) => void;
 };
 
-export function FileManagerView({ scanId, rootPath, onWorkingChange }: Props) {
+export function FileManagerView({ scanId, rootPath, onWorkingChange, onOrganize }: Props) {
   const { t } = useTranslation();
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
+  const app = useAppStore();
 
-  const fm = useFileManager(scanId, rootPath);
+  const fm = useFileManager(scanId, rootPath, {
+    initialIncludeHidden: appStore.getState().includeHidden,
+    initialPath: appStore.getState().fileManagerPath,
+  });
+
+  // Remember the browsed directory so a rescan (which unmounts this panel
+  // while `currentResult` is cleared) restores the position afterwards.
+  useEffect(() => {
+    appStore.setFileManagerPath(fm.currentPath);
+  }, [fm.currentPath]);
   const [rootDirs, setRootDirs] = useState<DirNode[]>([]);
   const [treeRevision, setTreeRevision] = useState(0);
   const refresh = useCallback(() => {
@@ -73,8 +85,31 @@ export function FileManagerView({ scanId, rootPath, onWorkingChange }: Props) {
   const [trashPending, setTrashPending] = useState<string[] | null>(null);
   const [movePending, setMovePending] = useState<{ paths: string[]; source: string; destination: string } | null>(null);
 
-  // Organize wizard state
-  const [organizeOpen, setOrganizeOpen] = useState(false);
+  // Keep the store-level includeHidden flag in step with the toolbar toggle so
+  // the top bar and the settings page show the same value (one source of truth).
+  const lastReportedHidden = useRef(fm.includeHidden);
+  useEffect(() => {
+    if (fm.includeHidden !== lastReportedHidden.current) {
+      lastReportedHidden.current = fm.includeHidden;
+      appStore.setIncludeHidden(fm.includeHidden);
+    }
+  }, [fm.includeHidden]);
+  useEffect(() => {
+    if (app.includeHidden !== fm.includeHidden) {
+      fm.setIncludeHidden(app.includeHidden);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.includeHidden]);
+
+  // Any write performed elsewhere (organize page, duplicates processing,
+  // overview undo…) may change this directory — refresh in place.
+  const initialRevision = useRef(app.dataRevision);
+  useEffect(() => {
+    if (app.dataRevision === initialRevision.current) return;
+    initialRevision.current = app.dataRevision;
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.dataRevision]);
 
   // Lazy-load children for the tree sidebar
   const loadChildren = useCallback(
@@ -173,7 +208,7 @@ export function FileManagerView({ scanId, rootPath, onWorkingChange }: Props) {
         onCopyChecked={handleCopyChecked}
         onClearChecked={ops.clearChecked}
         onUndo={() => void ops.undoLast()}
-        onOrganize={() => setOrganizeOpen(true)}
+        onOrganize={() => onOrganize(fm.currentPath)}
       />
       </fieldset>
       {busy && <div className="fm-busy-status" role="status"><ButtonSpinner />{pendingLabel
@@ -264,19 +299,6 @@ export function FileManagerView({ scanId, rootPath, onWorkingChange }: Props) {
 
       {/* Toast notifications */}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
-
-      {/* Organize wizard */}
-      <OrganizeWizard
-        open={organizeOpen}
-        scanId={scanId}
-        defaultSourceDir={fm.currentPath}
-        onClose={() => setOrganizeOpen(false)}
-        onDone={() => {
-          refresh();
-          void ops.refreshUndoable();
-          setOrganizeOpen(false);
-        }}
-      />
     </div>
   );
 }

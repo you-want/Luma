@@ -1,0 +1,119 @@
+// HistoryView — unified operation log styles.
+
+.history-panel .content { width: min(920px, calc(100% - 40px)); }
+
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.history-filter {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--separator);
+  border-radius: 100px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.history-filter:hover { background: var(--surface-hover); color: var(--text); }
+
+.history-filter--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.history-filter--active:hover { background: var(--accent-hover); color: var(--on-accent); }
+
+.history-list {
+  margin: 0;
+  padding: 4px 16px;
+  list-style: none;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--card-shadow);
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 10px 128px auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 6px 0;
+  border-top: 0.5px solid var(--separator);
+}
+
+.history-row:first-child { border-top: 0; }
+
+.history-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.history-status--completed { background: var(--han-color-success, #34c759); }
+.history-status--partial { background: var(--warning); }
+.history-status--failed,
+.history-status--undo_failed,
+.history-status--interrupted { background: var(--danger); }
+.history-status--undone { background: var(--fill-quaternary); }
+
+.history-time { color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.history-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 510;
+}
+
+.history-row--undone .history-label { color: var(--text-secondary); text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
+
+.history-state { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.history-state--failed, .history-state--undo_failed { color: var(--danger); }
+.history-state--partial { color: var(--warning); }
+
+.history-undo { min-height: 26px; padding: 0 10px; font-size: 12px; }
+.history-spacer { width: 1px; }
+
+/* Shared badges (also used by the overview recent list). */
+.op-kind-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 550;
+  background: var(--fill-quaternary);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.op-kind-badge--organize { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.op-kind-badge--machine { background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--warning); }
+
+.op-recoverable {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--han-color-info, var(--accent));
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  padding: 2px 8px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.op-recoverable--muted { color: var(--text-tertiary); background: var(--fill-quaternary); }
+
+@media (max-width: 760px) {
+  .history-row { grid-template-columns: 10px minmax(0, 1fr) auto auto; }
+  .history-time, .history-state { display: none; }
+}

@@ -204,5 +204,7 @@ test("first open: welcome state offers a scan, no scan data needed", async ({
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Start with a folder" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Scan" })).toBeVisible();
+  // Both the top bar and the overview welcome CTA offer a scan.
+  const panel = page.getByRole("tabpanel", { name: "Overview" });
+  await expect(panel.getByRole("button", { name: "Scan" })).toBeVisible();
 });

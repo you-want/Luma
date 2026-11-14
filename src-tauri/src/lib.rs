@@ -172,6 +172,7 @@ pub fn run() {
             commands::move_files,
             commands::copy_files,
             commands::list_undoable_operations,
+            commands::list_recent_operations,
             commands::undo_file_operation,
             commands::plan_organize,
             commands::execute_organize_plan,
