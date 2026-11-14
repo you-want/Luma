@@ -426,7 +426,7 @@ button[aria-busy="true"]:disabled { opacity: 0.8; cursor: progress; }
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 2px 6px;
+  padding: 2px 6px 16px;
 }
 
 .app-sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
