@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://luma.raingpt.top/">官方网站</a> ·
   <a href="https://github.com/you-want/Luma/releases/latest">下载安装</a> ·
-  <a href="docs/releases/v0.5.0.md">更新说明</a> ·
+  <a href="docs/releases/v0.6.0.md">更新说明</a> ·
   <a href="https://github.com/you-want/Luma/issues">问题反馈</a>
 </p>
 
@@ -28,12 +28,12 @@ Luma 帮助你管理堆积在桌面、下载目录和其他文件夹中的资料
 
 ## 下载与安装
 
-当前版本：**[v0.5.0](https://github.com/you-want/Luma/releases/tag/v0.5.0)**。
+当前版本：**[v0.6.0](https://github.com/you-want/Luma/releases/tag/v0.6.0)**。
 
 | 平台 | 安装包 | 安装方式 |
 |---|---|---|
-| macOS · Apple Silicon / Intel | [下载通用版 DMG](https://github.com/you-want/Luma/releases/download/v0.5.0/Luma_0.5.0_universal.dmg) | 打开安装盘，将 Luma 拖入 Applications，再从「应用程序」启动 |
-| Windows · x64 | [下载安装程序 EXE](https://github.com/you-want/Luma/releases/download/v0.5.0/Luma-0.5.0-windows-x64-setup.exe) · [MSI](https://github.com/you-want/Luma/releases/download/v0.5.0/Luma-0.5.0-windows-x64.msi) | 下载安装程序并按提示完成安装 |
+| macOS · Apple Silicon / Intel | [下载通用版 DMG](https://github.com/you-want/Luma/releases/download/v0.6.0/Luma_0.6.0_universal.dmg) | 打开安装盘，将 Luma 拖入 Applications，再从「应用程序」启动 |
+| Windows · x64 | [下载安装程序 EXE](https://github.com/you-want/Luma/releases/download/v0.6.0/Luma-0.6.0-windows-x64-setup.exe) · [MSI](https://github.com/you-want/Luma/releases/download/v0.6.0/Luma-0.6.0-windows-x64.msi) | 下载安装程序并按提示完成安装 |
 
 已有用户可在应用内检查更新，确认后下载、安装并重启。应用启动时也会检查新版本，不会自动强制安装。
 
