@@ -318,3 +318,26 @@ test("largest files: row trash action confirms and calls trash_files", async ({ 
 async function openAppTabAnalysis(page: Page) {
   await openTab(page, "Space analysis");
 }
+
+// ── Organize page scrolling ───────────────────────────────────────────────────
+// Regression: .org-page lacked min-height:0, so its height propagated past
+// .workspace-content's overflow:hidden and the page got clipped instead of
+// scrolling when the rule cards overflowed the viewport.
+
+test("organize page: body scrolls when rule cards overflow the viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 1120, height: 500 });
+  await openApp(page, uxHandlers());
+  await openTab(page, "Organize");
+  const body = page.locator(".org-page-body");
+  await expect(body.locator(".org-rule-card").first()).toBeVisible();
+
+  const metrics = await body.evaluate(el => ({
+    scrollHeight: el.scrollHeight,
+    clientHeight: el.clientHeight,
+  }));
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+
+  await page.mouse.move(450, 250);
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => body.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+});

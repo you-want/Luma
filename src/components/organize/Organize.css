@@ -11,6 +11,9 @@
 
 .org-page {
   flex: 1;
+  /* Without this the content height propagates up past .workspace-content's
+     overflow:hidden — the page gets clipped instead of scrolling. */
+  min-height: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
